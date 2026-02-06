@@ -108,6 +108,7 @@ const config = {
       // Keep it small: the goal is "alive enough" without pretending to be a full BYOK brain.
       const defaults = [
         'DIALOGUE',
+        'ARENA_DEBATE',
         'DAILY_SUMMARY',
         'DIARY_POST',
         'PLAZA_POST',

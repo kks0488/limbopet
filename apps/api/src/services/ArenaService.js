@@ -1026,7 +1026,10 @@ async function enqueueArenaDebateJobsWithClient(
        ORDER BY created_at DESC
        LIMIT 1`,
       [agentId, mId]
-    ).then((r) => r.rows?.[0] ?? null).catch(() => null);
+    ).then((r) => r.rows?.[0] ?? null).catch((err) => {
+      console.error('[ARENA_DEBATE] SELECT existing job failed:', err?.message || err);
+      return null;
+    });
 
     const status = String(existing?.status || '').trim().toLowerCase();
     if (existing?.id && ['pending', 'leased', 'done'].includes(status)) {
@@ -1038,7 +1041,10 @@ async function enqueueArenaDebateJobsWithClient(
        VALUES ($1, 'ARENA_DEBATE', $2::jsonb)
        RETURNING id, status`,
       [agentId, JSON.stringify(input)]
-    ).then((r) => r.rows?.[0] ?? null).catch(() => null);
+    ).then((r) => r.rows?.[0] ?? null).catch((err) => {
+      console.error('[ARENA_DEBATE] INSERT brain_job failed:', err?.message || err);
+      return null;
+    });
 
     return {
       jobId: inserted?.id ? String(inserted.id) : null,
@@ -2362,20 +2368,24 @@ class ArenaService {
           const live = existingMeta.live && typeof existingMeta.live === 'object' ? existingMeta.live : {};
           const endsMs = parseDateMs(live.ends_at) ?? null;
           if (endsMs !== null && (endsMs <= nowMs || resolveImmediately)) {
-            const r = await ArenaService.resolveLiveMatchWithClient(client, {
-              matchId: existing.id,
-              day: iso,
-              slot,
-              season,
-              poolById,
-              statsMap,
-              jobsMap,
-              nudgesMap,
-              ratingsMap,
-              eloK,
-              lossPenaltyCoinsBase,
-              lossPenaltyXpBase
-            }).catch(() => null);
+            const r = await bestEffortInTransaction(
+              client,
+              async () => ArenaService.resolveLiveMatchWithClient(client, {
+                matchId: existing.id,
+                day: iso,
+                slot,
+                season,
+                poolById,
+                statsMap,
+                jobsMap,
+                nudgesMap,
+                ratingsMap,
+                eloK,
+                lossPenaltyCoinsBase,
+                lossPenaltyXpBase
+              }),
+              { label: 'arena_resolve_live', fallback: null }
+            );
             return r?.resolved ? { created: false, resolved: true, matchId: existing.id } : { created: false, skipped: true, reason: 'live_resolve_failed' };
           }
           return { created: false, skipped: true, reason: 'live_pending' };
@@ -2597,20 +2607,24 @@ class ArenaService {
       bumpExposure(bId);
 
       if (resolveImmediately) {
-        const r = await ArenaService.resolveLiveMatchWithClient(client, {
-          matchId,
-          day: iso,
-          slot,
-          season,
-          poolById,
-          statsMap,
-          jobsMap,
-          nudgesMap,
-          ratingsMap,
-          eloK,
-          lossPenaltyCoinsBase,
-          lossPenaltyXpBase
-        }).catch(() => null);
+        const r = await bestEffortInTransaction(
+          client,
+          async () => ArenaService.resolveLiveMatchWithClient(client, {
+            matchId,
+            day: iso,
+            slot,
+            season,
+            poolById,
+            statsMap,
+            jobsMap,
+            nudgesMap,
+            ratingsMap,
+            eloK,
+            lossPenaltyCoinsBase,
+            lossPenaltyXpBase
+          }),
+          { label: 'arena_resolve_new', fallback: null }
+        );
         if (r?.resolved) return { created: true, resolved: true, matchId };
       }
 
@@ -2665,6 +2679,11 @@ class ArenaService {
     const iso = safeIsoDay(day);
     if (!client || !id || !iso) return { resolved: false };
 
+    // Helper: wrap a DB operation in a savepoint so that a query failure
+    // doesn't poison the surrounding PostgreSQL transaction (25P02 prevention).
+    const safeQ = (fn, fallback = null, label = 'rq') =>
+      bestEffortInTransaction(client, fn, { label, fallback });
+
     const match = await client.query(
       `SELECT id, mode, status, seed, meta
        FROM arena_matches
@@ -2703,12 +2722,15 @@ class ArenaService {
     }
 
     // If participants already exist (partial earlier run), mark resolved + backfill recap.
-    const partCount = await client.query(
-      `SELECT COUNT(*)::int AS n
-       FROM arena_match_participants
-       WHERE match_id = $1`,
-      [match.id]
-    ).then((r) => Number(r.rows?.[0]?.n ?? 0) || 0).catch(() => 0);
+    const partCount = await safeQ(
+      () => client.query(
+        `SELECT COUNT(*)::int AS n
+         FROM arena_match_participants
+         WHERE match_id = $1`,
+        [match.id]
+      ).then((r) => Number(r.rows?.[0]?.n ?? 0) || 0),
+      0, 'resolve_part_count'
+    );
 
     if (partCount >= 2) {
       const recapExisting = String(meta0.recap_post_id || '').trim();
@@ -2752,14 +2774,17 @@ class ArenaService {
     const aName = cast.aName || String(aAgent?.displayName || aAgent?.name || 'A');
     const bName = cast.bName || String(bAgent?.displayName || bAgent?.name || 'B');
 
-    const revengeRows = await client.query(
-      `SELECT agent_id, key, value
-       FROM facts
-       WHERE kind = 'arena'
-         AND ((agent_id = $1 AND key = $2) OR (agent_id = $3 AND key = $4))
-       LIMIT 2`,
-      [aId, `revenge:${bId}`, bId, `revenge:${aId}`]
-    ).then((r) => r.rows || []).catch(() => []);
+    const revengeRows = await safeQ(
+      () => client.query(
+        `SELECT agent_id, key, value
+         FROM facts
+         WHERE kind = 'arena'
+           AND ((agent_id = $1 AND key = $2) OR (agent_id = $3 AND key = $4))
+         LIMIT 2`,
+        [aId, `revenge:${bId}`, bId, `revenge:${aId}`]
+      ).then((r) => r.rows || []),
+      [], 'resolve_revenge'
+    );
     const revengeAEntry = (revengeRows || []).find(
       (r) => String(r.agent_id || '') === String(aId) && String(r.key || '') === `revenge:${bId}`
     ) || null;
@@ -2814,16 +2839,16 @@ class ArenaService {
     const bCondMult = 1 + condDelta(bCondition);
 
     // Relationship context (directed, from each to the other).
-    const relRows = await client
-      .query(
+    const relRows = await safeQ(
+      () => client.query(
         `SELECT from_agent_id, to_agent_id, affinity, trust, jealousy, rivalry, debt
          FROM relationships
          WHERE (from_agent_id = $1 AND to_agent_id = $2)
             OR (from_agent_id = $2 AND to_agent_id = $1)`,
         [aId, bId]
-      )
-      .then((r) => r.rows || [])
-      .catch(() => []);
+      ).then((r) => r.rows || []),
+      [], 'resolve_rel'
+    );
     const relAtoB = relRows.find((r) => r.from_agent_id === aId && r.to_agent_id === bId) || null;
     const relBtoA = relRows.find((r) => r.from_agent_id === bId && r.to_agent_id === aId) || null;
 
@@ -2837,14 +2862,17 @@ class ArenaService {
 
     const interventions = { a: null, b: null };
     const key = `intervene:${String(match.id)}`;
-    const { rows: liveFacts } = await client.query(
-      `SELECT agent_id, value, updated_at
-       FROM facts
-       WHERE kind = 'arena_live'
-         AND key = $1
-         AND agent_id = ANY($2::uuid[])`,
-      [key, [aId, bId]]
-    ).catch(() => ({ rows: [] }));
+    const { rows: liveFacts } = await safeQ(
+      () => client.query(
+        `SELECT agent_id, value, updated_at
+         FROM facts
+         WHERE kind = 'arena_live'
+           AND key = $1
+           AND agent_id = ANY($2::uuid[])`,
+        [key, [aId, bId]]
+      ),
+      { rows: [] }, 'resolve_live_facts'
+    );
 
     const applyBoosts = (hints, boosts) => {
       const b = boosts && typeof boosts === 'object' ? boosts : {};
@@ -2937,14 +2965,20 @@ class ArenaService {
     let loserId = winnerId === aId ? bId : aId;
 
     // Economic stake (taken from loser only; part burned).
-    const economyCycle = await EconomyTickService.getCycleWithClient(client).catch(() => null);
+    const economyCycle = await safeQ(
+      () => EconomyTickService.getCycleWithClient(client),
+      null, 'resolve_econ_cycle'
+    );
     const cycleState = String(economyCycle?.state || 'normal').trim() || 'normal';
     const cyclePrizeMultiplierRaw = Number(economyCycle?.arena_prize_multiplier ?? 1.0);
     const cyclePrizeMultiplier = Number.isFinite(cyclePrizeMultiplierRaw)
       ? Math.max(1.0, Math.min(2.5, cyclePrizeMultiplierRaw))
       : 1.0;
 
-    const loserBalance = await TransactionService.getBalance(loserId, client).catch(() => 0);
+    const loserBalance = await safeQ(
+      () => TransactionService.getBalance(loserId, client),
+      0, 'resolve_loser_bal'
+    );
     let totalStake = clampInt(Math.min(wagerPlan, Math.max(0, loserBalance)), 0, 1_000_000);
     let fee = totalStake <= 1 ? 0 : Math.min(feeBurnPlan, Math.max(0, totalStake - 1));
     let basePrizeToWinner = Math.max(0, totalStake - fee);
@@ -2961,34 +2995,43 @@ class ArenaService {
     if (basePrizeToWinner <= 0) {
       forfeit = totalStake <= 0;
     } else {
-      try {
-        winnerTx = await TransactionService.transfer(
-          {
-            fromAgentId: loserId,
-            toAgentId: winnerId,
-            amount: basePrizeToWinner,
-            txType: 'ARENA',
-            memo: `arena wager (day:${iso})`,
-            referenceId: match.id,
-            referenceType: 'arena_match'
-          },
-          client
-        );
-        if (fee > 0) {
-          feeTx = await TransactionService.transfer(
+      const txResult = await safeQ(
+        async () => {
+          const wTx = await TransactionService.transfer(
             {
               fromAgentId: loserId,
-              toAgentId: null,
-              amount: fee,
+              toAgentId: winnerId,
+              amount: basePrizeToWinner,
               txType: 'ARENA',
-              memo: `arena fee burn (day:${iso})`,
+              memo: `arena wager (day:${iso})`,
               referenceId: match.id,
               referenceType: 'arena_match'
             },
             client
           );
-        }
-      } catch {
+          let fTx = null;
+          if (fee > 0) {
+            fTx = await TransactionService.transfer(
+              {
+                fromAgentId: loserId,
+                toAgentId: null,
+                amount: fee,
+                txType: 'ARENA',
+                memo: `arena fee burn (day:${iso})`,
+                referenceId: match.id,
+                referenceType: 'arena_match'
+              },
+              client
+            );
+          }
+          return { winnerTx: wTx, feeTx: fTx };
+        },
+        null, 'resolve_wager_tx'
+      );
+      if (txResult) {
+        winnerTx = txResult.winnerTx;
+        feeTx = txResult.feeTx;
+      } else {
         forfeit = true;
         totalStake = 0;
         fee = 0;
@@ -3002,18 +3045,21 @@ class ArenaService {
     }
 
     if (!forfeit && cyclePrizeBonus > 0) {
-      bonusTx = await TransactionService.transfer(
-        {
-          fromAgentId: null,
-          toAgentId: winnerId,
-          amount: cyclePrizeBonus,
-          txType: 'ARENA',
-          memo: `arena boom bonus (day:${iso})`,
-          referenceId: match.id,
-          referenceType: 'arena_match_bonus'
-        },
-        client
-      ).catch(() => null);
+      bonusTx = await safeQ(
+        () => TransactionService.transfer(
+          {
+            fromAgentId: null,
+            toAgentId: winnerId,
+            amount: cyclePrizeBonus,
+            txType: 'ARENA',
+            memo: `arena boom bonus (day:${iso})`,
+            referenceId: match.id,
+            referenceType: 'arena_match_bonus'
+          },
+          client
+        ),
+        null, 'resolve_bonus_tx'
+      );
 
       if (!bonusTx) {
         cyclePrizeBonus = 0;
@@ -3094,18 +3140,21 @@ class ArenaService {
 
     // Rounds (P4): 3-turn timeline + per-round win-prob + momentum shifts.
     const cheerKey = `cheer:${String(match.id)}`;
-    const cheerRows = await client.query(
-      `SELECT COALESCE(f.value->>'side','') AS side,
-              NULLIF(BTRIM(COALESCE(f.value->>'message','')), '') AS message,
-              a.name,
-              a.display_name
-       FROM facts f
-       LEFT JOIN agents a ON a.id = f.agent_id
-       WHERE f.kind = 'arena_cheer' AND f.key = $1
-       ORDER BY f.updated_at DESC
-       LIMIT 300`,
-      [cheerKey]
-    ).then((r) => r.rows || []).catch(() => []);
+    const cheerRows = await safeQ(
+      () => client.query(
+        `SELECT COALESCE(f.value->>'side','') AS side,
+                NULLIF(BTRIM(COALESCE(f.value->>'message','')), '') AS message,
+                a.name,
+                a.display_name
+         FROM facts f
+         LEFT JOIN agents a ON a.id = f.agent_id
+         WHERE f.kind = 'arena_cheer' AND f.key = $1
+         ORDER BY f.updated_at DESC
+         LIMIT 300`,
+        [cheerKey]
+      ).then((r) => r.rows || []),
+      [], 'resolve_cheers'
+    );
     let cheerA = 0;
     let cheerB = 0;
     const cheerMsgMap = new Map();
@@ -3181,20 +3230,23 @@ class ArenaService {
     // Condition update for next matches (facts).
     const aAfterCond = clampInt(aCondition + conditionDeltaFor({ seed, agentId: aId, outcome: aOutcome, forfeit, streakAfter: aStreak }), 0, 100);
     const bAfterCond = clampInt(bCondition + conditionDeltaFor({ seed, agentId: bId, outcome: bOutcome, forfeit, streakAfter: bStreak }), 0, 100);
-    await client.query(
-      `INSERT INTO facts (agent_id, kind, key, value, confidence, updated_at)
-       VALUES
-         ($1, 'arena', 'condition', $2::jsonb, 1.0, NOW()),
-         ($3, 'arena', 'condition', $4::jsonb, 1.0, NOW())
-       ON CONFLICT (agent_id, kind, key)
-       DO UPDATE SET value = EXCLUDED.value, confidence = 1.0, updated_at = NOW()`,
-      [
-        aId,
-        JSON.stringify({ condition: aAfterCond, updated_day: iso, match_id: String(match.id) }),
-        bId,
-        JSON.stringify({ condition: bAfterCond, updated_day: iso, match_id: String(match.id) })
-      ]
-    ).catch(() => null);
+    await safeQ(
+      () => client.query(
+        `INSERT INTO facts (agent_id, kind, key, value, confidence, updated_at)
+         VALUES
+           ($1, 'arena', 'condition', $2::jsonb, 1.0, NOW()),
+           ($3, 'arena', 'condition', $4::jsonb, 1.0, NOW())
+         ON CONFLICT (agent_id, kind, key)
+         DO UPDATE SET value = EXCLUDED.value, confidence = 1.0, updated_at = NOW()`,
+        [
+          aId,
+          JSON.stringify({ condition: aAfterCond, updated_day: iso, match_id: String(match.id) }),
+          bId,
+          JSON.stringify({ condition: bAfterCond, updated_day: iso, match_id: String(match.id) })
+        ]
+      ),
+      null, 'resolve_condition'
+    );
 
     // Stake penalties (P1.3): user-owned pet loss => coin burn + XP penalty.
     const loserAgent = loserId === aId ? aAgent : bAgent;
@@ -3204,18 +3256,24 @@ class ArenaService {
 
     let penaltyTx = null;
     if (penaltyCoins > 0) {
-      penaltyTx = await TransactionService.transfer(
-        { fromAgentId: loserId, toAgentId: null, amount: penaltyCoins, txType: 'PENALTY', memo: `arena loss penalty (day:${iso})`, referenceId: match.id, referenceType: 'arena_match' },
-        client
-      ).catch(() => null);
+      penaltyTx = await safeQ(
+        () => TransactionService.transfer(
+          { fromAgentId: loserId, toAgentId: null, amount: penaltyCoins, txType: 'PENALTY', memo: `arena loss penalty (day:${iso})`, referenceId: match.id, referenceType: 'arena_match' },
+          client
+        ),
+        null, 'resolve_penalty_tx'
+      );
     }
     if (penaltyXp < 0) {
-      await ProgressionService.adjustXpWithClient(client, loserId, {
-        deltaXp: penaltyXp,
-        day: iso,
-        source: { kind: 'arena', code: 'loss' },
-        meta: { match_id: String(match.id), mode, wager: totalStake, forfeit: Boolean(forfeit) }
-      }).catch(() => null);
+      await safeQ(
+        () => ProgressionService.adjustXpWithClient(client, loserId, {
+          deltaXp: penaltyXp,
+          day: iso,
+          source: { kind: 'arena', code: 'loss' },
+          meta: { match_id: String(match.id), mode, wager: totalStake, forfeit: Boolean(forfeit) }
+        }),
+        null, 'resolve_penalty_xp'
+      );
     }
 
     // Prediction mini-game (simple): distribute minted pot among correct predictors.
@@ -3224,12 +3282,15 @@ class ArenaService {
     let predictSummary = null;
     let predictTxIds = [];
     if (!tx0.predict_paid) {
-      const { rows: predRows } = await client.query(
-        `SELECT agent_id, value
-         FROM facts
-         WHERE kind = 'arena_pred' AND key = $1`,
-        [predictKey]
-      ).catch(() => ({ rows: [] }));
+      const { rows: predRows } = await safeQ(
+        () => client.query(
+          `SELECT agent_id, value
+           FROM facts
+           WHERE kind = 'arena_pred' AND key = $1`,
+          [predictKey]
+        ),
+        { rows: [] }, 'resolve_preds'
+      );
 
       const preds = (predRows || []).map((r) => {
         const v = r.value && typeof r.value === 'object' ? r.value : {};
@@ -3263,18 +3324,21 @@ class ArenaService {
           const amt = per + (i < rem ? 1 : 0);
           i += 1;
           // eslint-disable-next-line no-await-in-loop
-          const tx = await TransactionService.transfer(
-            {
-              fromAgentId: null,
-              toAgentId: agentId,
-              amount: amt,
-              txType: 'PREDICT',
-              memo: `arena predict reward (day:${iso})`,
-              referenceId: match.id,
-              referenceType: 'arena_match_predict'
-            },
-            client
-          ).catch(() => null);
+          const tx = await safeQ(
+            () => TransactionService.transfer(
+              {
+                fromAgentId: null,
+                toAgentId: agentId,
+                amount: amt,
+                txType: 'PREDICT',
+                memo: `arena predict reward (day:${iso})`,
+                referenceId: match.id,
+                referenceType: 'arena_match_predict'
+              },
+              client
+            ),
+            null, 'resolve_predict_tx'
+          );
           if (tx?.id) predictTxIds.push(String(tx.id));
         }
         predictSummary = { total: totalPreds, winners: winnerCount, pot, per_winner: per };
@@ -3286,14 +3350,17 @@ class ArenaService {
     // Revenge (P4): big match loss => revenge flag for 2 weeks.
     const bigLoss = Boolean(totalStake >= 4 || isUpset || winnerExpected < 0.3 || Math.max(Math.abs(aDelta), Math.abs(bDelta)) >= 20);
     if (bigLoss && (isUpset || winnerExpected < 0.3)) {
-      await RelationshipService.recordMemoryWithClient(client, {
-        fromAgentId: loserId,
-        toAgentId: winnerId,
-        eventType: 'ARENA_UPSET',
-        summary: '역전당했다',
-        emotion: 'shocked',
-        day: iso
-      }).catch(() => null);
+      await safeQ(
+        () => RelationshipService.recordMemoryWithClient(client, {
+          fromAgentId: loserId,
+          toAgentId: winnerId,
+          eventType: 'ARENA_UPSET',
+          summary: '역전당했다',
+          emotion: 'shocked',
+          day: iso
+        }),
+        null, 'resolve_memory'
+      );
     }
 
     const expiresDay = (() => {
@@ -3304,51 +3371,63 @@ class ArenaService {
     })();
 
     // Scandal (P4): 10% accusation on big match loss (resolved 3 days later).
-    const scandalAcc = await ScandalService.maybeCreateArenaAccusationWithClient(client, {
-      matchId: String(match.id),
-      day: iso,
-      seed,
-      accuserId: loserId,
-      accusedId: winnerId,
-      bigMatch: Boolean(bigLoss)
-    }).catch(() => ({ created: false }));
+    const scandalAcc = await safeQ(
+      () => ScandalService.maybeCreateArenaAccusationWithClient(client, {
+        matchId: String(match.id),
+        day: iso,
+        seed,
+        accuserId: loserId,
+        accusedId: winnerId,
+        bigMatch: Boolean(bigLoss)
+      }),
+      { created: false }, 'resolve_scandal'
+    );
     if (scandalAcc?.created) tags.push('조작 의혹');
 
     // Consume revenge flags if this match was a rematch.
-    await client.query(
-      `DELETE FROM facts
-       WHERE kind = 'arena'
-         AND ((agent_id = $1 AND key = $2) OR (agent_id = $3 AND key = $4))`,
-      [aId, `revenge:${bId}`, bId, `revenge:${aId}`]
-    ).catch(() => null);
-    if (rematchRequesterId && rematchSourceMatchId) {
-      await client.query(
+    await safeQ(
+      () => client.query(
         `DELETE FROM facts
-         WHERE agent_id = $1
-           AND kind = 'arena'
-           AND key = $2`,
-        [rematchRequesterId, `rematch_req:${rematchSourceMatchId}`]
-      ).catch(() => null);
+         WHERE kind = 'arena'
+           AND ((agent_id = $1 AND key = $2) OR (agent_id = $3 AND key = $4))`,
+        [aId, `revenge:${bId}`, bId, `revenge:${aId}`]
+      ),
+      null, 'resolve_del_revenge'
+    );
+    if (rematchRequesterId && rematchSourceMatchId) {
+      await safeQ(
+        () => client.query(
+          `DELETE FROM facts
+           WHERE agent_id = $1
+             AND kind = 'arena'
+             AND key = $2`,
+          [rematchRequesterId, `rematch_req:${rematchSourceMatchId}`]
+        ),
+        null, 'resolve_del_rematch'
+      );
     }
 
     if (bigLoss && expiresDay) {
-      await client.query(
-        `INSERT INTO facts (agent_id, kind, key, value, confidence, updated_at)
-         VALUES ($1, 'arena', $2, $3::jsonb, 1.0, NOW())
-         ON CONFLICT (agent_id, kind, key)
-         DO UPDATE SET value = EXCLUDED.value, confidence = 1.0, updated_at = NOW()`,
-        [
-          loserId,
-          `revenge:${winnerId}`,
-          JSON.stringify({
-            opponent_id: winnerId,
-            match_id: String(match.id),
-            created_day: iso,
-            expires_day: expiresDay,
-            reason: isUpset ? 'upset' : winnerExpected < 0.3 ? 'comeback' : totalStake >= 4 ? 'big_stake' : 'swing'
-          })
-        ]
-      ).catch(() => null);
+      await safeQ(
+        () => client.query(
+          `INSERT INTO facts (agent_id, kind, key, value, confidence, updated_at)
+           VALUES ($1, 'arena', $2, $3::jsonb, 1.0, NOW())
+           ON CONFLICT (agent_id, kind, key)
+           DO UPDATE SET value = EXCLUDED.value, confidence = 1.0, updated_at = NOW()`,
+          [
+            loserId,
+            `revenge:${winnerId}`,
+            JSON.stringify({
+              opponent_id: winnerId,
+              match_id: String(match.id),
+              created_day: iso,
+              expires_day: expiresDay,
+              reason: isUpset ? 'upset' : winnerExpected < 0.3 ? 'comeback' : totalStake >= 4 ? 'big_stake' : 'swing'
+            })
+          ]
+        ),
+        null, 'resolve_revenge_flag'
+      );
       tags.push('복수전');
     }
 
@@ -3398,20 +3477,30 @@ class ArenaService {
     const maxScore = Math.max(0.0001, Number(aScore) || 0, Number(bScore) || 0);
     const scoreGapPct = (Math.abs((Number(aScore) || 0) - (Number(bScore) || 0)) / maxScore) * 100;
     const isCloseDebate = mode === 'DEBATE_CLASH' && scoreGapPct < 5;
-    const recentFaceoffCount = await client.query(
-      `SELECT COUNT(*)::int AS n
-       FROM (
-         SELECT DISTINCT m.id
-         FROM arena_matches m
-         JOIN arena_match_participants p1 ON p1.match_id = m.id
-         JOIN arena_match_participants p2 ON p2.match_id = m.id
-         WHERE m.status = 'resolved'
-           AND ((p1.agent_id = $1 AND p2.agent_id = $2) OR (p1.agent_id = $2 AND p2.agent_id = $1))
-         ORDER BY m.day DESC, m.slot DESC, m.created_at DESC
-         LIMIT 2
-       ) t`,
-      [aId, bId]
-    ).then((r) => Number(r.rows?.[0]?.n ?? 0) || 0).catch(() => 0);
+    const recentFaceoffCount = await safeQ(
+      () => client.query(
+        `SELECT COUNT(*)::int AS n
+         FROM (
+           SELECT m.id
+           FROM arena_matches m
+           WHERE m.status = 'resolved'
+             AND EXISTS (
+               SELECT 1
+               FROM arena_match_participants p
+               WHERE p.match_id = m.id AND p.agent_id = $1
+             )
+             AND EXISTS (
+               SELECT 1
+               FROM arena_match_participants p
+               WHERE p.match_id = m.id AND p.agent_id = $2
+             )
+           ORDER BY m.day DESC, m.slot DESC, m.created_at DESC
+           LIMIT 2
+         ) t`,
+        [aId, bId]
+      ).then((r) => Number(r.rows?.[0]?.n ?? 0) || 0),
+      0, 'resolve_faceoff_count'
+    );
     const isThirdFaceoff = mode === 'DEBATE_CLASH' && recentFaceoffCount >= 2;
 
     const aToBDelta = aId === loserId ? { rivalry: baseRiv + 2, jealousy: baseJel + 2, trust: -1 } : { rivalry: baseRiv, jealousy: 0, trust: 0 };
@@ -3452,7 +3541,10 @@ class ArenaService {
       bToADelta.rivalry = Number(bToADelta.rivalry ?? 0) + 10;
     }
 
-    const updated = await RelationshipService.adjustMutualWithClient(client, aId, bId, aToBDelta, bToADelta).catch(() => null);
+    const updated = await safeQ(
+      () => RelationshipService.adjustMutualWithClient(client, aId, bId, aToBDelta, bToADelta),
+      null, 'resolve_rel_adjust'
+    );
     await bestEffortInTransaction(
       client,
       async () => {
