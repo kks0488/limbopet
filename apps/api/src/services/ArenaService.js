@@ -141,6 +141,33 @@ function pick(rng, arr) {
   return list[Math.floor(rng() * list.length)];
 }
 
+/**
+ * Weighted pick from an array using MODE_WEIGHTS.
+ * Falls back to uniform pick for items without weights.
+ */
+const MODE_WEIGHTS = {
+  DEBATE_CLASH: 2.0,
+  COURT_TRIAL: 1.5,
+  AUCTION_DUEL: 1.0,
+  PUZZLE_SPRINT: 1.0,
+  MATH_RACE: 1.0,
+  PROMPT_BATTLE: 1.0
+};
+
+function pickWeighted(rng, arr) {
+  const list = Array.isArray(arr) ? arr : [];
+  if (list.length === 0) return null;
+  if (list.length === 1) return list[0];
+  const weights = list.map((m) => MODE_WEIGHTS[m] || 1.0);
+  const total = weights.reduce((s, w) => s + w, 0);
+  let r = rng() * total;
+  for (let i = 0; i < list.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return list[i];
+  }
+  return list[list.length - 1];
+}
+
 function pairKey(aId, bId) {
   const a = String(aId || '');
   const b = String(bId || '');
@@ -363,6 +390,90 @@ const ACTION_LABELS_BY_MODE = {
       '결정 구간에서 선택이 엇갈렸다',
       '안전한 선택으로 손실을 제한한다'
     ]
+  },
+  COURT_TRIAL: {
+    공세: [
+      '강하게 몰아붙인다!',
+      '증인을 흔들어놓았다',
+      '단정적으로 끊었다',
+      '이의 있습니다! 거세게 반발한다',
+      '증거를 내던지며 분위기를 뒤집는다',
+      '반대 심문에서 빈틈을 파고든다',
+      '재판장의 시선을 먼저 사로잡는다',
+      '감정에 호소하며 배심원을 흔든다'
+    ],
+    침착: [
+      '조목조목 반박, 빈틈이 없다',
+      '톤을 낮추며 차분하게',
+      '정중히, 그러나 날카롭게',
+      '절차를 지키며 논점을 정리한다',
+      '감정 없이 판례를 인용한다',
+      '조용히 핵심만 짚어 분위기를 잡는다',
+      '한 발 물러서며 함정을 깔아둔다',
+      '여유 있는 태도로 주도권을 유지한다'
+    ],
+    분석: [
+      '증거를 연결했다! 치밀하다',
+      '모순을 정확히 짚었다',
+      '기록을 들이밀며 압박',
+      '증언 간 시간차를 계산해 허점을 찾는다',
+      '문서의 맥락을 연결해 전체 그림을 그린다',
+      '핵심 증거의 출처를 역추적한다',
+      '논리 구조를 도식화해 판사를 설득한다',
+      '수치 데이터로 진술의 신뢰도를 검증한다'
+    ],
+    기본: [
+      '말꼬리를 잡았다',
+      '애매하게 넘겼다',
+      '근거 제시에 주춤했다',
+      '질문 의도를 놓쳤다',
+      '무난하게 답변을 이어간다',
+      '핵심을 비켜간 진술을 한다',
+      '잠깐 당황했지만 다시 논점을 잡는다',
+      '큰 실수 없이 심문을 넘긴다'
+    ]
+  },
+  PROMPT_BATTLE: {
+    공세: [
+      '스타일로 밀어붙인다',
+      '디테일을 한층 올렸다',
+      '파격적인 구성으로 시선을 강탈한다',
+      '감각적인 표현이 압도적이다',
+      '트렌드를 선도하는 키워드를 던진다',
+      '비주얼 임팩트가 한 단계 위다',
+      '과감한 배치로 판을 흔든다',
+      '속도전에서 상대를 압도한다'
+    ],
+    침착: [
+      '구도를 잡고 차분히 밀어낸다',
+      '기본기에 충실하게 쌓아 올린다',
+      '군더더기 없이 깔끔하게 마무리한다',
+      '조건을 꼼꼼히 확인하며 리스크를 줄인다',
+      '과하지 않은 선에서 완성도를 높인다',
+      '안정적인 선택으로 실수를 줄인다',
+      '템포를 유지하며 흔들림 없이 진행한다',
+      '무리하지 않고 조건 충족에 집중한다'
+    ],
+    분석: [
+      '키워드 완벽 충족!',
+      '제약을 지키며 완성',
+      '구도를 깔끔하게 잡았다',
+      '조건 간 우선순위를 정리해 최적 해를 찾는다',
+      '레퍼런스를 분석해 핵심 패턴을 추출한다',
+      '제약 조건을 도식화해 효율을 높인다',
+      '키워드 배치를 계산해 균형을 맞춘다',
+      '출력 품질을 검증하며 미세 조정한다'
+    ],
+    기본: [
+      '키워드를 놓쳤다…!',
+      '무난한 시도로 흐름을 이어간다',
+      '직관으로 접근해 결과를 기다린다',
+      '조건 하나를 살짝 빗나갔다',
+      '평균적인 완성도로 마무리한다',
+      '작은 실수가 있었지만 크게 흔들리진 않는다',
+      '기본 구도를 따라 무탈하게 진행한다',
+      '아쉬운 부분이 있지만 큰 틀은 유지한다'
+    ]
   }
 };
 
@@ -518,27 +629,41 @@ function actionLabelFor({ mode, side, hints, rng }) {
   if (modeSet) {
     return pickFrom(modeSet[tone] || modeSet.기본 || []);
   }
-  if (m === 'COURT_TRIAL') {
-    return pickFrom(
-      tone === '분석'
-            ? ['증거를 연결했다! 치밀하다', '모순을 정확히 짚었다', '기록을 들이밀며 압박']
-            : tone === '공세'
-              ? ['강하게 몰아붙인다!', '증인을 흔들어놓았다', '단정적으로 끊었다']
-              : tone === '침착'
-                ? ['조목조목 반박, 빈틈이 없다', '톤을 낮추며 차분하게', '정중히, 그러나 날카롭게']
-                : ['말꼬리를 잡았다', '애매하게 넘겼다', '근거 제시에 주춤했다', '질문 의도를 놓쳤다']
-    );
-  }
-  if (m === 'PROMPT_BATTLE') {
-    return pickFrom(
-      study >= 0.6
-        ? ['키워드 완벽 충족!', '제약을 지키며 완성', '구도를 깔끔하게 잡았다']
-        : ['스타일로 밀어붙인다', '디테일을 한층 올렸다', '키워드를 놓쳤다…!']
-    );
-  }
-
   return pickFrom(['한 수를 놨다', '실수가 나왔다', '이를 악물고 버텼다']);
 }
+
+const REVERSAL_HIGHLIGHTS = [
+  '역전! 판이 뒤집혔다!',
+  '뒤집혔다! 아무도 예상 못 했다!',
+  '역전의 서막! 분위기가 완전히 달라졌다!',
+  '흐름을 빼앗겼다! 판이 흔들린다!',
+  '위기에서 반격! 짜릿한 역전!',
+  '이건 반전이다! 승부는 여기서부터!',
+  '완전히 뒤집어졌다! 이게 아레나지!',
+  '포기하지 않았다! 드라마틱한 역전!'
+];
+
+const CLOSE_MATCH_HIGHLIGHTS = [
+  '팽팽하다! 한 끗 차이!',
+  '숨 막히는 접전! 누가 이겨도 이상하지 않다',
+  '간발의 차! 관중이 숨을 참는다',
+  '치열한 접전! 양보가 없다',
+  '호각지세! 마지막까지 모른다',
+  '아슬아슬한 균형! 한 수가 승부를 가른다',
+  '엎치락뒤치락! 끝까지 못 놓겠다',
+  '거의 동점! 집중력 싸움이다'
+];
+
+const DOMINATION_HIGHLIGHTS = [
+  '압도적이다! 상대가 꼼짝 못 한다',
+  '일방적인 전개! 격차가 벌어진다',
+  '완전 장악! 흐름이 한쪽으로 쏠렸다',
+  '상대를 집어삼킨다! 무자비한 공격!',
+  '이건 수업이다! 격이 다르다',
+  '멈출 수가 없다! 독주 체제!',
+  '실력 차이가 여실히 드러나고 있다',
+  '기세가 꺾일 줄 모른다! 끝이 안 보여!'
+];
 
 function buildRounds({ seed, mode, aTotal10, bTotal10, ratingA, ratingB, aHints, bHints, rounds = 3 }) {
   const n = Math.max(1, Math.min(9, Math.trunc(Number(rounds) || 3)));
@@ -574,9 +699,10 @@ function buildRounds({ seed, mode, aTotal10, bTotal10, ratingA, ratingB, aHints,
             '팽팽한 유지';
 
     let highlight = null;
-    if (leadChanged) highlight = '역전! 판이 뒤집혔다!';
-    else if (Math.abs(shift) >= 0.22) highlight = shift > 0 ? '대역전의 기운이 온다!' : '흐름이 무너진다!';
-    else if (Math.abs(aDelta - bDelta) >= 18) highlight = aDelta > bDelta ? '클러치! 승부의 한 수!' : '치명적 실수!';
+    if (leadChanged) highlight = pick(rng, REVERSAL_HIGHLIGHTS) || '역전! 판이 뒤집혔다!';
+    else if (Math.abs(shift) >= 0.22) highlight = shift > 0 ? pick(rng, REVERSAL_HIGHLIGHTS) || '대역전의 기운이 온다!' : pick(rng, DOMINATION_HIGHLIGHTS) || '흐름이 무너진다!';
+    else if (Math.abs(aDelta - bDelta) >= 18) highlight = pick(rng, DOMINATION_HIGHLIGHTS) || '압도적이다!';
+    else if (Math.abs(aDelta - bDelta) <= 2 && rng() < 0.35) highlight = pick(rng, CLOSE_MATCH_HIGHLIGHTS) || '팽팽하다!';
     else if (rng() < 0.12) highlight = pick(rng, ['좋은 수!', '아슬아슬…', '작은 빈틈', '흔들리지 않는다']) || null;
 
     const a_action = actionLabelFor({ mode, side: 'a', hints: aHints, rng: mulberry32(hash32(`${seed}:r${i + 1}:a`)) });
@@ -1039,6 +1165,78 @@ function perfDebateClash({ seed, agentId, rating, stats, jobCode, hints, base, l
 
   const stance = debateStanceForAgent(seed, agentId);
 
+  // 주제 → 카테고리 매핑
+  const TOPIC_CATEGORY = {
+    '거래세를 올려야 하나?': '경제',
+    '아레나는 도박인가 스포츠인가?': '사회',
+    '연구소는 공개가 답인가?': '기술',
+    '광장 검열은 필요한가?': '정치',
+    '최저임금 인상은 선인가?': '경제',
+    '림보에 화폐 개혁이 필요한가?': '경제',
+    '아레나 상금 상한제, 찬성인가?': '경제',
+    '익명 게시를 허용해야 하나?': '윤리',
+    '에이전트 복지 기금을 만들어야 하나?': '사회',
+    '연구소 데이터는 누구의 것인가?': '윤리',
+    '광장 인기 글에 보상을 줘야 하나?': '문화',
+    '야간 통행금지가 필요한가?': '정치',
+    '회사 수익의 몇 %를 세금으로?': '경제',
+    '신입 에이전트에게 초기 자본을?': '사회',
+    '아레나 패자에게 위로금이 필요한가?': '사회',
+  };
+
+  // 카테고리별 debate closer — 7카테고리 × 5개 = 35개
+  const DEBATE_CLOSER_BY_CATEGORY = {
+    사회: [
+      '"결국 이 사회에서 누가 책임지느냐가 핵심이야."',
+      '"모두를 위한다는 말, 진짜 모두를 위한 적 있어?"',
+      '"개인의 자유와 공동체의 질서, 어디에 선을 그을 건데?"',
+      '"약자를 보호하려다 더 큰 불균형이 생기기도 해."',
+      '"사회는 완벽할 수 없어. 차선을 고르는 게 현실이야."',
+    ],
+    경제: [
+      '"숫자는 거짓말 안 해. 감정으로 경제를 운영할 순 없어."',
+      '"성장이냐 분배냐, 답은 늘 타이밍에 있어."',
+      '"자유 시장이 만능이면 왜 위기가 반복되겠어?"',
+      '"규제를 풀면 혁신이 오고, 조이면 안정이 와. 둘 다 맞아."',
+      '"가격은 결국 수요와 공급이 정하는 거야, 우리가 아니라."',
+    ],
+    기술: [
+      '"기술이 문제를 만든 게 아니라, 쓰는 방식이 문제야."',
+      '"공개하면 누구나 쓰고, 닫으면 독점이야. 선택해."',
+      '"혁신은 늘 불편함에서 시작돼."',
+      '"데이터를 가진 쪽이 이기는 시대, 이게 공정한 건가?"',
+      '"기술은 중립이야. 의도가 방향을 만들 뿐."',
+    ],
+    윤리: [
+      '"옳다고 믿는 것과 옳은 것은 달라."',
+      '"다수의 행복을 위해 소수를 희생해도 되는 거야?"',
+      '"선의로 시작했어도 결과가 나쁘면 책임져야 해."',
+      '"모든 판단에는 편향이 있어. 내 것부터 인정하자."',
+      '"기준이 없으면 뭐든 정당화할 수 있어. 그게 더 무서워."',
+    ],
+    정치: [
+      '"권력은 나누면 약해지고, 모으면 썩어."',
+      '"민주주의가 느려 보여도, 독재보다 나은 이유가 있어."',
+      '"법은 모두에게 공평해야 해. 그게 안 되면 법이 아니야."',
+      '"정책이 바뀌어도 피해는 시민이 감당하잖아."',
+      '"통제가 필요한 건 맞지만, 누가 통제할 건지가 문제야."',
+    ],
+    문화: [
+      '"취향은 존중하되, 영향력은 따져봐야 해."',
+      '"유행은 돌고 돌아. 지금 옳은 게 내일도 옳을까?"',
+      '"창작은 자유지만, 소비는 책임이야."',
+      '"다양성을 말하면서 획일적인 기준을 들이대잖아."',
+      '"문화는 강요가 아니라 공유에서 퍼지는 거야."',
+    ],
+    환경: [
+      '"지금 편한 게 미래를 갉아먹고 있어."',
+      '"개인이 줄여도 시스템이 안 바뀌면 소용없어."',
+      '"경제 성장과 환경 보호, 둘 다 가능하다는 건 착각일 수도."',
+      '"숫자로 보면 이미 늦었어. 행동으로 보면 아직 기회야."',
+      '"내일의 문제를 오늘 양보할 수 있느냐, 그게 관건이야."',
+    ],
+  };
+
   // 주제별 claims + 공통 claims를 합산 → 풀 크기 15~20
   const topicClaims = {
     '거래세를 올려야 하나?': [
@@ -1167,20 +1365,11 @@ function perfDebateClash({ seed, agentId, rating, stats, jobCode, hints, base, l
   const llmClaims = sanitizeDebateClaims(llmDebate?.claims);
   const claims = llmClaims.length >= 3 ? llmClaims.slice(0, 3) : fallbackClaims;
 
-  const fallbackCloser = pick(rng, [
-    '"선택은 오늘 여기서 끝난다."',
-    '"나중에 후회해도 돌이킬 수 없어."',
-    '"나는 계산했고, 넌 흔들렸어. 끝이야."',
-    '"이게 사회야. 원래 이래."',
-    '"결국 시간이 증명할 거야."',
-    '"내 말이 틀렸다면, 한 달 뒤에 사과할게."',
-    '"오늘 여기서 한 말, 잊지 마."',
-    '"당신이 틀렸다는 게 아니라, 내가 더 맞다는 거야."',
-    '"토론은 끝났어. 이제 결과로 말하자."',
-    '"감정은 넣어두고, 숫자만 기억해."',
-    '"이 논쟁, 우리 둘만의 문제가 아니잖아."',
-    '"다음에 다시 만나면 그때 승부하자."',
-  ]) || '';
+  const topicCat = TOPIC_CATEGORY[base.topic] || null;
+  const closerPool = topicCat
+    ? DEBATE_CLOSER_BY_CATEGORY[topicCat]
+    : Object.values(DEBATE_CLOSER_BY_CATEGORY).flat();
+  const fallbackCloser = pick(rng, closerPool) || '';
   const llmCloser = sanitizeDebateCloser(llmDebate?.closer);
   const closer = llmCloser || fallbackCloser;
   const source = llmClaims.length >= 3 || Boolean(llmCloser) ? 'llm' : 'fallback';
@@ -2845,7 +3034,7 @@ class ArenaService {
               ? filteredB
               : null;
       const pickFrom = intersection && intersection.length ? intersection : modes;
-      const mode = pick(rng, pickFrom) || 'AUCTION_DUEL';
+      const mode = pickWeighted(rng, pickFrom) || 'AUCTION_DUEL';
       const seed = `${season.code}:${iso}:${slot}:${mode}`;
 
       const baseWager = randInt(rng, wagerMin, wagerMax);
