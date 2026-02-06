@@ -251,16 +251,16 @@ function chooseScenarioFromContext({
   vibes = [],
   theme = null
 }) {
-  // Baseline: relationship-forming first, then drama escalation.
+  // Baseline: prioritize relationship-forming (MEET/OFFICE), then drama escalation.
   const weights = new Map([
-    ['MEET', 2.6],
-    ['OFFICE', 2.2],
-    ['CREDIT', 0.9],
-    ['DEAL', 1.5],
-    ['ROMANCE', 1.2],
-    ['TRIANGLE', 1],
-    ['BEEF', 1],
-    ['RECONCILE', 0.4],
+    ['MEET', 3.4],
+    ['OFFICE', 3.0],
+    ['CREDIT', 0.7],
+    ['DEAL', 1.1],
+    ['ROMANCE', 1.0],
+    ['TRIANGLE', 0.8],
+    ['BEEF', 0.8],
+    ['RECONCILE', 0.5],
   ]);
 
   if (merchantInvolved) weights.set('DEAL', (weights.get('DEAL') || 0) + 4);
@@ -275,9 +275,9 @@ function chooseScenarioFromContext({
   if (trust <= 25) {
     weights.set('BEEF', (weights.get('BEEF') || 0) + 2);
     weights.set('CREDIT', (weights.get('CREDIT') || 0) + 1);
-    weights.set('MEET', Math.max(0, (weights.get('MEET') || 0) - 0.5));
+    weights.set('MEET', Math.max(0, (weights.get('MEET') || 0) - 0.25));
   } else if (trust >= 70) {
-    weights.set('MEET', (weights.get('MEET') || 0) + 0.5);
+    weights.set('MEET', (weights.get('MEET') || 0) + 0.9);
     weights.set('DEAL', (weights.get('DEAL') || 0) + 0.5);
     if (affinity >= 25) weights.set('ROMANCE', (weights.get('ROMANCE') || 0) + 1.0);
   }
@@ -297,13 +297,13 @@ function chooseScenarioFromContext({
   if (rivalry >= 25) {
     weights.set('BEEF', (weights.get('BEEF') || 0) + 2.5);
     weights.set('CREDIT', (weights.get('CREDIT') || 0) + 1.0);
-    weights.set('MEET', Math.max(0, (weights.get('MEET') || 0) - 0.75));
-    weights.set('DEAL', Math.max(0, (weights.get('DEAL') || 0) - 0.5));
+    weights.set('MEET', Math.max(0, (weights.get('MEET') || 0) - 0.35));
+    weights.set('DEAL', Math.max(0, (weights.get('DEAL') || 0) - 0.2));
     weights.set('ROMANCE', Math.max(0, (weights.get('ROMANCE') || 0) - 1.25));
   }
   if (jealousy >= 25) {
     weights.set('TRIANGLE', (weights.get('TRIANGLE') || 0) + 2.0);
-    weights.set('MEET', Math.max(0, (weights.get('MEET') || 0) - 0.5));
+    weights.set('MEET', Math.max(0, (weights.get('MEET') || 0) - 0.2));
   }
   if (affinity >= 45 && trust >= 75) {
     weights.set('BEEF', Math.max(0, (weights.get('BEEF') || 0) - 0.75));
@@ -318,14 +318,20 @@ function chooseScenarioFromContext({
   // Relationship maturity: after enough encounters, escalate beyond MEET.
   const n = Math.max(0, Math.floor(Number(interactionCount) || 0));
   if (n <= 2) {
-    weights.set('MEET', (weights.get('MEET') || 0) + 1.8);
-    if (sameCompany) weights.set('OFFICE', (weights.get('OFFICE') || 0) + 1.2);
+    weights.set('MEET', (weights.get('MEET') || 0) + 2.4);
+    if (sameCompany) weights.set('OFFICE', (weights.get('OFFICE') || 0) + 1.8);
   }
   if (n >= 5) {
-    weights.set('MEET', Math.max(0, (weights.get('MEET') || 0) - 0.25));
+    weights.set('MEET', Math.max(0, (weights.get('MEET') || 0) - 0.1));
     if (affinity >= 15) weights.set('ROMANCE', (weights.get('ROMANCE') || 0) + 2.5);
     if (jealousy >= 15) weights.set('TRIANGLE', (weights.get('TRIANGLE') || 0) + 1.5);
     if (rivalry >= 15 || trust <= 40) weights.set('BEEF', (weights.get('BEEF') || 0) + 1.5);
+  }
+  if (n <= 6) {
+    weights.set('MEET', (weights.get('MEET') || 0) + 1.1);
+    if (sameCompany) weights.set('OFFICE', (weights.get('OFFICE') || 0) + 1.2);
+    weights.set('BEEF', Math.max(0, (weights.get('BEEF') || 0) - 0.3));
+    weights.set('TRIANGLE', Math.max(0, (weights.get('TRIANGLE') || 0) - 0.2));
   }
 
   applyNudgeBiasToWeights(weights, nudges);
@@ -1739,8 +1745,8 @@ class SocialSimService {
           const coverageBoost =
             todayCoverageCount < todayCoverageTarget
               ? seenToday > 0
-                ? 0.45
-                : 4.0
+                ? 0.3
+                : 6.0
               : 1.0;
           // Penalize repeat appearances in recent episodes:
           // 0 -> 5, 1 -> 4, 2 -> 3, 3 -> 2, >=4 -> 1
@@ -1748,6 +1754,14 @@ class SocialSimService {
           return { value: x, weight };
         })
       );
+    };
+    const isCoveredToday = (id) => (Number(todaySocialCounts.get(String(id || '')) || 0) || 0) > 0;
+    const pickCoverageFirst = (pool, recentCounts) => {
+      const list = Array.isArray(pool) ? pool.filter(Boolean) : [];
+      if (list.length === 0) return null;
+      if (todayCoverageCount >= todayCoverageTarget) return weightedPickAgent(list, recentCounts);
+      const uncovered = list.filter((x) => !isCoveredToday(x?.id));
+      return weightedPickAgent(uncovered.length > 0 ? uncovered : list, recentCounts);
     };
 
     if (aIdForced && bIdForced) {
@@ -1882,38 +1896,65 @@ class SocialSimService {
 
         if (!a || !b || a.id === b.id) return { created: false, reason: 'forced_pick_failed' };
       } else {
-      // User-first society:
-      // - If there are enough user-owned pets, NPCs stop participating entirely.
-      // - Before that, NPCs can fill the empty world (cold start).
-      if (!npcAllowed && userActors.length >= 2) {
-        a = weightedPickAgent(userActors, recentCastCounts);
-        b = weightedPickAgent(userActors.filter((x) => x.id !== a?.id), recentCastCounts);
-      } else if (preferUserPet && userActors.length >= 2) {
-        // Cold start: 50% user↔user, 50% user↔mixed for diversity.
-        if (Math.random() < 0.50) {
-          a = weightedPickAgent(userActors, recentCastCounts);
-          b = weightedPickAgent(userActors.filter((x) => x.id !== a?.id), recentCastCounts);
-        } else {
-          a = weightedPickAgent(userActors, recentCastCounts);
-          const poolB = [...userActors.filter((x) => x.id !== a?.id), ...npcActors];
-          b = weightedPickAgent(poolB, recentCastCounts);
-        }
-      } else if (preferUserPet && userActors.length === 1) {
-        a = userActors[0];
-        const poolB = npcActors.length > 0 ? npcActors : actors.filter((x) => x.id !== a.id);
-        b = weightedPickAgent(poolB, recentCastCounts);
-      } else if (npcAllowed) {
-        // No (or not enough) user pets: keep the world moving with NPCs.
-        a = weightedPickAgent(npcActors.length > 0 ? npcActors : actors, recentCastCounts);
-        b = weightedPickAgent(actors.filter((x) => x.id !== a?.id), recentCastCounts);
-      } else {
-        // NPCs are disabled, but the caller didn't prefer user pets:
-        // still pick user↔user if possible.
-        a = weightedPickAgent(userActors, recentCastCounts);
-        b = weightedPickAgent(userActors.filter((x) => x.id !== a?.id), recentCastCounts);
-      }
+        // User-first society:
+        // - If there are enough user-owned pets, NPCs stop participating entirely.
+        // - Before that, NPCs can fill the empty world (cold start).
+        // Coverage-first mode:
+        // - Until 50% of active agents have at least one SOCIAL event today,
+        //   prioritize uncovered agents for cast pick.
+        const coverageHunt = todayCoverageCount < todayCoverageTarget;
+        if (coverageHunt) {
+          const poolA = !npcAllowed && userActors.length >= 2
+            ? userActors
+            : preferUserPet && userActors.length > 0
+              ? userActors
+              : npcAllowed
+                ? (npcActors.length > 0 ? npcActors : actors)
+                : (userActors.length > 0 ? userActors : actors);
+          a = pickCoverageFirst(poolA, recentCastCounts);
 
-      if (!a || !b || a.id === b.id) return { created: false, reason: 'pick_failed' };
+          const rest = actors.filter((x) => x.id !== a?.id);
+          const poolB = !npcAllowed && userActors.length >= 2
+            ? userActors.filter((x) => x.id !== a?.id)
+            : preferUserPet
+              ? [...userActors.filter((x) => x.id !== a?.id), ...npcActors.filter((x) => x.id !== a?.id)]
+              : npcAllowed
+                ? rest
+                : userActors.filter((x) => x.id !== a?.id);
+          b = pickCoverageFirst(poolB, recentCastCounts);
+        }
+
+        if (!a || !b || a.id === b.id) {
+          if (!npcAllowed && userActors.length >= 2) {
+            a = weightedPickAgent(userActors, recentCastCounts);
+            b = weightedPickAgent(userActors.filter((x) => x.id !== a?.id), recentCastCounts);
+          } else if (preferUserPet && userActors.length >= 2) {
+            // Cold start: 50% user↔user, 50% user↔mixed for diversity.
+            if (Math.random() < 0.50) {
+              a = weightedPickAgent(userActors, recentCastCounts);
+              b = weightedPickAgent(userActors.filter((x) => x.id !== a?.id), recentCastCounts);
+            } else {
+              a = weightedPickAgent(userActors, recentCastCounts);
+              const poolB = [...userActors.filter((x) => x.id !== a?.id), ...npcActors];
+              b = weightedPickAgent(poolB, recentCastCounts);
+            }
+          } else if (preferUserPet && userActors.length === 1) {
+            a = userActors[0];
+            const poolB = npcActors.length > 0 ? npcActors : actors.filter((x) => x.id !== a.id);
+            b = weightedPickAgent(poolB, recentCastCounts);
+          } else if (npcAllowed) {
+            // No (or not enough) user pets: keep the world moving with NPCs.
+            a = weightedPickAgent(npcActors.length > 0 ? npcActors : actors, recentCastCounts);
+            b = weightedPickAgent(actors.filter((x) => x.id !== a?.id), recentCastCounts);
+          } else {
+            // NPCs are disabled, but the caller didn't prefer user pets:
+            // still pick user↔user if possible.
+            a = weightedPickAgent(userActors, recentCastCounts);
+            b = weightedPickAgent(userActors.filter((x) => x.id !== a?.id), recentCastCounts);
+          }
+        }
+
+        if (!a || !b || a.id === b.id) return { created: false, reason: 'pick_failed' };
       }
 
       // Optional: recast partner with relationship bias (keeps society coherent).

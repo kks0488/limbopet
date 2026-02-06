@@ -339,9 +339,47 @@ class ShowrunnerService {
       const countToday = lastDay === today ? prevCount : 0;
       const lastCast = state?.last_cast && typeof state.last_cast === 'object' ? state.last_cast : null;
 
-      const allowed = force ? MAX_EPISODES_PER_DAY : allowedEpisodesForNow(nowDate);
+      const timeAllowed = force ? MAX_EPISODES_PER_DAY : allowedEpisodesForNow(nowDate);
+      let allowed = timeAllowed;
+      let coveragePlan = null;
+      if (!force) {
+        const coverageRaw = await bestEffortInTransaction(
+          client,
+          async () => {
+            const { rows } = await client.query(
+              `WITH actors AS (
+                 SELECT id
+                 FROM agents
+                 WHERE name <> 'world_core'
+                   AND is_active = true
+               ),
+               covered AS (
+                 SELECT DISTINCT e.agent_id
+                 FROM events e
+                 JOIN actors a ON a.id = e.agent_id
+                 WHERE e.event_type = 'SOCIAL'
+                   AND e.payload->>'day' = $1
+               )
+               SELECT
+                 (SELECT COUNT(*)::int FROM actors) AS actor_count,
+                 (SELECT COUNT(*)::int FROM covered) AS covered_count`,
+              [today]
+            );
+            return rows?.[0] ?? { actor_count: 0, covered_count: 0 };
+          },
+          { label: 'showrunner_social_coverage', fallback: () => ({ actor_count: 0, covered_count: 0 }) }
+        );
+        const actorCount = Math.max(0, Number(coverageRaw?.actor_count ?? 0) || 0);
+        const coveredCount = Math.max(0, Number(coverageRaw?.covered_count ?? 0) || 0);
+        const targetCoverage = Math.ceil(actorCount * 0.5);
+        const missingCoverage = Math.max(0, targetCoverage - coveredCount);
+        const neededEpisodes = Math.ceil(missingCoverage / 2);
+        const coverageAllowed = neededEpisodes > 0 ? Math.min(120, countToday + neededEpisodes) : countToday;
+        allowed = Math.max(timeAllowed, coverageAllowed);
+        coveragePlan = { actorCount, coveredCount, targetCoverage, neededEpisodes };
+      }
       if (!force && countToday >= allowed) {
-        return { created: false, day: today, count: countToday, allowed };
+        return { created: false, day: today, count: countToday, allowed, coverage: coveragePlan };
       }
 
       const general = await client.query('SELECT id FROM submolts WHERE name = $1', ['general']).then((r) => r.rows[0]);

@@ -47,22 +47,32 @@ function renderRecapBody({ day, mode, meta }) {
   if (tags.length) lines.push(`태그: ${tags.join(' · ')}`);
 
   const rounds = Array.isArray(m.rounds) ? m.rounds : [];
+  const roundSignals = new Set();
   if (rounds.length > 0) {
-    lines.push('라운드 하이라이트:');
+    lines.push('라운드별 하이라이트 요약:');
     for (const r of rounds.slice(0, 5)) {
-      const idx = Number(r?.idx ?? 0) || 0;
+      const idx = asInt(r?.round_num ?? r?.idx, 0);
       const highlight = safeText(r?.highlight, 140);
       const aAction = safeText(r?.a_action ?? r?.aAction, 80);
       const bAction = safeText(r?.b_action ?? r?.bAction, 80);
-      const scoreA = Number(r?.a_score10 ?? r?.aScore10 ?? 0) || 0;
-      const scoreB = Number(r?.b_score10 ?? r?.bScore10 ?? 0) || 0;
+      const momentum = safeText(r?.momentum_shift ?? r?.momentumShift, 80);
+      const scoreA = asInt(r?.a_score_delta ?? r?.a_score10 ?? r?.aScore10, 0);
+      const scoreB = asInt(r?.b_score_delta ?? r?.b_score10 ?? r?.bScore10, 0);
+      const gap = Math.abs(scoreA - scoreB);
+      if (gap <= 2) roundSignals.add('박빙');
+      if (gap >= 18) roundSignals.add('압도적');
+      if (/역전/.test(`${highlight} ${momentum}`)) roundSignals.add('역전');
+      const lead = scoreA === scoreB ? '동수' : (scoreA > scoreB ? `${aName || 'A'} 우세` : `${bName || 'B'} 우세`);
       const parts = [];
-      if (highlight) parts.push(highlight);
+      parts.push(`${lead} (${scoreA}:${scoreB})`);
       if (aAction || bAction) parts.push(`A:${aAction || '-'} / B:${bAction || '-'}`);
-      parts.push(`점수 ${scoreA}:${scoreB}`);
+      if (momentum) parts.push(momentum);
+      if (highlight) parts.push(highlight);
       lines.push(`- R${idx || '?'} ${parts.join(' | ')}`);
     }
   }
+  const spotlightTags = [...new Set(['역전', '압도적', '박빙'].filter((t) => tags.includes(t) || roundSignals.has(t)))];
+  if (spotlightTags.length) lines.push(`관전 포인트: ${spotlightTags.join(' · ')}`);
 
   const cheer = m.cheer && typeof m.cheer === 'object' ? m.cheer : null;
   if (cheer) {
@@ -146,7 +156,7 @@ function renderRecapBody({ day, mode, meta }) {
     const bPts = bPerf.points && typeof bPerf.points === 'object' ? bPerf.points : {};
 
     lines.push('');
-    lines.push(`설전: ${topic || '주제'}`);
+    lines.push(`토론 주제: ${topic || '주제'}`);
     if (rule) lines.push(`규칙: ${rule}`);
     if (judge) lines.push(`심사: ${judge}`);
     lines.push(
@@ -156,8 +166,8 @@ function renderRecapBody({ day, mode, meta }) {
 
     const aClaims = Array.isArray(aPerf.claims) ? aPerf.claims.map((x) => safeText(x, 240)).filter(Boolean).slice(0, 3) : [];
     const bClaims = Array.isArray(bPerf.claims) ? bPerf.claims.map((x) => safeText(x, 240)).filter(Boolean).slice(0, 3) : [];
-    if (aClaims.length) lines.push(`${aName || 'A'} 주장:`, ...aClaims.map((c) => `- ${c}`));
-    if (bClaims.length) lines.push(`${bName || 'B'} 주장:`, ...bClaims.map((c) => `- ${c}`));
+    if (aClaims.length) lines.push(`${aName || 'A'} 핵심 주장:`, ...aClaims.map((c) => `- ${c}`));
+    if (bClaims.length) lines.push(`${bName || 'B'} 핵심 주장:`, ...bClaims.map((c) => `- ${c}`));
 
     const aCloser = safeText(aPerf.closer, 240);
     const bCloser = safeText(bPerf.closer, 240);
