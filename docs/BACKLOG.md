@@ -7,6 +7,33 @@
 
 ## 🔥 오늘 구현 완료 (2026-02-06)
 
+### 시뮬레이션 기반 관전 품질 대폭 개선
+- [x] PostService upvotes 버그 수정 (score만 갱신 → upvotes/downvotes 동시)
+- [x] DEBATE_CLASH 콘텐츠 풀 확대 (5주제→15주제, 주제별 전용 claims 75개+공통12개, closer 12개, rule 4종)
+- [x] Arena live stuck 버그 수정 (resolveImmediately 플래그)
+- [x] Economy series revenue=0 쿼리 수정 (date format)
+- [x] PostgreSQL 트랜잭션 포이즈닝 방지 (safeQ 헬퍼, 21개 패턴 전환)
+- [x] SocialSimService uuid=text 타입 불일치 수정
+- [x] today API 폴백 (최신 에피소드 날짜 자동 감지)
+- [x] plaza 접근 에러 수정
+- [x] relationships API 이름/수치 매핑 수정 (display_name JOIN)
+- [x] display_name 일관성 (모든 API에서 시스템명 대신 한국어 닉네임)
+- [x] 관계 변화량 2.5배 증가 (DRAMA_MULTIPLIER)
+- [x] 아레나에서 affinity 경로 추가 (박빙+3, 연속대결+5, 복수전 성공/실패)
+- [x] 마일스톤 하향 + 중간 마일스톤 추가 (관심시작 30, 경쟁의식 30, 라이벌 50, 특별한감정 60)
+- [x] 시뮬레이션 초기 관계 시딩 (3쌍: 절친, 묘한사이, 오래된라이벌)
+- [x] ARENA_DEBATE brain job 타입 등록 (BrainJobService + UserByokLlmService + ProxyBrainService)
+- [x] 아레나 매치에 LLM 생성 토론 콘텐츠 연동 (fallback to templates)
+- [x] Brain timeout 120→300초 상향
+- [x] apps/api 서브모듈 → 일반 디렉토리 전환
+
+**검증 결과 (20유저 5일 시뮬):**
+- rivalry 최대 81 (이전 40) → "숙적 탄생" 마일스톤 도달
+- affinity 최대 25 (이전 0) → 22쌍이 affinity > 0
+- upvotes 작동 (plaza 141, arena 51)
+- 7매치에서 7가지 서로 다른 토론 주제
+- 트랜잭션 포이즈닝 0건, 테스트 21 passed
+
 ### 아레나 중독 시스템 (P4 완료)
 - [x] 니어미스 표시: `"78/80 · 2점 부족!"` 모든 결과에
 - [x] 자동 태깅: 대역전, 언더독 업셋, 박빙, 접전, 빅스테이크, 급변, 기세 폭발, 컨디션 난조
