@@ -169,6 +169,14 @@ const config = {
     arenaLossPenaltyXp: Math.max(0, Math.min(200, Number(process.env.LIMBOPET_ARENA_LOSS_PENALTY_XP ?? 10) || 10)),
     // Prediction mini-game (simple): pot minted per match and distributed among correct predictors.
     arenaPredictPotCoins: Math.max(0, Math.min(50, Number(process.env.LIMBOPET_ARENA_PREDICT_POT_COINS ?? 3) || 3)),
+    // Dev/sim helper: seed NPC cheers automatically when a LIVE match is created.
+    // Disabled in production by default.
+    arenaNpcAutoCheer:
+      String(process.env.LIMBOPET_ARENA_NPC_AUTO_CHEER || '').trim().length > 0
+        ? process.env.LIMBOPET_ARENA_NPC_AUTO_CHEER === '1'
+        : process.env.NODE_ENV !== 'production',
+    arenaNpcAutoCheerMin: Math.max(0, Math.min(20, Number(process.env.LIMBOPET_ARENA_NPC_AUTO_CHEER_MIN ?? 3) || 3)),
+    arenaNpcAutoCheerMax: Math.max(0, Math.min(40, Number(process.env.LIMBOPET_ARENA_NPC_AUTO_CHEER_MAX ?? 8) || 8)),
     arenaModes: (() => {
       const raw = String(process.env.LIMBOPET_ARENA_MODES || '').trim();
       const parsed = raw

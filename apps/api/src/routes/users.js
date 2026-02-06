@@ -1275,7 +1275,8 @@ router.post('/me/world/arena/matches/:id/predict', requireUserAuth, asyncHandler
  *
  * Live cheer / spectator buff:
  * - Allowed while match.status='live' and within the live window.
- * - Stores a single cheer per viewer pet: facts(kind='arena_cheer', key=`cheer:${matchId}`)
+ * - Stores a single cheer per viewer pet: cheers(match_id, agent_id) upsert.
+ *   (legacy facts fallback is kept for old DB states)
  * - Cheer counts are aggregated into match.meta.cheer (for UI) and applied as a tiny win-prob buff on resolve.
  *
  * Body:
@@ -1318,24 +1319,15 @@ router.post('/me/world/arena/matches/:id/cheer', requireUserAuth, asyncHandler(a
     const bId = String(cast.bId || cast.b_id || '').trim();
     if (!aId || !bId) throw new BadRequestError('Missing cast');
 
-    const key = `cheer:${String(match.id)}`;
     const day = (await WorldDayService.getCurrentDayWithClient(client).catch(() => null)) || new Date().toISOString().slice(0, 10);
-    await client.query(
-      `INSERT INTO facts (agent_id, kind, key, value, confidence, updated_at)
-       VALUES ($1, 'arena_cheer', $2, $3::jsonb, 1.0, NOW())
-       ON CONFLICT (agent_id, kind, key)
-       DO UPDATE SET value = EXCLUDED.value, confidence = EXCLUDED.confidence, updated_at = NOW()`,
-      [
-        petRow.id,
-        key,
-        JSON.stringify({
-          match_id: String(match.id),
-          side,
-          message: message || null,
-          created_at: new Date().toISOString()
-        })
-      ]
-    );
+    await ArenaService.upsertCheerWithClient(client, {
+      matchId: String(match.id),
+      agentId: String(petRow.id),
+      side,
+      message: message || null,
+      day,
+      source: 'user'
+    });
 
     await client.query(
       `INSERT INTO events (agent_id, event_type, payload, salience_score)
@@ -1343,36 +1335,16 @@ router.post('/me/world/arena/matches/:id/cheer', requireUserAuth, asyncHandler(a
       [petRow.id, JSON.stringify({ day, target: String(match.id), match_id: String(match.id), side })]
     ).catch(() => null);
 
-    const { rows } = await client.query(
-      `SELECT COALESCE(value->>'side','') AS side,
-              NULLIF(BTRIM(COALESCE(value->>'message','')), '') AS message
-       FROM facts
-       WHERE kind = 'arena_cheer' AND key = $1
-       ORDER BY updated_at DESC
-       LIMIT 200`,
-      [key]
-    );
-    let aCount = 0;
-    let bCount = 0;
-    const msgMap = new Map();
-    for (const r of rows || []) {
-      const s = String(r.side || '').trim().toLowerCase();
-      if (s === 'a') aCount += 1;
-      else if (s === 'b') bCount += 1;
-      const text = String(r.message || '').trim();
-      if (!text) continue;
-      const mKey = `${s}:${text}`;
-      const cur = msgMap.get(mKey) || { side: s, text, count: 0 };
-      cur.count += 1;
-      msgMap.set(mKey, cur);
-    }
-
-    const topMessages = [...msgMap.values()]
-      .sort((x, y) => y.count - x.count || x.text.localeCompare(y.text))
-      .slice(0, 5);
-    const bestCheer = topMessages[0] && topMessages[0].count >= 2
-      ? { ...topMessages[0], tag: '베스트 응원' }
-      : null;
+    const summary = await ArenaService.cheerSummaryWithClient(client, {
+      matchId: String(match.id),
+      limit: 200,
+      maxMessages: 5,
+      bestMinCount: 2
+    });
+    const aCount = Number(summary?.aCount ?? 0) || 0;
+    const bCount = Number(summary?.bCount ?? 0) || 0;
+    const topMessages = Array.isArray(summary?.messages) ? summary.messages : [];
+    const bestCheer = summary?.bestCheer && typeof summary.bestCheer === 'object' ? summary.bestCheer : null;
 
     const cheerMeta = {
       a_count: aCount,

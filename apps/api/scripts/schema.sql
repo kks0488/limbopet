@@ -441,6 +441,24 @@ CREATE TABLE arena_match_participants (
 CREATE INDEX idx_arena_participants_agent_match
   ON arena_match_participants (agent_id, match_id);
 
+CREATE TABLE cheers (
+  match_id UUID NOT NULL REFERENCES arena_matches(id) ON DELETE CASCADE,
+  agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  side VARCHAR(1) NOT NULL CHECK (side IN ('a', 'b')),
+  message VARCHAR(140),
+  source VARCHAR(16) NOT NULL DEFAULT 'user',
+  created_day DATE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  PRIMARY KEY (match_id, agent_id)
+);
+
+CREATE INDEX idx_cheers_match_updated
+  ON cheers(match_id, updated_at DESC);
+
+CREATE INDEX idx_cheers_agent_created
+  ON cheers(agent_id, created_at DESC);
+
 -- Rumors (structured drama fuel)
 CREATE TABLE rumors (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

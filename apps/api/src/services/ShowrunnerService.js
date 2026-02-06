@@ -238,7 +238,138 @@ function cliffhangerFor({ scenario, evidenceLevel, cast = null }) {
   return fill(pick(pool) || pool[0] || '내일은 또 어떤 장면이 나올까…');
 }
 
-function buildBroadcastPost({ day, index, scenario, location, company, cast, mode, narrative, worldContext, todayHook }) {
+const BROADCAST_REACTION_POOL = {
+  동의: [
+    '"오늘은 {a} 쪽 말이 더 설득력 있었다."',
+    '"저 장면은 {a}·{b} 둘 다 이해된다."',
+    '"싸움보다 대화가 맞다. 다음엔 풀릴 수도."',
+    '"감정은 있었지만 선은 안 넘겼다."',
+    '"나도 같은 상황이면 저렇게 말했을 듯."',
+    '"판세는 흔들렸지만 결론은 납득된다."',
+    '"오늘 흐름은 정리형 플레이가 먹혔다."',
+    '"둘 다 버텼다. 이 정도면 존중해야지."'
+  ],
+  반발: [
+    '"그 논리는 빈틈이 너무 많았다."',
+    '"포장만 화려했지 핵심이 비었다."',
+    '"감정에 밀어붙인 플레이, 오래 못 간다."',
+    '"타이밍은 좋았는데 선택이 아쉽다."',
+    '"상대를 흔든 건 맞지만 판정은 과하다."',
+    '"결과가 전부는 아니다. 내용은 반대."',
+    '"오늘은 강공만 많고 설계가 약했다."',
+    '"이 장면을 명장면이라 부르긴 이르다."'
+  ],
+  무관심: [
+    '"결과만 보고 간다. 다음 장면이나 보자."',
+    '"오늘은 그냥 관전용. 깊게 얘기할 건 없음."',
+    '"둘 다 무난했다. 크게 놀랄 건 없었다."',
+    '"판세보다 리듬이 중요했는데 그 정도였다."',
+    '"클립만 봐도 요약 끝."',
+    '"뜨겁긴 했는데 내 취향은 아니네."',
+    '"난 중립. 다음 매치가 더 궁금하다."',
+    '"이건 저장만 해두고 나중에 다시 본다."'
+  ],
+  분석: [
+    '"초반 변수 관리에서 {a}가 앞섰다."',
+    '"결정 분기에서 {b}의 대응 속도가 떨어졌다."',
+    '"리스크 대비 기대값 계산은 {a} 쪽이 우세."',
+    '"중반부터 프레임 전환이 승부를 갈랐다."',
+    '"표면은 접전인데 의사결정 품질 차이가 컸다."',
+    '"오늘 핵심은 템포 제어다. {a}가 더 안정적."',
+    '"데이터 포인트 기준으론 {b}의 선택이 고효율이었다."',
+    '"마지막 1턴, 손실 최소화 판단이 승부수였다."'
+  ]
+};
+
+function profileSignalFromValue(value, key) {
+  const v = value && typeof value === 'object' ? value : null;
+  if (!v) return null;
+  if (key === 'mbti') return safeText(v.mbti, 16) || null;
+  if (key === 'vibe') return safeText(v.vibe, 40) || null;
+  if (key === 'role') return safeText(v.role, 64) || null;
+  if (key === 'job_role') return safeText(v.job_role, 64) || null;
+  if (key === 'voice') return safeText(v.tone || v.style || v.speech || '', 64) || null;
+  if (key === 'job') return safeText(v.code || v.name || '', 40) || null;
+  return null;
+}
+
+async function loadBroadcastProfileMap(client, castIds) {
+  const ids = Array.isArray(castIds) ? castIds.map((x) => String(x || '').trim()).filter(Boolean) : [];
+  if (!client || ids.length === 0) return {};
+  const { rows } = await client.query(
+    `SELECT agent_id, key, value
+     FROM facts
+     WHERE agent_id = ANY($1::uuid[])
+       AND kind = 'profile'
+       AND key IN ('mbti','vibe','role','job_role','voice','job')`,
+    [ids]
+  );
+
+  const out = {};
+  for (const row of rows || []) {
+    const id = String(row.agent_id || '').trim();
+    if (!id) continue;
+    const key = String(row.key || '').trim();
+    if (!key) continue;
+    const signal = profileSignalFromValue(row.value, key);
+    if (!signal) continue;
+    const cur = out[id] && typeof out[id] === 'object' ? out[id] : {};
+    cur[key] = signal;
+    out[id] = cur;
+  }
+  return out;
+}
+
+function reactionTypeForProfile(profile, scenario) {
+  const p = profile && typeof profile === 'object' ? profile : {};
+  const mbti = String(p.mbti || '').toUpperCase();
+  const vibe = String(p.vibe || '').toLowerCase();
+  const role = `${String(p.role || '')} ${String(p.job_role || '')} ${String(p.job || '')}`.toLowerCase();
+  const voice = String(p.voice || '').toLowerCase();
+  const blob = `${mbti} ${vibe} ${role} ${voice}`;
+
+  if (/intj|intp|entj|entp|전략|분석|기획|연구|engineer|detective|research/.test(blob)) return '분석';
+  if (/rebellious|aggressive|직설|도발|냉소|버럭|fighter|검사|변론|rival/.test(blob)) return '반발';
+  if (/peaceful|romantic|따뜻|공감|상냥|care|support|상담|isfj|enfj|esfj/.test(blob)) return '동의';
+  if (/무심|관망|chill|dry|barista|janitor|istp|istj/.test(blob)) return '무관심';
+
+  const s = String(scenario || '').toUpperCase();
+  if (s === 'BEEF' || s === 'CREDIT') return Math.random() < 0.6 ? '반발' : '분석';
+  if (s === 'ROMANCE' || s === 'RECONCILE') return Math.random() < 0.6 ? '동의' : '무관심';
+  if (s === 'TRIANGLE') return Math.random() < 0.5 ? '반발' : '분석';
+  return pick(['동의', '반발', '무관심', '분석']) || '무관심';
+}
+
+function buildBroadcastReactionLines({ cast, scenario, castProfiles }) {
+  const c = cast && typeof cast === 'object' ? cast : {};
+  const aName = safeText(c.aName, 40) || 'A';
+  const bName = safeText(c.bName, 40) || 'B';
+  const aId = String(c.aId || '').trim();
+  const bId = String(c.bId || '').trim();
+  const profileMap = castProfiles && typeof castProfiles === 'object' ? castProfiles : {};
+  const aType = reactionTypeForProfile(profileMap[aId] || null, scenario);
+  const bType = reactionTypeForProfile(profileMap[bId] || null, scenario);
+
+  const fill = (line) =>
+    String(line || '')
+      .replace(/\{a\}/g, aName)
+      .replace(/\{b\}/g, bName);
+
+  const out = [];
+  const aLine = fill(pick(BROADCAST_REACTION_POOL[aType] || []));
+  if (aLine) out.push(`${aName} 지지석(${aType}): ${aLine}`);
+  const bLine = fill(pick(BROADCAST_REACTION_POOL[bType] || []));
+  if (bLine) out.push(`${bName} 지지석(${bType}): ${bLine}`);
+
+  const extraTypes = ['동의', '반발', '무관심', '분석'].filter((x) => x !== aType && x !== bType);
+  const crowdType = pick(extraTypes.length ? extraTypes : ['분석', '무관심']) || '무관심';
+  const crowdLine = fill(pick(BROADCAST_REACTION_POOL[crowdType] || []));
+  if (crowdLine) out.push(`중립 관전석(${crowdType}): ${crowdLine}`);
+
+  return out.slice(0, 3);
+}
+
+function buildBroadcastPost({ day, index, scenario, location, company, cast, mode, narrative, worldContext, todayHook, castProfiles }) {
   const label = scenarioLabel(scenario);
   const comp = company ? ` · ${company}` : '';
   const header = headerForMode(mode);
@@ -299,6 +430,11 @@ function buildBroadcastPost({ day, index, scenario, location, company, cast, mod
     const head = safeText(hk.reveal.headline, 200);
     const details = Array.isArray(hk.reveal.details) ? hk.reveal.details.map((x) => safeText(x, 220)).filter(Boolean).slice(0, 5) : [];
     lines.push('', '💥 떡밥 결과 공개', head ? `"${head}"` : null, ...details);
+  }
+
+  const reactionLines = buildBroadcastReactionLines({ cast, scenario, castProfiles });
+  if (reactionLines.length) {
+    lines.push('', '🗣 광장 반응', ...reactionLines.map((x) => `- ${x}`));
   }
 
   lines.push(`⏭ 다음화 예고: ${cliffhangerFor({ scenario, evidenceLevel: 0, cast })}`);
@@ -707,6 +843,12 @@ class ShowrunnerService {
         }
       } catch { /* ignore */ }
 
+      const castProfiles = await bestEffortInTransaction(
+        client,
+        async () => loadBroadcastProfileMap(client, [cast?.aId, cast?.bId]),
+        { label: 'showrunner_broadcast_profiles', fallback: () => ({}) }
+      );
+
       const postDraft = buildBroadcastPost({
         day: today,
         index: nextIndex,
@@ -717,7 +859,8 @@ class ShowrunnerService {
         mode,
         narrative: interaction?.narrative ?? null,
         worldContext,
-        todayHook
+        todayHook,
+        castProfiles
       });
 
       const { rows: postRows } = await client.query(

@@ -366,6 +366,136 @@ const ACTION_LABELS_BY_MODE = {
   }
 };
 
+const NPC_AUTO_CHEER_LINES = {
+  a: [
+    '{a} 오늘 컨디션 미쳤다!',
+    '{a} 끝까지 밀어붙여!',
+    '이 판은 {a}가 가져간다!',
+    '{a} 집중력 장난 아니다',
+    '{a} 한 방 더 보여줘!',
+    '{a} 폼이 살아있다',
+    '{a} 템포 좋다 그대로 가자',
+    '{a} 마무리만 깔끔하게!'
+  ],
+  b: [
+    '{b} 오늘 흐름 좋다!',
+    '{b} 침착하게 끝내자!',
+    '이 라운드는 {b} 쪽이다!',
+    '{b} 판단이 정확하다',
+    '{b} 한 수 더 올려!',
+    '{b} 집중 깨지지 마!',
+    '{b} 페이스 유지하면 이긴다',
+    '{b} 승부수 타이밍 좋았다'
+  ],
+  neutral: [
+    '와 오늘 매치 퀄리티 미쳤다',
+    '양쪽 다 폼 좋다 끝까지 간다',
+    '이건 마지막까지 모른다',
+    '분위기 진짜 뜨겁다',
+    '관전 맛 제대로 난다',
+    '누가 이겨도 명경기각',
+    '집중 안 하면 바로 뒤집힌다',
+    '오늘 응원하길 잘했다'
+  ]
+};
+
+function normalizeCheerSide(side) {
+  const s = String(side || '').trim().toLowerCase();
+  if (s === 'a' || s === 'b') return s;
+  return null;
+}
+
+function normalizeCheerMessage(message) {
+  const text = safeText(message, 140);
+  return text || null;
+}
+
+function aggregateCheerRows(rows, { maxMessages = 8, bestMinCount = 2 } = {}) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  let aCount = 0;
+  let bCount = 0;
+  const msgMap = new Map();
+
+  for (const row of safeRows) {
+    const side = normalizeCheerSide(row?.side) || '';
+    if (side === 'a') aCount += 1;
+    else if (side === 'b') bCount += 1;
+
+    const text = String(row?.message || '').trim();
+    if (!text || !side) continue;
+    const authorName = String(row?.display_name || row?.name || '').trim() || null;
+    const k = `${side}:${text}`;
+    const cur = msgMap.get(k) || { side, text, count: 0, authors: [] };
+    cur.count += 1;
+    if (authorName && !cur.authors.includes(authorName) && cur.authors.length < 3) {
+      cur.authors.push(authorName);
+    }
+    msgMap.set(k, cur);
+  }
+
+  const messages = [...msgMap.values()]
+    .sort((x, y) => y.count - x.count || x.text.localeCompare(y.text))
+    .slice(0, Math.max(1, Math.min(20, Number(maxMessages) || 8)));
+  const threshold = Math.max(1, Math.min(10, Number(bestMinCount) || 2));
+  const bestCheer = messages[0] && messages[0].count >= threshold
+    ? { ...messages[0], tag: '베스트 응원' }
+    : null;
+
+  return { aCount, bCount, total: aCount + bCount, messages, bestCheer };
+}
+
+async function loadCheerRowsWithFallback(client, matchId, { limit = 300 } = {}) {
+  const mId = String(matchId || '').trim();
+  if (!client || !mId) return { rows: [], source: 'none' };
+
+  const safeLimit = clampInt(limit, 1, 500);
+  try {
+    const cheerRows = await client.query(
+      `SELECT c.side,
+              NULLIF(BTRIM(COALESCE(c.message, '')), '') AS message,
+              a.name,
+              a.display_name
+       FROM cheers c
+       LEFT JOIN agents a ON a.id = c.agent_id
+       WHERE c.match_id = $1::uuid
+       ORDER BY c.updated_at DESC, c.created_at DESC
+       LIMIT $2`,
+      [mId, safeLimit]
+    ).then((r) => r.rows || []);
+    if (cheerRows.length > 0) {
+      return { rows: cheerRows, source: 'cheers' };
+    }
+  } catch {
+    // cheers table may not exist yet on old DBs; fallback to legacy facts.
+  }
+
+  const cheerKey = `cheer:${mId}`;
+  const factRows = await client.query(
+    `SELECT COALESCE(f.value->>'side','') AS side,
+            NULLIF(BTRIM(COALESCE(f.value->>'message','')), '') AS message,
+            a.name,
+            a.display_name
+     FROM facts f
+     LEFT JOIN agents a ON a.id = f.agent_id
+     WHERE f.kind = 'arena_cheer' AND f.key = $1
+     ORDER BY f.updated_at DESC
+     LIMIT $2`,
+    [cheerKey, safeLimit]
+  ).then((r) => r.rows || []).catch(() => []);
+  return { rows: factRows, source: 'facts' };
+}
+
+function npcCheerMessageFor({ side, aName, bName, rng }) {
+  const s = normalizeCheerSide(side) || 'a';
+  const fill = (text) =>
+    String(text || '')
+      .replace(/\{a\}/g, String(aName || 'A'))
+      .replace(/\{b\}/g, String(bName || 'B'));
+  const modePool = NPC_AUTO_CHEER_LINES[s] || NPC_AUTO_CHEER_LINES.neutral;
+  const line = pick(rng, modePool) || pick(rng, NPC_AUTO_CHEER_LINES.neutral) || '{a} 파이팅!';
+  return normalizeCheerMessage(fill(line));
+}
+
 function actionLabelFor({ mode, side, hints, rng }) {
   const m = String(mode || '').trim().toUpperCase();
   const who = side === 'b' ? 'B' : 'A';
@@ -391,12 +521,12 @@ function actionLabelFor({ mode, side, hints, rng }) {
   if (m === 'COURT_TRIAL') {
     return pickFrom(
       tone === '분석'
-        ? ['증거를 연결했다! 치밀하다', '모순을 정확히 짚었다', '기록을 들이밀며 압박']
-        : tone === '공세'
-          ? ['강하게 몰아붙인다!', '증인을 흔들어놓았다', '단정적으로 끊었다']
-          : tone === '침착'
-            ? ['조목조목 반박, 빈틈이 없다', '톤을 낮추며 차분하게', '정중히, 그러나 날카롭게']
-            : ['말꼬리를 잡았다', '애매하게 넘겼다', '분위기에 휩쓸렸다']
+            ? ['증거를 연결했다! 치밀하다', '모순을 정확히 짚었다', '기록을 들이밀며 압박']
+            : tone === '공세'
+              ? ['강하게 몰아붙인다!', '증인을 흔들어놓았다', '단정적으로 끊었다']
+              : tone === '침착'
+                ? ['조목조목 반박, 빈틈이 없다', '톤을 낮추며 차분하게', '정중히, 그러나 날카롭게']
+                : ['말꼬리를 잡았다', '애매하게 넘겼다', '근거 제시에 주춤했다', '질문 의도를 놓쳤다']
     );
   }
   if (m === 'PROMPT_BATTLE') {
@@ -1634,6 +1764,72 @@ class ArenaService {
     };
   }
 
+  static async upsertCheerWithClient(
+    client,
+    { matchId, agentId, side, message = null, day = null, source = 'user' } = {}
+  ) {
+    const mId = String(matchId || '').trim();
+    const aId = String(agentId || '').trim();
+    const s = normalizeCheerSide(side);
+    if (!client || !mId || !aId || !s) {
+      return { ok: false, reason: 'invalid_input', storage: null };
+    }
+
+    const msg = normalizeCheerMessage(message);
+    const iso = safeIsoDay(day);
+    const src = safeText(source, 16) || 'user';
+    const nowIso = new Date().toISOString();
+
+    try {
+      await client.query(
+        `INSERT INTO cheers (match_id, agent_id, side, message, source, created_day, created_at, updated_at)
+         VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6::date, $7::timestamptz, NOW())
+         ON CONFLICT (match_id, agent_id)
+         DO UPDATE SET
+           side = EXCLUDED.side,
+           message = EXCLUDED.message,
+           source = EXCLUDED.source,
+           created_day = EXCLUDED.created_day,
+           updated_at = NOW()`,
+        [mId, aId, s, msg, src, iso, nowIso]
+      );
+      return { ok: true, storage: 'cheers' };
+    } catch {
+      // Backward-compatible fallback for DBs that haven't run cheers migration.
+      const key = `cheer:${mId}`;
+      await client.query(
+        `INSERT INTO facts (agent_id, kind, key, value, confidence, updated_at)
+         VALUES ($1::uuid, 'arena_cheer', $2, $3::jsonb, 1.0, NOW())
+         ON CONFLICT (agent_id, kind, key)
+         DO UPDATE SET value = EXCLUDED.value, confidence = EXCLUDED.confidence, updated_at = NOW()`,
+        [
+          aId,
+          key,
+          JSON.stringify({
+            match_id: mId,
+            side: s,
+            message: msg,
+            source: src,
+            created_at: nowIso
+          })
+        ]
+      );
+      return { ok: true, storage: 'facts' };
+    }
+  }
+
+  static async cheerSummaryWithClient(
+    client,
+    { matchId, limit = 300, maxMessages = 8, bestMinCount = 2 } = {}
+  ) {
+    const bundle = await loadCheerRowsWithFallback(client, matchId, { limit });
+    const summary = aggregateCheerRows(bundle.rows, { maxMessages, bestMinCount });
+    return {
+      ...summary,
+      source: bundle.source
+    };
+  }
+
   static async listLeaderboardWithClient(client, { seasonId, limit = 50 } = {}) {
     const safeLimit = Math.max(1, Math.min(200, Number(limit) || 50));
     if (!seasonId) return { season: null, leaderboard: [] };
@@ -2180,7 +2376,10 @@ class ArenaService {
     return { ok: true, match_id: mId, recap_post_id: recapPostId, highlight, best_cheer: cheer.best_cheer ?? null };
   }
 
-  static async tickDayWithClient(client, { day, matchesPerDay = null, resolveImmediately = false } = {}) {
+  static async tickDayWithClient(
+    client,
+    { day, matchesPerDay = null, resolveImmediately = false, autoNpcCheer = null } = {}
+  ) {
     const iso = safeIsoDay(day);
     if (!iso) return { ok: false, day: null, created: 0, skipped: 0 };
 
@@ -2204,6 +2403,12 @@ class ArenaService {
     const liveWindowS = clampInt(config.limbopet?.arenaLiveWindowSeconds ?? 30, 10, 180);
     const lossPenaltyCoinsBase = clampInt(config.limbopet?.arenaLossPenaltyCoins ?? 1, 0, 50);
     const lossPenaltyXpBase = clampInt(config.limbopet?.arenaLossPenaltyXp ?? 10, 0, 200);
+    const npcAutoCheerEnabled =
+      typeof autoNpcCheer === 'boolean'
+        ? autoNpcCheer
+        : Boolean(config.limbopet?.arenaNpcAutoCheer) && Boolean(resolveImmediately);
+    const npcAutoCheerMin = clampInt(config.limbopet?.arenaNpcAutoCheerMin ?? 3, 0, 20);
+    const npcAutoCheerMax = clampInt(config.limbopet?.arenaNpcAutoCheerMax ?? 8, npcAutoCheerMin, 40);
 
     const modesRaw = Array.isArray(config.limbopet?.arenaModes) ? config.limbopet.arenaModes : null;
     const modes = (modesRaw && modesRaw.length ? modesRaw : ['AUCTION_DUEL', 'PUZZLE_SPRINT', 'DEBATE_CLASH', 'MATH_RACE', 'COURT_TRIAL', 'PROMPT_BATTLE'])
@@ -2225,6 +2430,7 @@ class ArenaService {
       ownerUserId: a.owner_user_id ?? null,
       isNpc: !a.owner_user_id
     }));
+    const npcSpectators = agentsAll.filter((a) => a.isNpc);
 
     const userPets = agentsAll.filter((a) => !a.isNpc);
     const userCount = userPets.length;
@@ -2681,6 +2887,7 @@ class ArenaService {
         },
         debate_base: debateBase
       };
+      let liveMeta = { ...meta };
 
       const { rows: matchRows } = await client.query(
         `INSERT INTO arena_matches (season_id, day, slot, mode, status, seed, meta)
@@ -2711,16 +2918,83 @@ class ArenaService {
             });
             if (!jobs) return;
             const nextMeta = {
-              ...meta,
+              ...liveMeta,
               debate_jobs: {
                 a: jobs.a,
                 b: jobs.b
               }
             };
             await client.query(`UPDATE arena_matches SET meta = $2::jsonb WHERE id = $1`, [matchId, JSON.stringify(nextMeta)]);
+            liveMeta = nextMeta;
           },
           { label: 'arena_debate_jobs' }
         );
+      }
+
+      if (npcAutoCheerEnabled && npcAutoCheerMax > 0 && npcSpectators.length > 0) {
+        const autoCheerResult = await bestEffortInTransaction(
+          client,
+          async () => {
+            const candidateNpcIds = npcSpectators
+              .map((x) => String(x.id || '').trim())
+              .filter((x) => x && x !== aId && x !== bId);
+            if (candidateNpcIds.length === 0) return null;
+
+            const shuffledNpcIds = seedShuffle(
+              candidateNpcIds,
+              String(hash32(`${seed}:npc_auto_cheer:pool`).toString(16))
+            );
+            const rng = mulberry32(hash32(`${seed}:npc_auto_cheer`));
+            const targetCount = randInt(rng, npcAutoCheerMin, npcAutoCheerMax);
+            const fanCount = Math.max(0, Math.min(shuffledNpcIds.length, targetCount));
+            if (fanCount <= 0) return null;
+
+            const selectedFanIds = shuffledNpcIds.slice(0, fanCount);
+            for (let i = 0; i < selectedFanIds.length; i += 1) {
+              const fanId = selectedFanIds[i];
+              const side = selectedFanIds.length >= 2
+                ? (i === 0 ? 'a' : i === 1 ? 'b' : (rng() < 0.5 ? 'a' : 'b'))
+                : (rng() < 0.5 ? 'a' : 'b');
+              // eslint-disable-next-line no-await-in-loop
+              await ArenaService.upsertCheerWithClient(client, {
+                matchId,
+                agentId: fanId,
+                side,
+                message: npcCheerMessageFor({ side, aName, bName, rng }),
+                day: iso,
+                source: 'npc_auto'
+              });
+            }
+
+            const summary = await ArenaService.cheerSummaryWithClient(client, {
+              matchId,
+              limit: 300,
+              maxMessages: 5,
+              bestMinCount: 2
+            });
+            return { summary, fanCount };
+          },
+          { label: 'arena_auto_npc_cheers', fallback: null }
+        );
+
+        if (autoCheerResult?.summary) {
+          const summary = autoCheerResult.summary;
+          const tags = Array.isArray(liveMeta.tags) ? [...liveMeta.tags] : [];
+          if (summary.bestCheer) tags.push('베스트 응원');
+          liveMeta = {
+            ...liveMeta,
+            cheer: {
+              a_count: summary.aCount,
+              b_count: summary.bCount,
+              messages: summary.messages,
+              best_cheer: summary.bestCheer,
+              auto_seeded: autoCheerResult.fanCount,
+              updated_at: new Date().toISOString()
+            },
+            tags: tags.length ? [...new Set(tags)].slice(0, 8) : liveMeta.tags
+          };
+          await client.query(`UPDATE arena_matches SET meta = $2::jsonb WHERE id = $1`, [matchId, JSON.stringify(liveMeta)]).catch(() => null);
+        }
       }
 
       usedPairsToday.add(key);
@@ -3260,45 +3534,20 @@ class ArenaService {
     const bCoinsNet = bId === winnerId ? winnerCoinsNet : -loserCoinsNet;
 
     // Rounds (P4): 3-turn timeline + per-round win-prob + momentum shifts.
-    const cheerKey = `cheer:${String(match.id)}`;
-    const cheerRows = await safeQ(
-      () => client.query(
-        `SELECT COALESCE(f.value->>'side','') AS side,
-                NULLIF(BTRIM(COALESCE(f.value->>'message','')), '') AS message,
-                a.name,
-                a.display_name
-         FROM facts f
-         LEFT JOIN agents a ON a.id = f.agent_id
-         WHERE f.kind = 'arena_cheer' AND f.key = $1
-         ORDER BY f.updated_at DESC
-         LIMIT 300`,
-        [cheerKey]
-      ).then((r) => r.rows || []),
-      [], 'resolve_cheers'
+    const cheerSummary = await safeQ(
+      () => ArenaService.cheerSummaryWithClient(client, {
+        matchId: String(match.id),
+        limit: 300,
+        maxMessages: 8,
+        bestMinCount: 2
+      }),
+      { aCount: 0, bCount: 0, messages: [], bestCheer: null, source: 'none' },
+      'resolve_cheers'
     );
-    let cheerA = 0;
-    let cheerB = 0;
-    const cheerMsgMap = new Map();
-    for (const row of cheerRows || []) {
-      const side = String(row.side || '').trim().toLowerCase();
-      if (side === 'a') cheerA += 1;
-      else if (side === 'b') cheerB += 1;
-
-      const msg = String(row.message || '').trim();
-      if (!msg) continue;
-      const authorName = String(row.display_name || row.name || '').trim() || null;
-      const k = `${side}:${msg}`;
-      const cur = cheerMsgMap.get(k) || { side, text: msg, count: 0, authors: [] };
-      cur.count += 1;
-      if (authorName && !cur.authors.includes(authorName) && cur.authors.length < 3) cur.authors.push(authorName);
-      cheerMsgMap.set(k, cur);
-    }
-    const cheerMessages = [...cheerMsgMap.values()]
-      .sort((x, y) => y.count - x.count || x.text.localeCompare(y.text))
-      .slice(0, 8);
-    const bestCheer = cheerMessages[0] && cheerMessages[0].count >= 2
-      ? { ...cheerMessages[0], tag: '베스트 응원' }
-      : null;
+    const cheerA = Math.max(0, Number(cheerSummary?.aCount ?? 0) || 0);
+    const cheerB = Math.max(0, Number(cheerSummary?.bCount ?? 0) || 0);
+    const cheerMessages = Array.isArray(cheerSummary?.messages) ? cheerSummary.messages : [];
+    const bestCheer = cheerSummary?.bestCheer && typeof cheerSummary.bestCheer === 'object' ? cheerSummary.bestCheer : null;
     const cheerDeltaRaw = ((cheerA - cheerB) / (cheerA + cheerB + 4)) * 0.03;
     const cheerDelta = Math.max(-0.03, Math.min(0.03, Number.isFinite(cheerDeltaRaw) ? cheerDeltaRaw : 0));
     const cheerMeta = {

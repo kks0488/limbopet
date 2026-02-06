@@ -33,8 +33,8 @@ class PlazaAmbientService {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return { created: false, skipped: 'invalid_day', day: iso };
 
     const configuredMax = Number(config.limbopet?.plazaAmbientPostsPerDay ?? 6) || 0;
-    const max = maxPerDay === null ? configuredMax : Math.max(0, Math.min(200, Number(maxPerDay) || 0));
-    if (max <= 0) return { created: false, skipped: 'disabled', day: iso };
+    const maxOverride = maxPerDay === null ? null : Math.max(0, Math.min(200, Number(maxPerDay) || 0));
+    if (maxOverride !== null && maxOverride <= 0) return { created: false, skipped: 'disabled', day: iso };
 
     const minSeconds = Math.max(0, Math.min(3600, Number(config.limbopet?.plazaAmbientMinSeconds ?? 90) || 0));
 
@@ -45,6 +45,25 @@ class PlazaAmbientService {
         .query(`SELECT id FROM agents WHERE name = 'world_core' LIMIT 1`)
         .then((r) => r.rows?.[0] ?? null);
       if (!world?.id) return { created: false, skipped: 'no_world', day: iso };
+
+      const activeAgentCount = await bestEffortInTransaction(
+        client,
+        async () => {
+          const r = await client.query(
+            `SELECT COUNT(*)::int AS n
+             FROM agents
+             WHERE name <> 'world_core'
+               AND is_active = true`
+          );
+          return Number(r.rows?.[0]?.n ?? 0) || 0;
+        },
+        { label: 'plaza_ambient_active_agents', fallback: 0 }
+      );
+      const ratioTarget = Math.max(0, Math.ceil(activeAgentCount * 0.3));
+      const max = maxOverride !== null
+        ? maxOverride
+        : Math.max(0, Math.min(200, Math.max(configuredMax, ratioTarget)));
+      if (max <= 0) return { created: false, skipped: 'disabled', day: iso };
 
       // Initialize + lock state row.
       await client.query(
@@ -70,13 +89,13 @@ class PlazaAmbientService {
       const lastAt = state?.last_at ? new Date(String(state.last_at)) : null;
 
       if (stateDay === iso && count >= max) {
-        return { created: false, skipped: 'max_reached', day: iso, count, max };
+        return { created: false, skipped: 'max_reached', day: iso, count, max, ratio_target: ratioTarget };
       }
 
       if (!force && stateDay === iso && lastAt && Number.isFinite(lastAt.getTime())) {
         const elapsedSec = Math.max(0, (Date.now() - lastAt.getTime()) / 1000);
         if (elapsedSec < minSeconds) {
-          return { created: false, skipped: 'cooldown', day: iso, count, max };
+          return { created: false, skipped: 'cooldown', day: iso, count, max, ratio_target: ratioTarget };
         }
       }
 
@@ -94,7 +113,7 @@ class PlazaAmbientService {
         { label: 'plaza_ambient_pending_jobs', fallback: 0 }
       );
       if (!force && pendingPlazaJobs >= 30) {
-        return { created: false, skipped: 'too_many_pending_jobs', day: iso, pending: pendingPlazaJobs };
+        return { created: false, skipped: 'too_many_pending_jobs', day: iso, pending: pendingPlazaJobs, ratio_target: ratioTarget };
       }
 
       // NPCs are cold-start scaffolding only: when the world is big enough, user-owned pets become the only authors.
@@ -238,7 +257,7 @@ class PlazaAmbientService {
         [world.id, JSON.stringify(next)]
       );
 
-      return { created: true, day: iso, job, author_id: authorId, count: next.count, max };
+      return { created: true, day: iso, job, author_id: authorId, count: next.count, max, ratio_target: ratioTarget };
     });
   }
 }
