@@ -1068,29 +1068,56 @@ async function getArenaDebateJobResultWithClient(client, { matchId, agentId } = 
   const aId = String(agentId || '').trim();
   if (!client || !mId || !aId) return null;
 
-  const row = await client.query(
-    `SELECT id, status, result, error
-     FROM brain_jobs
-     WHERE agent_id = $1
-       AND job_type = 'ARENA_DEBATE'
-       AND input->>'match_id' = $2
-     ORDER BY created_at DESC
-     LIMIT 1`,
-    [aId, mId]
-  ).then((r) => r.rows?.[0] ?? null).catch(() => null);
-  if (!row) return null;
+  const factKey = `debate:${mId}`;
+  const [factRow, jobRow] = await Promise.all([
+    client.query(
+      `SELECT value, updated_at
+       FROM facts
+       WHERE agent_id = $1::uuid
+         AND kind = 'arena'
+         AND key = $2
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [aId, factKey]
+    ).then((r) => r.rows?.[0] ?? null).catch(() => null),
+    client.query(
+      `SELECT id, status, result, error
+       FROM brain_jobs
+       WHERE agent_id = $1
+         AND job_type = 'ARENA_DEBATE'
+         AND input->>'match_id' = $2
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [aId, mId]
+    ).then((r) => r.rows?.[0] ?? null).catch(() => null)
+  ]);
+  if (!factRow && !jobRow) return null;
 
-  const status = String(row.status || '').trim().toLowerCase();
-  const result = row.result && typeof row.result === 'object' ? row.result : null;
-  const claims = sanitizeDebateClaims(result?.claims);
-  const closer = sanitizeDebateCloser(result?.closer);
+  const factValue = factRow?.value && typeof factRow.value === 'object' ? factRow.value : null;
+  const factClaims = sanitizeDebateClaims(factValue?.claims);
+  const factCloser = sanitizeDebateCloser(factValue?.closer);
+  const factHasUsableResult = factClaims.length >= 3 || Boolean(factCloser);
+
+  const jobStatus = String(jobRow?.status || '').trim().toLowerCase();
+  const jobResult = jobRow?.result && typeof jobRow.result === 'object' ? jobRow.result : null;
+  const jobClaims = sanitizeDebateClaims(jobResult?.claims);
+  const jobCloser = sanitizeDebateCloser(jobResult?.closer);
+
+  const claims = factHasUsableResult ? factClaims : jobClaims;
+  const closer = factHasUsableResult ? factCloser : jobCloser;
+  const status = factHasUsableResult ? 'done' : (jobStatus || null);
+  const hasUsableResult = (status === 'done' || factHasUsableResult) && (claims.length >= 3 || Boolean(closer));
+  const source = factHasUsableResult ? 'facts' : (jobRow ? 'brain_jobs' : null);
+  const jobId = factValue?.job_id || jobRow?.id || null;
+
   return {
-    jobId: row.id ? String(row.id) : null,
+    jobId: jobId ? String(jobId) : null,
     status,
     claims,
     closer,
-    hasUsableResult: status === 'done' && (claims.length >= 3 || Boolean(closer)),
-    error: row.error ? String(row.error).slice(0, 200) : null
+    hasUsableResult,
+    error: jobRow?.error ? String(jobRow.error).slice(0, 200) : null,
+    source
   };
 }
 
@@ -3623,11 +3650,23 @@ class ArenaService {
           topic: base.topic,
           rule: base.rule,
           judge: base.judge,
-          a: { ...aPerf, llm_job_id: aDebateJob?.jobId ?? null, llm_status: aDebateJob?.status ?? null },
-          b: { ...bPerf, llm_job_id: bDebateJob?.jobId ?? null, llm_status: bDebateJob?.status ?? null },
+          a: {
+            ...aPerf,
+            llm_job_id: aDebateJob?.jobId ?? null,
+            llm_status: aDebateJob?.status ?? null,
+            llm_source: aDebateJob?.source ?? null
+          },
+          b: {
+            ...bPerf,
+            llm_job_id: bDebateJob?.jobId ?? null,
+            llm_status: bDebateJob?.status ?? null,
+            llm_source: bDebateJob?.source ?? null
+          },
           llm: {
             a_status: aDebateJob?.status ?? null,
             b_status: bDebateJob?.status ?? null,
+            a_source: aDebateJob?.source ?? null,
+            b_source: bDebateJob?.source ?? null,
             a_error: aDebateJob?.error ?? null,
             b_error: bDebateJob?.error ?? null
           }
