@@ -1,0 +1,37 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="lensGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#E8E8FF;stop-opacity:0.6" />
+      <stop offset="100%" style="stop-color:#D0D0F0;stop-opacity:0.8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Magnifying glass handle -->
+  <rect x="52" y="48" width="6" height="24" rx="3" fill="#8B6F47" transform="rotate(45 55 60)"/>
+
+  <!-- Magnifying glass rim -->
+  <circle cx="40" cy="36" r="18" fill="#9B8FB9" stroke="#7D6FA3" stroke-width="2"/>
+
+  <!-- Magnifying glass lens -->
+  <circle cx="40" cy="36" r="15" fill="url(#lensGrad)"/>
+
+  <!-- Lens shine effect -->
+  <ellipse cx="35" cy="31" rx="6" ry="8" fill="#FFFFFF" opacity="0.5"/>
+  <ellipse cx="33" cy="29" rx="3" ry="4" fill="#FFFFFF" opacity="0.8"/>
+
+  <!-- Detective hat (deerstalker) -->
+  <ellipse cx="40" cy="18" rx="14" ry="4" fill="#8B6F47"/>
+
+  <!-- Hat crown -->
+  <path d="M26 18 C26 18 28 12 40 12 C52 12 54 18 54 18 C54 20 52 22 40 22 C28 22 26 20 26 18 Z" fill="#A0826A"/>
+
+  <!-- Hat brim front -->
+  <ellipse cx="40" cy="22" rx="12" ry="2.5" fill="#8B6F47"/>
+
+  <!-- Hat details -->
+  <ellipse cx="40" cy="16" rx="10" ry="3" fill="#8B6F47" opacity="0.3"/>
+
+  <!-- Hat ear flaps -->
+  <ellipse cx="28" cy="20" rx="3" ry="5" fill="#A0826A" transform="rotate(-20 28 20)"/>
+  <ellipse cx="52" cy="20" rx="3" ry="5" fill="#A0826A" transform="rotate(20 52 20)"/>
+</svg>

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <radialGradient id="coinGradient" cx="40%" cy="35%">
+      <stop offset="0%" style="stop-color:#FFE17B" />
+      <stop offset="50%" style="stop-color:#FFD93D" />
+      <stop offset="100%" style="stop-color:#F6AB2F" />
+    </radialGradient>
+    <radialGradient id="coinInner" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#FFF9E6" />
+      <stop offset="100%" style="stop-color:#FFD93D" />
+    </radialGradient>
+  </defs>
+
+  <!-- Shadow/3D effect -->
+  <ellipse cx="33" cy="34" rx="20" ry="20" fill="#E8A522" opacity="0.3" />
+
+  <!-- Main coin body -->
+  <circle cx="32" cy="32" r="20" fill="url(#coinGradient)" />
+
+  <!-- Inner ring -->
+  <circle cx="32" cy="32" r="16" fill="none" stroke="#F6AB2F" stroke-width="1.5" opacity="0.6" />
+
+  <!-- Paw symbol in center -->
+  <g transform="translate(32, 32)">
+    <!-- Paw pad -->
+    <ellipse cx="0" cy="2" rx="4" ry="5" fill="url(#coinInner)" />
+    <!-- Toe beans -->
+    <circle cx="-3" cy="-3" r="2" fill="url(#coinInner)" />
+    <circle cx="0" cy="-4" r="2" fill="url(#coinInner)" />
+    <circle cx="3" cy="-3" r="2" fill="url(#coinInner)" />
+  </g>
+
+  <!-- Sparkles -->
+  <circle cx="48" cy="16" r="2" fill="#FFF9E6" opacity="0.9" />
+  <circle cx="52" cy="24" r="1.5" fill="#FFF9E6" opacity="0.7" />
+  <circle cx="14" cy="20" r="1.5" fill="#FFF9E6" opacity="0.7" />
+</svg>

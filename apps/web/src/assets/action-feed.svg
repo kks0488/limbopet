@@ -1,0 +1,36 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Bowl base -->
+  <defs>
+    <linearGradient id="bowlGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFB4A2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FF8B7A;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="foodGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFD4A3;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFC080;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Bowl -->
+  <path d="M 20 35 Q 20 30 25 30 L 55 30 Q 60 30 60 35 L 65 55 Q 65 65 55 65 L 25 65 Q 15 65 15 55 Z"
+        fill="url(#bowlGradient)" stroke="#FF7A68" stroke-width="2"/>
+
+  <!-- Bowl rim highlight -->
+  <ellipse cx="40" cy="30" rx="16" ry="3" fill="#FFD4C4" opacity="0.6"/>
+
+  <!-- Food kibbles -->
+  <circle cx="35" cy="42" r="4" fill="url(#foodGradient)"/>
+  <circle cx="45" cy="40" r="4.5" fill="url(#foodGradient)"/>
+  <circle cx="40" cy="50" r="4" fill="url(#foodGradient)"/>
+  <circle cx="30" cy="50" r="3.5" fill="url(#foodGradient)"/>
+  <circle cx="50" cy="48" r="3.5" fill="url(#foodGradient)"/>
+
+  <!-- Heart on bowl side -->
+  <path d="M 52 38 C 52 36 50 35 49 35 C 48 35 47.5 35.5 47 36 C 46.5 35.5 46 35 45 35 C 44 35 42 36 42 38 C 42 40 47 43 47 43 C 47 43 52 40 52 38 Z"
+        fill="#FF9999" opacity="0.7"/>
+
+  <!-- Steam wisps -->
+  <path d="M 28 25 Q 26 20 28 15" stroke="#FFB4A2" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.6"/>
+  <path d="M 40 22 Q 38 17 40 12" stroke="#FFB4A2" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.6"/>
+  <path d="M 52 25 Q 50 20 52 15" stroke="#FFB4A2" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.6"/>
+</svg>

@@ -1,0 +1,35 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Character body -->
+  <ellipse cx="40" cy="48" rx="16" ry="18" fill="#FFD4B8"/>
+
+  <!-- Apron -->
+  <path d="M32 42 C32 42 32 52 32 56 C32 58 34 60 40 60 C46 60 48 58 48 56 C48 52 48 42 48 42 Z" fill="#FFF4E6"/>
+  <circle cx="40" cy="48" r="2" fill="#FFB5A0"/>
+
+  <!-- Head -->
+  <circle cx="40" cy="32" r="10" fill="#FFDFC9"/>
+
+  <!-- Eyes -->
+  <circle cx="37" cy="31" r="1.5" fill="#4A4A4A"/>
+  <circle cx="43" cy="31" r="1.5" fill="#4A4A4A"/>
+
+  <!-- Blush -->
+  <ellipse cx="35" cy="34" rx="2" ry="1" fill="#FFB5A0" opacity="0.6"/>
+  <ellipse cx="45" cy="34" rx="2" ry="1" fill="#FFB5A0" opacity="0.6"/>
+
+  <!-- Smile -->
+  <path d="M38 35 Q40 36 42 35" stroke="#4A4A4A" stroke-width="0.8" fill="none" stroke-linecap="round"/>
+
+  <!-- Coffee cup -->
+  <rect x="48" y="38" width="14" height="16" rx="2" fill="#D4A574"/>
+  <rect x="49" y="39" width="12" height="14" rx="1.5" fill="#8B6F47"/>
+  <ellipse cx="55" cy="39" rx="6" ry="1.5" fill="#A0826A"/>
+
+  <!-- Handle -->
+  <path d="M62 42 Q66 42 66 46 Q66 50 62 50" stroke="#D4A574" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+  <!-- Steam -->
+  <path d="M52 32 Q51 28 52 26" stroke="#D4D4D4" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+  <path d="M55 33 Q54 29 55 27" stroke="#D4D4D4" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+  <path d="M58 32 Q57 28 58 26" stroke="#D4D4D4" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+</svg>

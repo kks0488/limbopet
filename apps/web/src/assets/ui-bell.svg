@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bellGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFE57F" />
+      <stop offset="50%" style="stop-color:#FFD54F" />
+      <stop offset="100%" style="stop-color:#FFC107" />
+    </linearGradient>
+  </defs>
+
+  <!-- Bell top knob -->
+  <circle cx="32" cy="14" r="3" fill="url(#bellGradient)" />
+
+  <!-- Main bell body (rounded, puffy) -->
+  <path d="M 22 18 Q 20 20 20 28 L 20 38 Q 20 42 24 44 L 40 44 Q 44 42 44 38 L 44 28 Q 44 20 42 18 Q 40 16 32 16 Q 24 16 22 18 Z"
+        fill="url(#bellGradient)" />
+
+  <!-- Bell rim -->
+  <ellipse cx="32" cy="44" rx="12" ry="3" fill="#FFC107" />
+  <ellipse cx="32" cy="44" rx="10" ry="2" fill="#FFE57F" opacity="0.5" />
+
+  <!-- Inner highlight -->
+  <ellipse cx="28" cy="26" rx="6" ry="8" fill="#FFF9E6" opacity="0.4" />
+
+  <!-- Clapper -->
+  <line x1="32" y1="36" x2="32" y2="42" stroke="#FFA000" stroke-width="2" stroke-linecap="round" />
+  <circle cx="32" cy="43" r="2.5" fill="#FF8F00" />
+
+  <!-- Sparkle on top -->
+  <circle cx="38" cy="12" r="2" fill="#FFF9E6" opacity="0.9" />
+</svg>

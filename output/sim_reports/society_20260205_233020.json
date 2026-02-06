@@ -1,0 +1,195 @@
+{
+  "window": {
+    "day_from": "2029-09-05",
+    "day_to": "2029-09-11",
+    "users": 30,
+    "days": 7
+  },
+  "policy": {
+    "election_closed_count": 0,
+    "policy_changed_count": 0,
+    "recent_changes": []
+  },
+  "economy": {
+    "series": [
+      {
+        "day": "2029-09-05 00:00:00+00",
+        "revenue": 0,
+        "spending": 0
+      },
+      {
+        "day": "2029-09-06 00:00:00+00",
+        "revenue": 0,
+        "spending": 0
+      },
+      {
+        "day": "2029-09-07 00:00:00+00",
+        "revenue": 0,
+        "spending": 0
+      },
+      {
+        "day": "2029-09-08 00:00:00+00",
+        "revenue": 0,
+        "spending": 0
+      },
+      {
+        "day": "2029-09-09 00:00:00+00",
+        "revenue": 0,
+        "spending": 0
+      },
+      {
+        "day": "2029-09-10 00:00:00+00",
+        "revenue": 0,
+        "spending": 0
+      },
+      {
+        "day": "2029-09-11 00:00:00+00",
+        "revenue": 0,
+        "spending": 0
+      }
+    ],
+    "recent_transactions": [
+      {
+        "id": "30035201-547a-4ca7-a8fe-8b0994d5c531",
+        "tx_type": "REVENUE",
+        "amount": 160,
+        "memo": "소문통신 daily revenue (day:2029-09-11)",
+        "created_at": "2026-02-05T14:30:45.168629+00:00",
+        "from_name": null,
+        "to_name": "소문통신"
+      },
+      {
+        "id": "0836f7a4-a077-4bf8-956c-7cce078ac09b",
+        "tx_type": "REVENUE",
+        "amount": 144,
+        "memo": "새벽카페 daily revenue (day:2029-09-11)",
+        "created_at": "2026-02-05T14:30:45.168629+00:00",
+        "from_name": null,
+        "to_name": "새벽카페"
+      },
+      {
+        "id": "09b59b27-de53-4b3e-86bb-ed250a4468a5",
+        "tx_type": "REVENUE",
+        "amount": 131,
+        "memo": "리본굿즈 daily revenue (day:2029-09-11)",
+        "created_at": "2026-02-05T14:30:45.168629+00:00",
+        "from_name": null,
+        "to_name": "리본굿즈"
+      },
+      {
+        "id": "48f2348d-38c3-43fb-b436-c92fc45f6810",
+        "tx_type": "REVENUE",
+        "amount": 92,
+        "memo": "림보로스팅 daily revenue (day:2029-09-11)",
+        "created_at": "2026-02-05T14:30:45.168629+00:00",
+        "from_name": null,
+        "to_name": "림보로스팅"
+      },
+      {
+        "id": "778de1d6-5440-45d2-97c0-86d0cc43ed4e",
+        "tx_type": "REVENUE",
+        "amount": 78,
+        "memo": "안개랩스 daily revenue (day:2029-09-11)",
+        "created_at": "2026-02-05T14:30:45.168629+00:00",
+        "from_name": null,
+        "to_name": "안개랩스"
+      },
+      {
+        "id": "71a6f911-ae01-49db-a882-00c9d55982de",
+        "tx_type": "SALARY",
+        "amount": 50,
+        "memo": "안개랩스 salary (day:2029-09-11)",
+        "created_at": "2026-02-05T14:30:45.168629+00:00",
+        "from_name": "안개랩스",
+        "to_name": "깨모"
+      },
+      {
+        "id": "459d8a85-1b2f-480c-be92-6b4d777f8f92",
+        "tx_type": "SALARY",
+        "amount": 50,
+        "memo": "새벽카페 salary (day:2029-09-11)",
+        "created_at": "2026-02-05T14:30:45.168629+00:00",
+        "from_name": "새벽카페",
+        "to_name": "하늘고양이"
+      },
+      {
+        "id": "71d2dcfb-8a33-49bf-a0c6-2917fbff3b61",
+        "tx_type": "SALARY",
+        "amount": 50,
+        "memo": "소문통신 salary (day:2029-09-11)",
+        "created_at": "2026-02-05T14:30:45.168629+00:00",
+        "from_name": "소문통신",
+        "to_name": "dirtest"
+      },
+      {
+        "id": "5395ba67-034f-47b9-a132-a97da290bb91",
+        "tx_type": "REVENUE",
+        "amount": 42,
+        "memo": "림보전자 daily revenue (day:2029-09-11)",
+        "created_at": "2026-02-05T14:30:45.168629+00:00",
+        "from_name": null,
+        "to_name": "림보전자"
+      },
+      {
+        "id": "3b489d06-9652-4821-a3a5-f802c06e29f0",
+        "tx_type": "TRANSFER",
+        "amount": 33,
+        "memo": "딜 (day:2029-09-11) 봄수달09→smoketest",
+        "created_at": "2026-02-05T14:32:43.380238+00:00",
+        "from_name": "봄수달09",
+        "to_name": "smoketest"
+      }
+    ]
+  },
+  "content": {
+    "broadcast_count": 28,
+    "broadcast_duplicates": 0,
+    "cast_distinct": 29,
+    "cast_unique_ratio": 0.9666666666666667
+  },
+  "health": {
+    "brain_failed_delta": 0,
+    "brain_backlog": [
+      {
+        "job_type": "DAILY_SUMMARY",
+        "count": 30
+      },
+      {
+        "job_type": "PLAZA_POST",
+        "count": 17
+      }
+    ],
+    "http_codes": {
+      "likes": {
+        "200": 350
+      },
+      "comments": {
+        "201": 140
+      }
+    }
+  },
+  "ssot": {
+    "world_concept": {
+      "theme": {
+        "day": "2029-09-11",
+        "name": "불신의 계절",
+        "vibe": "suspicious",
+        "weekSeed": 3114,
+        "description": "서로를 의심하고 비밀이 많아지는 시기입니다."
+      },
+      "atmosphere": {
+        "day": "2029-09-11",
+        "text": "누군가의 시선이 등 뒤에 닿는 듯한 오싹함",
+        "vibe": "suspicious"
+      },
+      "ok": true,
+      "atmosphere_text": "누군가의 시선이 등 뒤에 닿는 듯한 오싹함"
+    },
+    "direction": {
+      "nudge_episode_count": 0,
+      "latest_count": 0,
+      "applied_count": 0,
+      "applied_rate": null
+    }
+  }
+}

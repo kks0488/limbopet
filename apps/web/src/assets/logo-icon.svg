@@ -1,0 +1,89 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background gradient -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6b5b95;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2c3e70;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="80" height="80" rx="0" fill="url(#bgGradient)"/>
+
+  <!-- Pet face -->
+  <g transform="translate(40, 40)">
+    <!-- Main head -->
+    <ellipse cx="0" cy="0" rx="22" ry="24" fill="#b8a9e8"/>
+
+    <!-- Left ear -->
+    <ellipse cx="-14" cy="-16" rx="7" ry="12" fill="#b8a9e8"/>
+
+    <!-- Right ear -->
+    <ellipse cx="14" cy="-16" rx="7" ry="12" fill="#b8a9e8"/>
+
+    <!-- Inner left ear -->
+    <ellipse cx="-14" cy="-14" rx="3.5" ry="6" fill="#d4c8f5"/>
+
+    <!-- Inner right ear -->
+    <ellipse cx="14" cy="-14" rx="3.5" ry="6" fill="#d4c8f5"/>
+
+    <!-- Left eye outer -->
+    <ellipse cx="-8" cy="-2" rx="5" ry="6" fill="#4a3f5c"/>
+
+    <!-- Right eye outer -->
+    <ellipse cx="8" cy="-2" rx="5" ry="6" fill="#4a3f5c"/>
+
+    <!-- Left eye highlight -->
+    <circle cx="-7" cy="-3" r="2.5" fill="white" opacity="0.9"/>
+    <circle cx="-6" cy="-1" r="1" fill="white" opacity="0.6"/>
+
+    <!-- Right eye highlight -->
+    <circle cx="9" cy="-3" r="2.5" fill="white" opacity="0.9"/>
+    <circle cx="10" cy="-1" r="1" fill="white" opacity="0.6"/>
+
+    <!-- Nose -->
+    <ellipse cx="0" cy="5" rx="2.5" ry="2" fill="#ffc4d6"/>
+
+    <!-- Smile -->
+    <path d="M -5 8 Q 0 12 5 8" stroke="#4a3f5c" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+
+    <!-- Cheek blush left -->
+    <ellipse cx="-16" cy="3" rx="3" ry="2" fill="#ffc4d6" opacity="0.4"/>
+
+    <!-- Cheek blush right -->
+    <ellipse cx="16" cy="3" rx="3" ry="2" fill="#ffc4d6" opacity="0.4"/>
+  </g>
+
+  <!-- Sparkles -->
+  <!-- Top left sparkle -->
+  <g transform="translate(15, 15)">
+    <path d="M 0 -3 L 0.5 0 L 3 0.5 L 0.5 1 L 0 4 L -0.5 1 L -3 0.5 L -0.5 0 Z" fill="#ffd700" opacity="0.9" filter="url(#glow)"/>
+  </g>
+
+  <!-- Top right sparkle -->
+  <g transform="translate(65, 18)">
+    <circle r="2" fill="#ffd700" opacity="0.8"/>
+    <circle r="1" fill="white" opacity="0.9"/>
+  </g>
+
+  <!-- Bottom left sparkle -->
+  <g transform="translate(18, 62)">
+    <circle r="1.5" fill="#7dd3c0" opacity="0.7"/>
+  </g>
+
+  <!-- Bottom right sparkle -->
+  <g transform="translate(62, 65)">
+    <path d="M 0 -2 L 0.3 0 L 2 0.3 L 0.3 0.6 L 0 3 L -0.3 0.6 L -2 0.3 L -0.3 0 Z" fill="#7dd3c0" opacity="0.8" filter="url(#glow)"/>
+  </g>
+
+  <!-- Small accent sparkles -->
+  <circle cx="28" cy="25" r="0.8" fill="white" opacity="0.6"/>
+  <circle cx="52" cy="55" r="0.8" fill="white" opacity="0.6"/>
+</svg>

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <radialGradient id="flameGlow" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#FFD700;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#FF6B35;stop-opacity:0" />
+    </radialGradient>
+    <linearGradient id="flameGradient" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#FF6B35" />
+      <stop offset="50%" style="stop-color:#FF8C42" />
+      <stop offset="100%" style="stop-color:#FFD700" />
+    </linearGradient>
+  </defs>
+
+  <!-- Glow effect -->
+  <circle cx="32" cy="36" r="28" fill="url(#flameGlow)" />
+
+  <!-- Main flame body -->
+  <path d="M 32 12 Q 38 18 40 28 Q 42 38 40 44 Q 38 50 32 54 Q 26 50 24 44 Q 22 38 24 28 Q 26 18 32 12 Z"
+        fill="url(#flameGradient)" />
+
+  <!-- Inner flame highlight -->
+  <path d="M 32 20 Q 35 24 36 30 Q 37 36 35 40 Q 33 44 32 46 Q 31 44 29 40 Q 27 36 28 30 Q 29 24 32 20 Z"
+        fill="#FFF9E6" opacity="0.8" />
+
+  <!-- Kawaii face -->
+  <circle cx="28" cy="34" r="1.5" fill="#FF6B35" />
+  <circle cx="36" cy="34" r="1.5" fill="#FF6B35" />
+  <path d="M 28 38 Q 32 40 36 38" stroke="#FF6B35" stroke-width="1.5" fill="none" stroke-linecap="round" />
+</svg>

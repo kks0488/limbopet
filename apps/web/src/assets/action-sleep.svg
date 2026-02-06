@@ -1,0 +1,47 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="moonGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#B4B4E4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#9494D4;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="capGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#D4C4F4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#B4A4D4;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="cloudGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#F4F4FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#E4E4F4;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Cloud pillow -->
+  <path d="M 15 55 Q 15 50 20 50 Q 20 45 25 45 Q 28 45 30 47 Q 33 45 37 45 Q 42 45 42 50 Q 47 50 47 55 Q 47 60 42 60 L 20 60 Q 15 60 15 55 Z"
+        fill="url(#cloudGradient)" stroke="#D4D4E4" stroke-width="1.5"/>
+
+  <!-- Crescent moon -->
+  <path d="M 38 18 Q 32 18 28 22 Q 24 26 24 32 Q 24 38 28 42 Q 32 46 38 46 Q 36 46 34 44 Q 30 40 30 32 Q 30 24 34 20 Q 36 18 38 18 Z"
+        fill="url(#moonGradient)" stroke="#8484C4" stroke-width="2"/>
+
+  <!-- Moon face -->
+  <circle cx="33" cy="28" r="1.5" fill="#8484C4" opacity="0.6"/>
+  <circle cx="33" cy="36" r="1.5" fill="#8484C4" opacity="0.6"/>
+  <path d="M 31 32 Q 30 33 31 34" stroke="#8484C4" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.6"/>
+
+  <!-- Sleeping cap -->
+  <path d="M 38 18 Q 42 15 46 15 Q 48 15 50 17 L 52 22 Q 52 24 50 24 L 40 28 Z"
+        fill="url(#capGradient)" stroke="#B494C4" stroke-width="1.5"/>
+  <circle cx="52" cy="22" r="3" fill="#F4E4FF"/>
+
+  <!-- Stars -->
+  <path d="M 55 25 L 56 28 L 59 28 L 57 30 L 58 33 L 55 31 L 52 33 L 53 30 L 51 28 L 54 28 Z"
+        fill="#FFD4A3" opacity="0.8"/>
+  <path d="M 62 38 L 63 40 L 65 40 L 63.5 41.5 L 64 43 L 62 42 L 60 43 L 60.5 41.5 L 59 40 L 61 40 Z"
+        fill="#FFD4A3" opacity="0.7"/>
+  <path d="M 58 50 L 59 52 L 61 52 L 59.5 53.5 L 60 55 L 58 54 L 56 55 L 56.5 53.5 L 55 52 L 57 52 Z"
+        fill="#FFD4A3" opacity="0.6"/>
+
+  <!-- Small stars -->
+  <circle cx="48" cy="32" r="1.5" fill="#FFD4A3" opacity="0.7"/>
+  <circle cx="66" cy="30" r="1" fill="#FFD4A3" opacity="0.5"/>
+  <circle cx="64" cy="48" r="1.5" fill="#FFD4A3" opacity="0.6"/>
+</svg>

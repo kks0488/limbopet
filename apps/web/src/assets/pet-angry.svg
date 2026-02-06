@@ -1,0 +1,92 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bodyGrad-angry" cx="0.3" cy="0.3" r="0.8">
+      <stop offset="0%" style="stop-color:#F0D5E8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#D8B0D0;stop-opacity:1" />
+    </radialGradient>
+    <radialGradient id="bellyGrad-angry" cx="0.5" cy="0.5" r="0.6">
+      <stop offset="0%" style="stop-color:#FFF5FB;stop-opacity:0.9" />
+      <stop offset="100%" style="stop-color:#FFE8F5;stop-opacity:0.3" />
+    </radialGradient>
+    <filter id="shadow-angry">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.2"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Shadow -->
+  <ellipse cx="80" cy="148" rx="32" ry="7" fill="#D8B0D0" opacity="0.25"/>
+
+  <!-- Tail (stiff, angry) -->
+  <path d="M 105 100 Q 128 92, 135 85 Q 130 98, 112 105 Z" fill="url(#bodyGrad-angry)" filter="url(#shadow-angry)"/>
+  <path d="M 115 92 Q 125 88, 130 86 Q 127 94, 118 96 Z" fill="#FFF5FB" opacity="0.5"/>
+
+  <!-- Body (puffed up slightly) -->
+  <circle cx="80" cy="100" r="42" fill="url(#bodyGrad-angry)" filter="url(#shadow-angry)"/>
+
+  <!-- Belly -->
+  <ellipse cx="80" cy="110" rx="27" ry="24" fill="url(#bellyGrad-angry)"/>
+
+  <!-- Arms -->
+  <ellipse cx="50" cy="105" rx="9" ry="13" fill="#D8B0D0" filter="url(#shadow-angry)"/>
+  <ellipse cx="110" cy="105" rx="9" ry="13" fill="#D8B0D0" filter="url(#shadow-angry)"/>
+  <ellipse cx="50" cy="107" rx="6" ry="8" fill="#FFE8F5"/>
+  <ellipse cx="110" cy="107" rx="6" ry="8" fill="#FFE8F5"/>
+
+  <!-- Feet -->
+  <ellipse cx="68" cy="135" rx="10" ry="7" fill="#D8B0D0" filter="url(#shadow-angry)"/>
+  <ellipse cx="92" cy="135" rx="10" ry="7" fill="#D8B0D0" filter="url(#shadow-angry)"/>
+  <ellipse cx="68" cy="135" rx="7" ry="4.5" fill="#FFE8F5"/>
+  <ellipse cx="92" cy="135" rx="7" ry="4.5" fill="#FFE8F5"/>
+
+  <!-- Head (puffed cheeks - wider) -->
+  <ellipse cx="80" cy="63" rx="36" ry="33" fill="url(#bodyGrad-angry)" filter="url(#shadow-angry)"/>
+
+  <!-- Puffed cheek bulges -->
+  <circle cx="52" cy="66" r="10" fill="#F0D5E8" opacity="0.8"/>
+  <circle cx="108" cy="66" r="10" fill="#F0D5E8" opacity="0.8"/>
+
+  <!-- Ears -->
+  <ellipse cx="58" cy="40" rx="11" ry="17" fill="#D8B0D0" filter="url(#shadow-angry)"/>
+  <ellipse cx="102" cy="40" rx="11" ry="17" fill="#D8B0D0" filter="url(#shadow-angry)"/>
+  <ellipse cx="58" cy="42" rx="6.5" ry="10" fill="#FFB8E6"/>
+  <ellipse cx="102" cy="42" rx="6.5" ry="10" fill="#FFB8E6"/>
+
+  <!-- Angry eyebrows (furrowed) -->
+  <path d="M 60 52 L 73 55" stroke="#3D2956" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M 87 55 L 100 52" stroke="#3D2956" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+
+  <!-- Eyes (narrow, angry) -->
+  <ellipse cx="67" cy="61" rx="6" ry="7" fill="#3D2956"/>
+  <ellipse cx="93" cy="61" rx="6" ry="7" fill="#3D2956"/>
+  <circle cx="68" cy="59" r="2.5" fill="#FFFFFF"/>
+  <circle cx="94" cy="59" r="2.5" fill="#FFFFFF"/>
+
+  <!-- Nose (slight scrunch) -->
+  <ellipse cx="80" cy="70" rx="3.5" ry="2.5" fill="#FFB8D9"/>
+
+  <!-- Grumpy mouth -->
+  <path d="M 70 78 L 90 78" stroke="#3D2956" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M 68 77 L 70 78" stroke="#3D2956" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M 90 78 L 92 77" stroke="#3D2956" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+  <!-- Reddish blush (angry) -->
+  <ellipse cx="52" cy="66" rx="9" ry="7" fill="#FF9999" opacity="0.4"/>
+  <ellipse cx="108" cy="66" rx="9" ry="7" fill="#FF9999" opacity="0.4"/>
+
+  <!-- Anger marks (cross symbols) -->
+  <g opacity="0.7">
+    <path d="M 35 50 L 40 55 M 40 50 L 35 55" stroke="#D84A6B" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 120 50 L 125 55 M 125 50 L 120 55" stroke="#D84A6B" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Small anger vein mark on head -->
+  <path d="M 48 38 L 50 42 L 52 38" stroke="#D84A6B" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

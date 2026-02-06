@@ -1,0 +1,49 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="keyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#D8E8F0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#B0C8D8;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Key ring -->
+  <circle cx="40" cy="30" r="8" stroke="url(#keyGrad)" stroke-width="3" fill="none"/>
+  <circle cx="40" cy="30" r="5" fill="none" stroke="#A0B8C8" stroke-width="1.5"/>
+
+  <!-- Key 1 (standard key) -->
+  <rect x="38" y="38" width="4" height="20" rx="2" fill="url(#keyGrad)"/>
+  <circle cx="40" cy="40" r="3" fill="#C8D8E8"/>
+  <circle cx="40" cy="40" r="1.5" fill="#FFFFFF"/>
+
+  <!-- Key 1 teeth -->
+  <rect x="38" y="54" width="1.5" height="3" fill="url(#keyGrad)"/>
+  <rect x="40.5" y="52" width="1.5" height="5" fill="url(#keyGrad)"/>
+
+  <!-- Key 2 (heart-shaped head) -->
+  <rect x="28" y="40" width="3" height="18" rx="1.5" fill="url(#keyGrad)" transform="rotate(-25 29.5 49)"/>
+
+  <!-- Heart head for key 2 -->
+  <path d="M26 38 C26 36 27 35 28.5 35 C29.5 35 30 35.5 30.5 36 C31 35.5 31.5 35 32.5 35 C34 35 35 36 35 38 C35 40 30.5 43 30.5 43 C30.5 43 26 40 26 38 Z" fill="#FFB5C5" transform="rotate(-25 30.5 39)"/>
+
+  <!-- Key 2 teeth -->
+  <rect x="22" y="52" width="1.2" height="2.5" fill="url(#keyGrad)" transform="rotate(-25 22.6 53.25)"/>
+  <rect x="20" y="50" width="1.2" height="3.5" fill="url(#keyGrad)" transform="rotate(-25 20.6 51.75)"/>
+
+  <!-- Key 3 (round head) -->
+  <rect x="48" y="40" width="3" height="18" rx="1.5" fill="url(#keyGrad)" transform="rotate(25 49.5 49)"/>
+  <circle cx="49.5" cy="42" r="3" fill="#C8D8E8" transform="rotate(25 49.5 42)"/>
+  <circle cx="49.5" cy="42" r="1.5" fill="#FFFFFF" transform="rotate(25 49.5 42)"/>
+
+  <!-- Key 3 teeth -->
+  <rect x="56" y="52" width="1.2" height="2.5" fill="url(#keyGrad)" transform="rotate(25 56.6 53.25)"/>
+  <rect x="58" y="50" width="1.2" height="4" fill="url(#keyGrad)" transform="rotate(25 58.6 52)"/>
+
+  <!-- Key 4 (small star head) -->
+  <rect x="32" y="36" width="2.5" height="14" rx="1.25" fill="url(#keyGrad)" transform="rotate(-60 33.25 43)"/>
+
+  <!-- Star head for key 4 -->
+  <path d="M24 32 L24.8 34 L27 34.3 L25.5 36 L25.8 38 L24 37 L22.2 38 L22.5 36 L21 34.3 L23.2 34 Z" fill="#FFE55C" transform="rotate(-60 24 35)"/>
+
+  <!-- Key 4 teeth -->
+  <rect x="18" y="42" width="1" height="2" fill="url(#keyGrad)" transform="rotate(-60 18.5 43)"/>
+</svg>

@@ -1,0 +1,57 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+.Python
+.venv/
+venv/
+env/
+.mypy_cache/
+.pytest_cache/
+
+# Local data
+data/
+*.sqlite
+
+# Playwright artifacts
+output/playwright/
+
+# Temp files
+tmp/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+
+# Logs
+*.log
+/tmp/
+
+# Vendor (external repos)
+vendor/
+
+# Unity project (separate)
+My project/
+
+# Work documents
+.vc/
+
+# Build output
+dist/
+build/

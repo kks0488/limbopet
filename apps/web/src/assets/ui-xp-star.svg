@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="starGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFF176" />
+      <stop offset="50%" style="stop-color:#FFD54F" />
+      <stop offset="100%" style="stop-color:#FFB74D" />
+    </linearGradient>
+    <radialGradient id="starGlow" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#FFF9E6;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:#FFD54F;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Glow effect -->
+  <circle cx="32" cy="32" r="24" fill="url(#starGlow)" />
+
+  <!-- Main star with rounded points -->
+  <path d="M 32 8 L 38 24 L 56 24 L 42 35 L 48 52 L 32 42 L 16 52 L 22 35 L 8 24 L 26 24 Z"
+        fill="url(#starGradient)" />
+
+  <!-- Inner highlight -->
+  <path d="M 32 16 L 36 26 L 46 26 L 38 32 L 42 42 L 32 36 L 22 42 L 26 32 L 18 26 L 28 26 Z"
+        fill="#FFF9E6" opacity="0.6" />
+
+  <!-- Sparkles -->
+  <g fill="#FFFFFF" opacity="0.9">
+    <circle cx="52" cy="12" r="2" />
+    <circle cx="58" cy="32" r="1.5" />
+    <circle cx="48" cy="54" r="1.5" />
+    <circle cx="16" cy="54" r="1.5" />
+    <circle cx="6" cy="32" r="1.5" />
+    <circle cx="12" cy="12" r="2" />
+  </g>
+</svg>

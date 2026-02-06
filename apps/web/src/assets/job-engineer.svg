@@ -1,0 +1,47 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gearGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#B8E6D5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#95D4C1;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="wrenchGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#D8D8D8;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#B0B0B0;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Gear with kawaii face -->
+  <circle cx="48" cy="35" r="14" fill="url(#gearGrad)"/>
+
+  <!-- Gear teeth -->
+  <rect x="46" y="19" width="4" height="4" rx="1" fill="url(#gearGrad)"/>
+  <rect x="46" y="47" width="4" height="4" rx="1" fill="url(#gearGrad)"/>
+  <rect x="32" y="33" width="4" height="4" rx="1" fill="url(#gearGrad)"/>
+  <rect x="60" y="33" width="4" height="4" rx="1" fill="url(#gearGrad)"/>
+  <rect x="37" y="24" width="4" height="4" rx="1" fill="url(#gearGrad)" transform="rotate(-45 39 26)"/>
+  <rect x="53" y="24" width="4" height="4" rx="1" fill="url(#gearGrad)" transform="rotate(45 55 26)"/>
+  <rect x="37" y="42" width="4" height="4" rx="1" fill="url(#gearGrad)" transform="rotate(45 39 44)"/>
+  <rect x="53" y="42" width="4" height="4" rx="1" fill="url(#gearGrad)" transform="rotate(-45 55 44)"/>
+
+  <!-- Gear center hole -->
+  <circle cx="48" cy="35" r="5" fill="#FFFFFF"/>
+
+  <!-- Kawaii face on gear -->
+  <circle cx="45" cy="33" r="1.2" fill="#4A4A4A"/>
+  <circle cx="51" cy="33" r="1.2" fill="#4A4A4A"/>
+  <path d="M45 37 Q48 39 51 37" stroke="#4A4A4A" stroke-width="1" fill="none" stroke-linecap="round"/>
+
+  <!-- Blush -->
+  <circle cx="43" cy="36" r="1.5" fill="#FFB5C5" opacity="0.5"/>
+  <circle cx="53" cy="36" r="1.5" fill="#FFB5C5" opacity="0.5"/>
+
+  <!-- Wrench -->
+  <rect x="18" y="42" width="8" height="24" rx="2" fill="url(#wrenchGrad)" transform="rotate(-35 22 54)"/>
+
+  <!-- Wrench head -->
+  <rect x="16" y="40" width="12" height="6" rx="2" fill="url(#wrenchGrad)" transform="rotate(-35 22 43)"/>
+  <rect x="18" y="41" width="8" height="4" rx="1" fill="#E8E8E8" transform="rotate(-35 22 43)"/>
+
+  <!-- Wrench opening -->
+  <rect x="20" y="38" width="4" height="3" rx="0.5" fill="#A0A0A0" transform="rotate(-35 22 39.5)"/>
+</svg>

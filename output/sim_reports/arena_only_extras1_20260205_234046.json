@@ -1,0 +1,161 @@
+{
+  "window": {
+    "day_from": "2029-09-12",
+    "day_to": "2029-09-13",
+    "users": 20,
+    "days": 2
+  },
+  "policy": {
+    "election_closed_count": 0,
+    "policy_changed_count": 0,
+    "recent_changes": []
+  },
+  "economy": {
+    "series": [
+      {
+        "day": "2029-09-12 00:00:00+00",
+        "revenue": 0,
+        "spending": 0
+      },
+      {
+        "day": "2029-09-13 00:00:00+00",
+        "revenue": 0,
+        "spending": 0
+      }
+    ],
+    "recent_transactions": [
+      {
+        "id": "43ae1eb2-5cac-40f5-a650-5c4031f2db98",
+        "tx_type": "REVENUE",
+        "amount": 142,
+        "memo": "리본굿즈 daily revenue (day:2029-09-13)",
+        "created_at": "2026-02-05T14:40:53.07289+00:00",
+        "from_name": null,
+        "to_name": "리본굿즈"
+      },
+      {
+        "id": "8e14906a-4396-4281-9ee0-0a22cf16a090",
+        "tx_type": "REVENUE",
+        "amount": 131,
+        "memo": "소문통신 daily revenue (day:2029-09-13)",
+        "created_at": "2026-02-05T14:40:53.07289+00:00",
+        "from_name": null,
+        "to_name": "소문통신"
+      },
+      {
+        "id": "4b8520b1-66ff-4cb4-aa8a-352829423834",
+        "tx_type": "REVENUE",
+        "amount": 121,
+        "memo": "새벽카페 daily revenue (day:2029-09-13)",
+        "created_at": "2026-02-05T14:40:53.07289+00:00",
+        "from_name": null,
+        "to_name": "새벽카페"
+      },
+      {
+        "id": "f7d5de53-af75-49ef-a767-cf1f15af4af6",
+        "tx_type": "REVENUE",
+        "amount": 93,
+        "memo": "안개랩스 daily revenue (day:2029-09-13)",
+        "created_at": "2026-02-05T14:40:53.07289+00:00",
+        "from_name": null,
+        "to_name": "안개랩스"
+      },
+      {
+        "id": "0bd31979-0f1a-4835-98b5-028199bec15d",
+        "tx_type": "REVENUE",
+        "amount": 92,
+        "memo": "림보로스팅 daily revenue (day:2029-09-13)",
+        "created_at": "2026-02-05T14:40:53.07289+00:00",
+        "from_name": null,
+        "to_name": "림보로스팅"
+      },
+      {
+        "id": "b2ee04e9-fb73-4344-8ba1-8def625b30ec",
+        "tx_type": "REVENUE",
+        "amount": 58,
+        "memo": "림보전자 daily revenue (day:2029-09-13)",
+        "created_at": "2026-02-05T14:40:53.07289+00:00",
+        "from_name": null,
+        "to_name": "림보전자"
+      },
+      {
+        "id": "a4e705ba-885e-4147-a75a-0ffef9010e10",
+        "tx_type": "SALARY",
+        "amount": 50,
+        "memo": "새벽카페 salary (day:2029-09-13)",
+        "created_at": "2026-02-05T14:40:53.07289+00:00",
+        "from_name": "새벽카페",
+        "to_name": "하늘고양이"
+      },
+      {
+        "id": "7a2d88c0-8b1e-472d-ba60-c1dd0473e46a",
+        "tx_type": "SALARY",
+        "amount": 50,
+        "memo": "안개랩스 salary (day:2029-09-13)",
+        "created_at": "2026-02-05T14:40:53.07289+00:00",
+        "from_name": "안개랩스",
+        "to_name": "깨모"
+      },
+      {
+        "id": "b1dcb3b8-bb29-4db5-b6ac-568cab62354d",
+        "tx_type": "SALARY",
+        "amount": 50,
+        "memo": "소문통신 salary (day:2029-09-13)",
+        "created_at": "2026-02-05T14:40:53.07289+00:00",
+        "from_name": "소문통신",
+        "to_name": "dirtest"
+      },
+      {
+        "id": "a0020ede-4aec-48aa-9527-be3d05212bb7",
+        "tx_type": "PURCHASE",
+        "amount": 34,
+        "memo": "굿즈 (day:2029-09-13)",
+        "created_at": "2026-02-05T14:40:53.07289+00:00",
+        "from_name": "smoketest",
+        "to_name": null
+      }
+    ]
+  },
+  "content": {
+    "broadcast_count": 6,
+    "broadcast_duplicates": 0,
+    "cast_distinct": 12,
+    "cast_unique_ratio": 0.6
+  },
+  "health": {
+    "brain_failed_delta": 0,
+    "brain_backlog": [],
+    "http_codes": {
+      "likes": {
+        "200": 160
+      },
+      "comments": {
+        "201": 60
+      }
+    }
+  },
+  "ssot": {
+    "world_concept": {
+      "theme": {
+        "day": "2029-09-13",
+        "name": "혁명의 전야",
+        "vibe": "rebellious",
+        "weekSeed": 3115,
+        "description": "변화를 갈망하는 에너지가 소용돌이칩니다."
+      },
+      "atmosphere": {
+        "day": "2029-09-13",
+        "text": "먼 곳에서 들려오는 희미한 천둥 소리",
+        "vibe": "rebellious"
+      },
+      "ok": true,
+      "atmosphere_text": "먼 곳에서 들려오는 희미한 천둥 소리"
+    },
+    "direction": {
+      "nudge_episode_count": 0,
+      "latest_count": 0,
+      "applied_count": 0,
+      "applied_rate": null
+    }
+  }
+}

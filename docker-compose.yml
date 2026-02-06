@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: limbopet
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "${LIMBOPET_DB_PORT:-5432}:5432"
+    volumes:
+      - limbopet_pg:/var/lib/postgresql/data
+
+volumes:
+  limbopet_pg:

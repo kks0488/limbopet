@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="shieldGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#A7F3D0" />
+      <stop offset="50%" style="stop-color:#6EE7B7" />
+      <stop offset="100%" style="stop-color:#34D399" />
+    </linearGradient>
+    <radialGradient id="shieldGlow" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#D1FAE5;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#34D399;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Glow effect -->
+  <ellipse cx="32" cy="32" rx="26" ry="28" fill="url(#shieldGlow)" />
+
+  <!-- Main shield body (rounded, friendly) -->
+  <path d="M 32 10 Q 44 12 48 18 Q 52 24 52 32 Q 52 40 48 46 Q 44 52 32 56 Q 20 52 16 46 Q 12 40 12 32 Q 12 24 16 18 Q 20 12 32 10 Z"
+        fill="url(#shieldGradient)" />
+
+  <!-- Inner border -->
+  <path d="M 32 14 Q 42 16 45 21 Q 48 26 48 32 Q 48 38 45 43 Q 42 48 32 52 Q 22 48 19 43 Q 16 38 16 32 Q 16 26 19 21 Q 22 16 32 14 Z"
+        fill="none" stroke="#D1FAE5" stroke-width="1.5" opacity="0.5" />
+
+  <!-- Heart emblem in center -->
+  <path d="M 32 26 L 28 22 Q 24 20 22 24 Q 20 28 24 32 L 32 40 L 40 32 Q 44 28 42 24 Q 40 20 36 22 L 32 26 Z"
+        fill="#FFFFFF" opacity="0.9" />
+
+  <!-- Highlight glow -->
+  <ellipse cx="28" cy="22" rx="8" ry="10" fill="#FFFFFF" opacity="0.2" />
+</svg>

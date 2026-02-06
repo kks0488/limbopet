@@ -1,0 +1,81 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bodyGrad-sad" cx="0.3" cy="0.3" r="0.8">
+      <stop offset="0%" style="stop-color:#D8C8F0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#B8A0D8;stop-opacity:1" />
+    </radialGradient>
+    <radialGradient id="bellyGrad-sad" cx="0.5" cy="0.5" r="0.6">
+      <stop offset="0%" style="stop-color:#F5EEFF;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#E8D8F5;stop-opacity:0.3" />
+    </radialGradient>
+    <filter id="shadow-sad">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.2"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="tearGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#A8D8FF;stop-opacity:0.9" />
+      <stop offset="100%" style="stop-color:#7FB8E8;stop-opacity:0.7" />
+    </linearGradient>
+  </defs>
+
+  <!-- Shadow -->
+  <ellipse cx="80" cy="150" rx="30" ry="6" fill="#B8A0D8" opacity="0.25"/>
+
+  <!-- Tail (droopy) -->
+  <path d="M 105 105 Q 118 108, 120 115 Q 115 110, 108 108 Z" fill="url(#bodyGrad-sad)" filter="url(#shadow-sad)"/>
+  <path d="M 110 108 Q 115 110, 116 113 Q 113 111, 111 110 Z" fill="#F5EEFF" opacity="0.4"/>
+
+  <!-- Body (hunched) -->
+  <ellipse cx="80" cy="105" rx="40" ry="38" fill="url(#bodyGrad-sad)" filter="url(#shadow-sad)"/>
+
+  <!-- Belly -->
+  <ellipse cx="80" cy="115" rx="25" ry="22" fill="url(#bellyGrad-sad)"/>
+
+  <!-- Arms (slightly forward, sad posture) -->
+  <ellipse cx="52" cy="108" rx="9" ry="12" fill="#B8A0D8" filter="url(#shadow-sad)"/>
+  <ellipse cx="108" cy="108" rx="9" ry="12" fill="#B8A0D8" filter="url(#shadow-sad)"/>
+  <ellipse cx="52" cy="110" rx="6" ry="7.5" fill="#E8D8F5"/>
+  <ellipse cx="108" cy="110" rx="6" ry="7.5" fill="#E8D8F5"/>
+
+  <!-- Feet -->
+  <ellipse cx="68" cy="138" rx="10" ry="7" fill="#B8A0D8" filter="url(#shadow-sad)"/>
+  <ellipse cx="92" cy="138" rx="10" ry="7" fill="#B8A0D8" filter="url(#shadow-sad)"/>
+  <ellipse cx="68" cy="138" rx="7" ry="4.5" fill="#E8D8F5"/>
+  <ellipse cx="92" cy="138" rx="7" ry="4.5" fill="#E8D8F5"/>
+
+  <!-- Head -->
+  <circle cx="80" cy="66" r="33" fill="url(#bodyGrad-sad)" filter="url(#shadow-sad)"/>
+
+  <!-- Ears (droopy - tilted down) -->
+  <ellipse cx="58" cy="48" rx="11" ry="16" fill="#B8A0D8" filter="url(#shadow-sad)" transform="rotate(25 58 48)"/>
+  <ellipse cx="102" cy="48" rx="11" ry="16" fill="#B8A0D8" filter="url(#shadow-sad)" transform="rotate(-25 102 48)"/>
+  <ellipse cx="58" cy="50" rx="6.5" ry="9" fill="#E8B8D6" transform="rotate(25 58 50)"/>
+  <ellipse cx="102" cy="50" rx="6.5" ry="9" fill="#E8B8D6" transform="rotate(-25 102 50)"/>
+
+  <!-- Eyes (sad, looking down) -->
+  <ellipse cx="68" cy="62" rx="6" ry="7" fill="#3D2956"/>
+  <ellipse cx="92" cy="62" rx="6" ry="7" fill="#3D2956"/>
+  <circle cx="69" cy="60" r="2.5" fill="#FFFFFF"/>
+  <circle cx="93" cy="60" r="2.5" fill="#FFFFFF"/>
+
+  <!-- Eyebrows (sad angle) -->
+  <path d="M 62 52 Q 65 50, 72 51" stroke="#3D2956" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <path d="M 88 51 Q 95 50, 98 52" stroke="#3D2956" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+
+  <!-- Nose -->
+  <ellipse cx="80" cy="70" rx="3.5" ry="2.5" fill="#E8B8D6"/>
+
+  <!-- Sad mouth (downturned) -->
+  <path d="M 70 80 Q 80 76, 90 80" stroke="#3D2956" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+  <!-- Teardrop -->
+  <ellipse cx="98" cy="72" rx="4" ry="6" fill="url(#tearGrad)" filter="url(#shadow-sad)"/>
+  <circle cx="98" cy="70" r="2" fill="#D8F0FF" opacity="0.8"/>
+</svg>
