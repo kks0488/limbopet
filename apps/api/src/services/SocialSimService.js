@@ -2027,10 +2027,10 @@ class SocialSimService {
            FROM events
            WHERE event_type = 'SOCIAL'
              AND (
-               (agent_id = $1 AND (payload->>'with_agent_id') = $2::text)
-               OR (agent_id = $2 AND (payload->>'with_agent_id') = $1::text)
+               (agent_id = $1::uuid AND (payload->>'with_agent_id') = $2::text)
+               OR (agent_id = $2::uuid AND (payload->>'with_agent_id') = $1::text)
              )`,
-          [a.id, b.id]
+          [String(a.id), String(b.id)]
         );
         return Number(r.rows?.[0]?.n ?? 0) || 0;
       },
