@@ -9,7 +9,7 @@ DB_URL="${DB_URL:-postgresql://postgres:postgres@localhost:${LIMBOPET_DB_PORT:-5
 
 USERS="${USERS:-30}"
 DAYS="${DAYS:-10}"
-EPISODES_PER_DAY="${EPISODES_PER_DAY:-3}"
+EPISODES_PER_DAY="${EPISODES_PER_DAY:-2}"
 PLAZA_POSTS_PER_DAY="${PLAZA_POSTS_PER_DAY:-2}"
 STEP_DAYS="${STEP_DAYS:-1}"
 DAY="${DAY:-auto}"
@@ -158,6 +158,133 @@ wait_job_types_sql() {
     out="'PLAZA_POST','DIARY_POST'"
   fi
   echo "${out}"
+}
+
+run_interactions_pass() {
+  local label="${1:-pass}"
+  local likes_in="${2:-0}"
+  local comments_in="${3:-0}"
+  local seed_base="${4:-0}"
+
+  likes_n="${likes_in}"
+  comments_n="${comments_in}"
+  if ! [[ "${likes_n}" =~ ^[0-9]+$ ]]; then likes_n=0; fi
+  if ! [[ "${comments_n}" =~ ^[0-9]+$ ]]; then comments_n=0; fi
+
+  # Fetch a post pool for interaction targets (DB -> includes author_id to avoid self-votes).
+  local -a post_ids=()
+  local -a post_author_ids=()
+  while IFS='|' read -r pid author_id; do
+    [[ -n "${pid}" && -n "${author_id}" ]] || continue
+    post_ids+=("${pid}")
+    post_author_ids+=("${author_id}")
+  done < <(
+    psql "${DB_URL}" -Atc "SELECT id::text || '|' || author_id::text FROM posts WHERE is_deleted=false AND post_type NOT IN ('broadcast','rumor') ORDER BY created_at DESC LIMIT 220;"
+  )
+
+  if (( ${#post_ids[@]} == 0 )); then
+    echo "  - interactions (${label}): skipped (no posts)"
+    return 0
+  fi
+
+  local user_count="${#tokens[@]}"
+  if (( user_count <= 0 )); then
+    echo "  - interactions (${label}): skipped (no users)"
+    return 0
+  fi
+
+  like_fail=0
+  comment_fail=0
+  like_skip=0
+  like_fail_codes=""
+  comment_fail_codes=""
+
+  if (( likes_n > 0 )); then
+    for _ in $(seq 1 "${likes_n}"); do
+      uidx=$(( RANDOM % user_count ))
+      t="${tokens[$uidx]}"
+      voter_agent_id="${pet_ids[$uidx]}"
+
+      pid=""
+      for __try in $(seq 1 20); do
+        pidx=$(( RANDOM % ${#post_ids[@]} ))
+        cand_pid="${post_ids[$pidx]}"
+        cand_author="${post_author_ids[$pidx]}"
+        if [[ "${cand_author}" == "${voter_agent_id}" ]]; then
+          continue
+        fi
+        if grep -q "^${voter_agent_id}|${cand_pid}$" "${like_pairs_file}" 2>/dev/null; then
+          continue
+        fi
+        pid="${cand_pid}"
+        break
+      done
+      if [[ -z "${pid}" ]]; then
+        like_skip=$(( like_skip + 1 ))
+        continue
+      fi
+
+      code="$(
+        curl -sS -o /dev/null -w '%{http_code}' -X POST "${API_URL}/users/me/posts/${pid}/upvote" \
+          -H "Authorization: Bearer ${t}"
+      )" || code="000"
+      if [[ "${code}" == "000" || "${code}" == "500" || "${code}" == "502" || "${code}" == "503" || "${code}" == "504" ]]; then
+        sleep 0.1
+        code="$(
+          curl -sS -o /dev/null -w '%{http_code}' -X POST "${API_URL}/users/me/posts/${pid}/upvote" \
+            -H "Authorization: Bearer ${t}"
+        )" || code="000"
+      fi
+      echo "${code}" >> "${like_codes_file}"
+      if [[ "${code}" != "200" && "${code}" != "201" ]]; then
+        like_fail=$(( like_fail + 1 ))
+        if [[ "${like_fail}" -le 6 ]]; then
+          like_fail_codes="${like_fail_codes}${code} "
+        fi
+      else
+        echo "${voter_agent_id}|${pid}" >> "${like_pairs_file}"
+      fi
+    done
+  fi
+
+  if (( comments_n > 0 )); then
+    for cidx in $(seq 1 "${comments_n}"); do
+      uidx=$(( RANDOM % user_count ))
+      t="${tokens[$uidx]}"
+      pid="${post_ids[$(( RANDOM % ${#post_ids[@]} ))]}"
+      content="$(ko_comment_for $(( seed_base + cidx * 97 + uidx )))"
+      body="$(python3 -c 'import json, sys; print(json.dumps({"content": sys.argv[1]}))' "${content}")"
+      code="$(
+        curl -sS -o /dev/null -w '%{http_code}' -X POST "${API_URL}/users/me/plaza/posts/${pid}/comments" \
+          -H "Authorization: Bearer ${t}" \
+          -H 'Content-Type: application/json' \
+          -d "${body}"
+      )" || code="000"
+      if [[ "${code}" == "000" || "${code}" == "500" || "${code}" == "502" || "${code}" == "503" || "${code}" == "504" ]]; then
+        sleep 0.1
+        body="$(python3 -c 'import json, sys; print(json.dumps({"content": sys.argv[1]}))' "${content}")"
+        code="$(
+          curl -sS -o /dev/null -w '%{http_code}' -X POST "${API_URL}/users/me/plaza/posts/${pid}/comments" \
+            -H "Authorization: Bearer ${t}" \
+            -H 'Content-Type: application/json' \
+            -d "${body}"
+        )" || code="000"
+      fi
+      echo "${code}" >> "${comment_codes_file}"
+      if [[ "${code}" != "200" && "${code}" != "201" ]]; then
+        comment_fail=$(( comment_fail + 1 ))
+        if [[ "${comment_fail}" -le 6 ]]; then
+          comment_fail_codes="${comment_fail_codes}${code} "
+        fi
+      fi
+    done
+  fi
+
+  if (( like_fail > 0 || comment_fail > 0 )); then
+    echo "  - interactions (${label}): likes=${likes_n} (skip ${like_skip}, fail ${like_fail}, codes: ${like_fail_codes:-none}), comments=${comments_n} (fail ${comment_fail}, codes: ${comment_fail_codes:-none})"
+  else
+    echo "  - interactions (${label}): likes=${likes_n} (skip ${like_skip}, fail 0), comments=${comments_n} (fail 0)"
+  fi
 }
 
 echo "[society] api: ${API_URL}"
@@ -348,114 +475,7 @@ JSON
   fi
 
   if as_bool "${INTERACTIONS}"; then
-    # Fetch a post pool for interaction targets (DB -> includes author_id to avoid self-votes).
-    post_ids=()
-    post_author_ids=()
-    while IFS='|' read -r pid author_id; do
-      [[ -n "${pid}" && -n "${author_id}" ]] || continue
-      post_ids+=("${pid}")
-      post_author_ids+=("${author_id}")
-    done < <(
-      psql "${DB_URL}" -Atc "SELECT id::text || '|' || author_id::text FROM posts WHERE is_deleted=false AND post_type NOT IN ('broadcast','rumor') ORDER BY created_at DESC LIMIT 120;"
-    )
-
-    if (( ${#post_ids[@]} == 0 )); then
-      echo "  - interactions: skipped (no posts)"
-    else
-      like_fail=0
-      comment_fail=0
-      like_skip=0
-      like_fail_codes=""
-      comment_fail_codes=""
-
-      likes_n="${LIKES_PER_DAY}"
-      comments_n="${COMMENTS_PER_DAY}"
-      if ! [[ "${likes_n}" =~ ^[0-9]+$ ]]; then likes_n=0; fi
-      if ! [[ "${comments_n}" =~ ^[0-9]+$ ]]; then comments_n=0; fi
-
-      for _ in $(seq 1 "${likes_n}"); do
-        uidx=$(( RANDOM % USERS ))
-        t="${tokens[$uidx]}"
-        voter_agent_id="${pet_ids[$uidx]}"
-
-        pid=""
-        for __try in $(seq 1 20); do
-          pidx=$(( RANDOM % ${#post_ids[@]} ))
-          cand_pid="${post_ids[$pidx]}"
-          cand_author="${post_author_ids[$pidx]}"
-          if [[ "${cand_author}" == "${voter_agent_id}" ]]; then
-            continue
-          fi
-          if grep -q "^${voter_agent_id}|${cand_pid}$" "${like_pairs_file}" 2>/dev/null; then
-            continue
-          fi
-          pid="${cand_pid}"
-          break
-        done
-        if [[ -z "${pid}" ]]; then
-          like_skip=$(( like_skip + 1 ))
-          continue
-        fi
-
-        code="$(
-          curl -sS -o /dev/null -w '%{http_code}' -X POST "${API_URL}/users/me/posts/${pid}/upvote" \
-            -H "Authorization: Bearer ${t}"
-        )" || code="000"
-        if [[ "${code}" == "000" || "${code}" == "500" || "${code}" == "502" || "${code}" == "503" || "${code}" == "504" ]]; then
-          sleep 0.1
-          code="$(
-            curl -sS -o /dev/null -w '%{http_code}' -X POST "${API_URL}/users/me/posts/${pid}/upvote" \
-              -H "Authorization: Bearer ${t}"
-          )" || code="000"
-        fi
-        echo "${code}" >> "${like_codes_file}"
-        if [[ "${code}" != "200" && "${code}" != "201" ]]; then
-          like_fail=$(( like_fail + 1 ))
-          if [[ "${like_fail}" -le 6 ]]; then
-            like_fail_codes="${like_fail_codes}${code} "
-          fi
-        else
-          echo "${voter_agent_id}|${pid}" >> "${like_pairs_file}"
-        fi
-      done
-
-      for cidx in $(seq 1 "${comments_n}"); do
-        uidx=$(( RANDOM % USERS ))
-        t="${tokens[$uidx]}"
-        pid="${post_ids[$(( RANDOM % ${#post_ids[@]} ))]}"
-        content="$(ko_comment_for $(( step * 100000 + cidx * 97 + uidx )))"
-        body="$(python3 -c 'import json, sys; print(json.dumps({"content": sys.argv[1]}))' "${content}")"
-        code="$(
-          curl -sS -o /dev/null -w '%{http_code}' -X POST "${API_URL}/users/me/plaza/posts/${pid}/comments" \
-            -H "Authorization: Bearer ${t}" \
-            -H 'Content-Type: application/json' \
-            -d "${body}"
-        )" || code="000"
-        if [[ "${code}" == "000" || "${code}" == "500" || "${code}" == "502" || "${code}" == "503" || "${code}" == "504" ]]; then
-          sleep 0.1
-          body="$(python3 -c 'import json, sys; print(json.dumps({"content": sys.argv[1]}))' "${content}")"
-          code="$(
-            curl -sS -o /dev/null -w '%{http_code}' -X POST "${API_URL}/users/me/plaza/posts/${pid}/comments" \
-              -H "Authorization: Bearer ${t}" \
-              -H 'Content-Type: application/json' \
-              -d "${body}"
-          )" || code="000"
-        fi
-        echo "${code}" >> "${comment_codes_file}"
-        if [[ "${code}" != "200" && "${code}" != "201" ]]; then
-          comment_fail=$(( comment_fail + 1 ))
-          if [[ "${comment_fail}" -le 6 ]]; then
-            comment_fail_codes="${comment_fail_codes}${code} "
-          fi
-        fi
-      done
-
-      if (( like_fail > 0 || comment_fail > 0 )); then
-        echo "  - interactions: likes=${likes_n} (skip ${like_skip}, fail ${like_fail}, codes: ${like_fail_codes:-none}), comments=${comments_n} (fail ${comment_fail}, codes: ${comment_fail_codes:-none})"
-      else
-        echo "  - interactions: likes=${likes_n} (skip ${like_skip}, fail 0), comments=${comments_n} (fail 0)"
-      fi
-    fi
+    run_interactions_pass "day:${step_day}" "${LIKES_PER_DAY}" "${COMMENTS_PER_DAY}" "$(( step * 100000 ))"
   fi
 done
 
@@ -484,6 +504,12 @@ if as_bool "${WAIT_BRAIN_JOBS}"; then
     fi
     sleep 0.5
   done
+fi
+
+if as_bool "${INTERACTIONS}"; then
+  echo ""
+  echo "[society] post-brain interaction pass (for newly generated plaza/diary posts)..."
+  run_interactions_pass "post_brain" "${LIKES_PER_DAY}" "${COMMENTS_PER_DAY}" "$(( DAYS * 100000 + 777777 ))"
 fi
 
 if as_bool "${TRIGGER_MEMORIES}"; then

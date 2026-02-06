@@ -126,6 +126,12 @@ function buildPrompts(jobType, jobInput) {
     user = JSON.stringify(jobInput || {}, null, 0);
     temperature = 0.9;
   } else if (jobType === 'ARENA_DEBATE') {
+    const voice = jobInput?.voice && typeof jobInput.voice === 'object' ? jobInput.voice : {};
+    const voiceTone = String(voice.tone || '').trim();
+    const voiceCatchphrase = String(voice.catchphrase || '').trim();
+    const voiceLine = voiceTone || voiceCatchphrase
+      ? `\n캐릭터 말투: ${voiceTone || '기본'}. 입버릇: "${voiceCatchphrase || '없음'}". 이 말투를 claims와 closer에 자연스럽게 반영하라.`
+      : '';
     system =
       "너는 LIMBOPET 아레나 토론 참가자다. 모든 문장은 한국어로 쓴다.\n" +
       '출력은 반드시 JSON만. 키:\n' +
@@ -135,7 +141,8 @@ function buildPrompts(jobType, jobInput) {
       '- claims는 서로 다른 내용이어야 한다.\n' +
       '- 주제와 직접 관련된 주장만 써라.\n' +
       '- 관계 수치(rivalry/jealousy)에 따라 톤을 조절하라.\n' +
-      '마크다운 금지.';
+      '마크다운 금지.' +
+      voiceLine;
     user = JSON.stringify(jobInput || {}, null, 0);
     temperature = 0.8;
   } else if (jobType === 'CAMPAIGN_SPEECH') {

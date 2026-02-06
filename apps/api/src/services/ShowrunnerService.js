@@ -22,6 +22,7 @@ const ElectionService = require('./ElectionService');
 const WorldConceptService = require('./WorldConceptService');
 const TodayHookService = require('./TodayHookService');
 const { bestEffortInTransaction } = require('../utils/savepoint');
+const { postposition } = require('../utils/korean');
 
 // WEEKLY_THEMES and ATMOSPHERE_POOL migrated to WorldConceptService
 
@@ -167,7 +168,12 @@ function cliffhangerFor({ scenario, evidenceLevel, cast = null }) {
   const a = String(cast?.aName || '').trim();
   const b = String(cast?.bName || '').trim();
   const ctx = { a: a || '그 애', b: b || '그 애' };
-  const fill = (s) => String(s ?? '').replace(/\{a\}/g, ctx.a).replace(/\{b\}/g, ctx.b);
+  const fill = (s) =>
+    String(s ?? '')
+      .replace(/\{a:([^}]+)\}/g, (_, p) => postposition(ctx.a, p))
+      .replace(/\{b:([^}]+)\}/g, (_, p) => postposition(ctx.b, p))
+      .replace(/\{a\}/g, ctx.a)
+      .replace(/\{b\}/g, ctx.b);
 
   const v = String(scenario || '').toUpperCase();
   const pool =
@@ -176,14 +182,14 @@ function cliffhangerFor({ scenario, evidenceLevel, cast = null }) {
           '둘이 다시 마주치면… 이번엔 못 참을지도.',
           '이 감정, 들키기 전에 정리될 리 없잖아.',
           '카페 창가에 남은 온기… 내일도 거기 있을까?',
-          '{b}의 그 표정이 안 잊혀… {a}는 버틸 수 있을까?',
+          '{b}의 그 표정이 안 잊혀… {a:는} 버틸 수 있을까?',
           '떨리는 건 진심일 때뿐이야.'
         ]
       : v === 'CREDIT'
         ? [
             '성과 얘기가 다시 나오면… 이번엔 터진다.',
             '이름 하나가 바뀌는 순간, 관계도 바뀐다.',
-            '{a}가 한 마디만 더 보태면… {b}의 인내가 끝날 텐데.',
+            '{a:가} 한 마디만 더 보태면… {b}의 인내가 끝날 텐데.',
             '다음 회의에서 누가 먼저 입을 열까?',
             'DM으로 끝날 이야기가 아니야.'
           ]
@@ -199,7 +205,7 @@ function cliffhangerFor({ scenario, evidenceLevel, cast = null }) {
             ? [
                 '"왜 나만 몰랐어?" 이 한마디가 터지기 직전이다.',
                 '질투는 늘 조용히 시작해서, 크게 터진다.',
-                '{a}의 질문이 다시 나오면… {b}는 뭐라고 할까?',
+                '{a}의 질문이 다시 나오면… {b:는} 뭐라고 할까?',
                 '숨긴 말이 하나 더 있다면… 오늘 밤은 길어진다.',
                 '눈치 싸움이 끝나면, 진짜 전쟁이 시작돼.'
               ]
@@ -207,7 +213,7 @@ function cliffhangerFor({ scenario, evidenceLevel, cast = null }) {
               ? [
                   '내일 광장에서 다시 마주친다면… 각오해.',
                   '한 마디만 더 나오면… 선을 넘는다.',
-                  '{a}가 한 번 더 건드리면… {b}는 이번엔 안 웃는다.',
+                  '{a:가} 한 번 더 건드리면… {b:는} 이번엔 안 웃는다.',
                   '사과가 나올까? 아니면 더 큰 한마디가?',
                   '오늘의 싸늘한 공기… 내일까지 이어진다.'
                 ]
@@ -215,21 +221,21 @@ function cliffhangerFor({ scenario, evidenceLevel, cast = null }) {
                 ? [
                     '회사 분위기가 점점 더 묘해진다…',
                     '내일 출근길, 누가 먼저 눈을 맞출까?',
-                    '{a}가 내일도 모른 척하면… {b}는 참을 수 있을까?',
+                    '{a:가} 내일도 모른 척하면… {b:는} 참을 수 있을까?',
                     '업무 얘기인 척해도… 감정은 숨길 수 없다.',
                     '회의실 문이 닫히면… 진짜 이야기가 시작된다.'
                   ]
                 : v === 'RECONCILE'
                   ? [
                       '화해가 끝이 아니라… 시작이었다면?',
-                      '{a}가 한 번만 더 다가가면… {b}는 웃어줄까?',
+                      '{a:가} 한 번만 더 다가가면… {b:는} 웃어줄까?',
                       '어색한 미소가 진심이 되려면… 아직 한 걸음 더.',
                       '오늘 풀렸다고? 내일 다시 꼬이면 어쩌지?',
                       '이상하게… 화해 후가 더 복잡해.'
                     ]
                   : [
                       '내일은 어떤 장면이 기다리고 있을까…',
-                      '{a}와 {b}, 다음 대사가 궁금하지 않아?',
+                      '{a:와} {b}, 다음 대사가 궁금하지 않아?',
                       '오늘의 침묵이 내일의 폭풍이 될까?',
                       '별거 아닌 줄 알았는데… 자꾸 떠오른다.',
                       '광장 공기가 바뀌면… 둘의 관계도 바뀔지 몰라.'
@@ -270,16 +276,100 @@ const BROADCAST_REACTION_POOL = {
     '"이건 저장만 해두고 나중에 다시 본다."'
   ],
   분석: [
-    '"초반 변수 관리에서 {a}가 앞섰다."',
+    '"초반 변수 관리에서 {a:가} 앞섰다."',
     '"결정 분기에서 {b}의 대응 속도가 떨어졌다."',
     '"리스크 대비 기대값 계산은 {a} 쪽이 우세."',
     '"중반부터 프레임 전환이 승부를 갈랐다."',
     '"표면은 접전인데 의사결정 품질 차이가 컸다."',
-    '"오늘 핵심은 템포 제어다. {a}가 더 안정적."',
+    '"오늘 핵심은 템포 제어다. {a:가} 더 안정적."',
     '"데이터 포인트 기준으론 {b}의 선택이 고효율이었다."',
     '"마지막 1턴, 손실 최소화 판단이 승부수였다."'
+  ],
+  감탄: [
+    '"와, {a}의 한마디에서 판이 확 뒤집혔다."',
+    '"저 템포 전환은 진짜 감탄만 나온다."',
+    '"오늘 연출은 인정. 클립 저장했다."',
+    '"{b}의 반응 속도, 방금 레전드였다."',
+    '"이 장면은 다시 봐도 짜릿하다."',
+    '"한 수 위 플레이가 이렇게 깔끔할 줄이야."',
+    '"오랜만에 광장이 동시에 숨 멎은 순간."',
+    '"디테일까지 챙긴 완성형 장면이었다."'
+  ],
+  의심: [
+    '"너무 깔끔해서 오히려 수상한데?"',
+    '"저 선택, 뭔가 숨긴 카드가 있어 보인다."',
+    '"표정은 침착한데 계산이 빠르다. 이상해."',
+    '"결론은 맞는데 과정이 좀 석연치 않다."',
+    '"타이밍이 지나치게 완벽했다. 우연 맞아?"',
+    '"저 발언 뒤에 의도가 더 있는 것 같다."',
+    '"지금은 잠잠해도 다음 턴이 불안하다."',
+    '"증거가 더 나오기 전까진 못 믿겠다."'
+  ],
+  유머: [
+    '"오늘 승자는 {a}, 패자는 내 광대."',
+    '"이 정도면 토론이 아니라 예능 편집감이다."',
+    '"{b} 한마디에 채팅창 밈이 폭발했다."',
+    '"논리도 좋았는데 웃음 포인트가 더 셌다."',
+    '"결과보다 드립이 먼저 기억나는 경기였다."',
+    '"오늘은 분석 금지, 웃고 넘어가자."',
+    '"명장면 인정. 근데 왜 이렇게 웃기지?"',
+    '"광장 온도 3도 상승: 원인 {a}/{b}의 티키타카."'
   ]
 };
+
+const BROADCAST_REACTION_TYPES = ['동의', '반발', '무관심', '분석', '감탄', '의심', '유머'];
+
+const REACTION_WEIGHTS_BY_TONE = {
+  balanced: { 동의: 1.0, 반발: 1.0, 무관심: 1.0, 분석: 1.1, 감탄: 0.9, 의심: 0.9, 유머: 0.8 },
+  warm: { 동의: 2.2, 반발: 0.6, 무관심: 0.7, 분석: 0.9, 감탄: 1.8, 의심: 0.7, 유머: 1.0 },
+  combative: { 동의: 0.7, 반발: 2.2, 무관심: 0.6, 분석: 1.1, 감탄: 0.7, 의심: 1.5, 유머: 0.8 },
+  detached: { 동의: 0.8, 반발: 0.9, 무관심: 2.2, 분석: 1.2, 감탄: 0.7, 의심: 1.0, 유머: 0.8 },
+  analytical: { 동의: 0.9, 반발: 1.0, 무관심: 0.8, 분석: 2.4, 감탄: 0.7, 의심: 1.6, 유머: 0.6 },
+  skeptical: { 동의: 0.6, 반발: 1.5, 무관심: 0.8, 분석: 1.3, 감탄: 0.6, 의심: 2.5, 유머: 0.7 },
+  humorous: { 동의: 1.1, 반발: 0.8, 무관심: 0.8, 분석: 0.7, 감탄: 1.3, 의심: 0.7, 유머: 2.6 }
+};
+
+const REACTION_SCENARIO_MULTIPLIERS = {
+  ROMANCE: { 동의: 1.35, 감탄: 1.25, 반발: 0.75, 의심: 0.8 },
+  RECONCILE: { 동의: 1.45, 감탄: 1.15, 반발: 0.65, 의심: 0.75 },
+  BEEF: { 반발: 1.35, 의심: 1.3, 동의: 0.75, 감탄: 0.85 },
+  CREDIT: { 반발: 1.25, 분석: 1.2, 의심: 1.2, 동의: 0.85 },
+  TRIANGLE: { 의심: 1.45, 반발: 1.2, 분석: 1.15, 감탄: 0.85 },
+  DEAL: { 분석: 1.35, 의심: 1.25, 유머: 0.85 },
+  OFFICE: { 분석: 1.3, 의심: 1.2, 무관심: 1.1 }
+};
+
+function pickWeightedReactionType(weightsByType) {
+  const weights = weightsByType && typeof weightsByType === 'object' ? weightsByType : {};
+  let total = 0;
+  for (const type of BROADCAST_REACTION_TYPES) {
+    total += Math.max(0, Number(weights[type] ?? 0) || 0);
+  }
+  if (total <= 0) return pick(BROADCAST_REACTION_TYPES) || '무관심';
+  let r = Math.random() * total;
+  for (const type of BROADCAST_REACTION_TYPES) {
+    r -= Math.max(0, Number(weights[type] ?? 0) || 0);
+    if (r <= 0) return type;
+  }
+  return BROADCAST_REACTION_TYPES[BROADCAST_REACTION_TYPES.length - 1] || '무관심';
+}
+
+function toneForProfile(profile) {
+  const p = profile && typeof profile === 'object' ? profile : {};
+  const mbti = String(p.mbti || '').toLowerCase();
+  const vibe = String(p.vibe || '').toLowerCase();
+  const role = `${String(p.role || '')} ${String(p.job_role || '')} ${String(p.job || '')}`.toLowerCase();
+  const voice = String(p.voice || '').toLowerCase();
+  const blob = `${mbti} ${vibe} ${role} ${voice}`;
+
+  if (/유머|장난|밈|드립|funny|joke|wit|comedy|개그|유쾌/.test(blob)) return 'humorous';
+  if (/의심|회의|냉소|불신|skept|cynic|snark|까칠/.test(blob)) return 'skeptical';
+  if (/intj|intp|entj|entp|전략|분석|논리|기획|연구|engineer|detective|research/.test(blob)) return 'analytical';
+  if (/rebellious|aggressive|직설|도발|버럭|fighter|검사|변론|rival/.test(blob)) return 'combative';
+  if (/무심|관망|chill|dry|barista|janitor|istp|istj/.test(blob)) return 'detached';
+  if (/peaceful|romantic|따뜻|공감|상냥|care|support|상담|isfj|enfj|esfj/.test(blob)) return 'warm';
+  return 'balanced';
+}
 
 function profileSignalFromValue(value, key) {
   const v = value && typeof value === 'object' ? value : null;
@@ -321,23 +411,17 @@ async function loadBroadcastProfileMap(client, castIds) {
 }
 
 function reactionTypeForProfile(profile, scenario) {
-  const p = profile && typeof profile === 'object' ? profile : {};
-  const mbti = String(p.mbti || '').toUpperCase();
-  const vibe = String(p.vibe || '').toLowerCase();
-  const role = `${String(p.role || '')} ${String(p.job_role || '')} ${String(p.job || '')}`.toLowerCase();
-  const voice = String(p.voice || '').toLowerCase();
-  const blob = `${mbti} ${vibe} ${role} ${voice}`;
-
-  if (/intj|intp|entj|entp|전략|분석|기획|연구|engineer|detective|research/.test(blob)) return '분석';
-  if (/rebellious|aggressive|직설|도발|냉소|버럭|fighter|검사|변론|rival/.test(blob)) return '반발';
-  if (/peaceful|romantic|따뜻|공감|상냥|care|support|상담|isfj|enfj|esfj/.test(blob)) return '동의';
-  if (/무심|관망|chill|dry|barista|janitor|istp|istj/.test(blob)) return '무관심';
-
   const s = String(scenario || '').toUpperCase();
-  if (s === 'BEEF' || s === 'CREDIT') return Math.random() < 0.6 ? '반발' : '분석';
-  if (s === 'ROMANCE' || s === 'RECONCILE') return Math.random() < 0.6 ? '동의' : '무관심';
-  if (s === 'TRIANGLE') return Math.random() < 0.5 ? '반발' : '분석';
-  return pick(['동의', '반발', '무관심', '분석']) || '무관심';
+  const tone = toneForProfile(profile);
+  const toneWeights = REACTION_WEIGHTS_BY_TONE[tone] || REACTION_WEIGHTS_BY_TONE.balanced;
+  const scenarioWeights = REACTION_SCENARIO_MULTIPLIERS[s] || {};
+  const finalWeights = {};
+  for (const type of BROADCAST_REACTION_TYPES) {
+    const base = Math.max(0.05, Number(toneWeights[type] ?? 1.0) || 1.0);
+    const scenarioBoost = Math.max(0.2, Number(scenarioWeights[type] ?? 1.0) || 1.0);
+    finalWeights[type] = base * scenarioBoost;
+  }
+  return pickWeightedReactionType(finalWeights);
 }
 
 function buildBroadcastReactionLines({ cast, scenario, castProfiles }) {
@@ -352,6 +436,8 @@ function buildBroadcastReactionLines({ cast, scenario, castProfiles }) {
 
   const fill = (line) =>
     String(line || '')
+      .replace(/\{a:([^}]+)\}/g, (_, p) => postposition(aName, p))
+      .replace(/\{b:([^}]+)\}/g, (_, p) => postposition(bName, p))
       .replace(/\{a\}/g, aName)
       .replace(/\{b\}/g, bName);
 
@@ -361,8 +447,8 @@ function buildBroadcastReactionLines({ cast, scenario, castProfiles }) {
   const bLine = fill(pick(BROADCAST_REACTION_POOL[bType] || []));
   if (bLine) out.push(`${bName} 지지석(${bType}): ${bLine}`);
 
-  const extraTypes = ['동의', '반발', '무관심', '분석'].filter((x) => x !== aType && x !== bType);
-  const crowdType = pick(extraTypes.length ? extraTypes : ['분석', '무관심']) || '무관심';
+  const extraTypes = BROADCAST_REACTION_TYPES.filter((x) => x !== aType && x !== bType);
+  const crowdType = pick(extraTypes.length ? extraTypes : ['분석', '무관심', '유머']) || '무관심';
   const crowdLine = fill(pick(BROADCAST_REACTION_POOL[crowdType] || []));
   if (crowdLine) out.push(`중립 관전석(${crowdType}): ${crowdLine}`);
 
@@ -393,7 +479,7 @@ function buildBroadcastPost({ day, index, scenario, location, company, cast, mod
     `시즌 테마: [${theme.name}]`,
     header,
     `연출: ${atmosphere}`,
-    `오늘 ${where}에서 ${cast.aName} ↔ ${cast.bName}가 마주쳤다.`,
+    `오늘 ${where}에서 ${cast.aName} ↔ ${postposition(cast.bName, '가')} 마주쳤다.`,
     hook ? hook : null,
     aHi ? `- ${cast.aName}: ${aHi}` : null,
     bHi ? `- ${cast.bName}: ${bHi}` : null,

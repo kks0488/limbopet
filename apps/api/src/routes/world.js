@@ -116,6 +116,40 @@ async function listEpisodesByDayWithClient(client, day, { limit = 20 } = {}) {
   });
 }
 
+async function listBroadcastPostsByDayWithClient(client, day, { limit = 8 } = {}) {
+  const iso = safeIsoDay(day);
+  if (!iso) return [];
+  const safeLimit = Math.max(1, Math.min(20, Number(limit) || 8));
+
+  const { rows } = await client.query(
+    `SELECT p.id, p.title, p.content, p.created_at, e.payload
+     FROM events e
+     JOIN posts p ON p.id::text = e.payload->>'post_id'
+     WHERE e.event_type = 'SHOWRUNNER_EPISODE'
+       AND (e.payload ? 'day')
+       AND e.payload->>'day' = $1
+       AND p.post_type = 'broadcast'
+       AND COALESCE(p.is_deleted, false) = false
+     ORDER BY e.created_at DESC, p.created_at DESC
+     LIMIT $2`,
+    [iso, safeLimit]
+  );
+
+  return (rows || []).map((r) => {
+    const payload = r?.payload && typeof r.payload === 'object' ? r.payload : {};
+    return {
+      id: r.id,
+      day: safeIsoDay(payload.day) || iso,
+      title: String(r.title || '').trim() || null,
+      content: String(r.content || '').trim() || null,
+      scenario: String(payload.scenario || '').trim() || null,
+      mode: String(payload.mode || '').trim() || null,
+      episode_index: Number(payload.episode_index ?? 0) || 0,
+      created_at: r.created_at
+    };
+  });
+}
+
 /**
  * GET /world/ticker
  * Optional query: day=YYYY-MM-DD
@@ -145,15 +179,17 @@ router.get('/today', asyncHandler(async (req, res) => {
 
   const epLimit = Math.max(1, Math.min(60, Number(req.query?.episode_limit ?? req.query?.episodeLimit ?? 20) || 20));
   const tickerLimit = Math.max(1, Math.min(100, Number(req.query?.ticker_limit ?? req.query?.tickerLimit ?? 40) || 40));
+  const broadcastLimit = Math.max(5, Math.min(10, Number(req.query?.broadcast_limit ?? req.query?.broadcastLimit ?? 8) || 8));
 
   const out = await transaction(async (client) => {
     const resolved = await resolveTodayDayWithClient(client, dayRaw);
     const day = resolved.day;
 
-    const [bundle, episodes, ticker] = await Promise.all([
+    const [bundle, episodes, ticker, broadcastPosts] = await Promise.all([
       WorldContextService.getBundle({ day, includeOpenRumors: true, ensureEpisode: false }).catch(() => null),
       listEpisodesByDayWithClient(client, day, { limit: epLimit }).catch(() => []),
-      WorldContextService.getLiveTicker({ limit: tickerLimit, day }).catch(() => [])
+      WorldContextService.getLiveTicker({ limit: tickerLimit, day }).catch(() => []),
+      listBroadcastPostsByDayWithClient(client, day, { limit: broadcastLimit }).catch(() => [])
     ]);
 
     const worldDailySummary = bundle?.worldDaily?.summary && typeof bundle.worldDaily.summary === 'object'
@@ -169,6 +205,7 @@ router.get('/today', asyncHandler(async (req, res) => {
       day,
       fallback_applied: Boolean(resolved.fallbackApplied),
       episodes,
+      broadcast_posts: broadcastPosts,
       ticker,
       theme,
       atmosphere,

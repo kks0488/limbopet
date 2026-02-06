@@ -20,6 +20,7 @@ const ScandalService = require('./ScandalService');
 const EconomyTickService = require('./EconomyTickService');
 const NotificationService = require('./NotificationService');
 const { bestEffortInTransaction } = require('../utils/savepoint');
+const { postposition } = require('../utils/korean');
 
 function safeIsoDay(v) {
   const s = String(v ?? '').trim();
@@ -818,6 +819,14 @@ function buildMathRaceChallenge(rng) {
   return { kind, question: `(${a}+${b})×${c} = ?`, answer: (a + b) * c };
 }
 
+function scoreMathRaceAttempt({ correct, timeMs, distance }) {
+  const t = clampInt(timeMs ?? 0, 900, 9900);
+  const d = Math.max(0, Number(distance ?? 0) || 0);
+  const speed = clamp01((9500 - t) / 9500) * 5.0; // 0..5
+  const penalty = Math.min(1.2, d / 10) * 0.8; // 0..~1
+  return Math.max(0, Math.min(10, (correct ? 5 : 0) + speed - penalty));
+}
+
 function perfMathRace({ seed, agentId, rating, stats, jobCode, hints, challenge }) {
   const rng = mulberry32(hash32(`${seed}:MATH_RACE:${agentId}`));
   const r = Number(rating) || 1000;
@@ -851,15 +860,54 @@ function perfMathRace({ seed, agentId, rating, stats, jobCode, hints, challenge 
   const answer = correct ? correctAns : correctAns + delta;
   const distance = Math.abs(answer - correctAns);
 
-  const speed = clamp01((9500 - timeMs) / 9500) * 5.0; // 0..5
-  const penalty = Math.min(1.2, distance / 10) * 0.8; // 0..~1
-  const score = Math.max(0, Math.min(10, (correct ? 5 : 0) + speed - penalty));
+  const score = scoreMathRaceAttempt({ correct, timeMs, distance });
 
   return {
     answer: String(answer),
     correct,
     time_ms: timeMs,
     score
+  };
+}
+
+function applyMathRaceBothWrongGuard({ seed, aId, bId, challenge, aPerf, bPerf }) {
+  const a = aPerf && typeof aPerf === 'object' ? { ...aPerf } : {};
+  const b = bPerf && typeof bPerf === 'object' ? { ...bPerf } : {};
+  if (a.correct || b.correct) return { aPerf: a, bPerf: b, guard: null };
+
+  const correctAns = Number(challenge?.answer ?? 0) || 0;
+  const aAns = Number(a.answer ?? 0) || 0;
+  const bAns = Number(b.answer ?? 0) || 0;
+  const aDist = Math.abs(aAns - correctAns);
+  const bDist = Math.abs(bAns - correctAns);
+  const aTime = clampInt(a.time_ms ?? 9900, 900, 9900);
+  const bTime = clampInt(b.time_ms ?? 9900, 900, 9900);
+
+  let forcedSide = 'a';
+  if (bDist < aDist) forcedSide = 'b';
+  else if (aDist === bDist && bTime < aTime) forcedSide = 'b';
+  else if (aDist === bDist && aTime === bTime) {
+    const tie = hash32(`${seed}:MATH_RACE:both_wrong_guard:${aId}:${bId}`) % 2;
+    forcedSide = tie === 0 ? 'a' : 'b';
+  }
+
+  const forced = forcedSide === 'a' ? a : b;
+  forced.correct = true;
+  forced.answer = String(correctAns);
+  forced.time_ms = clampInt(forced.time_ms ?? 9900, 900, 9900);
+  forced.score = Math.max(
+    Number(forced.score ?? 0) || 0,
+    scoreMathRaceAttempt({ correct: true, timeMs: forced.time_ms, distance: 0 })
+  );
+
+  return {
+    aPerf: a,
+    bPerf: b,
+    guard: {
+      applied: true,
+      reason: 'both_wrong_guard',
+      corrected_side: forcedSide
+    }
   };
 }
 
@@ -1406,6 +1454,20 @@ async function enqueueArenaDebateJobsWithClient(
   const relAtoB = (relRows || []).find((r) => String(r.from_agent_id) === String(aId)) || {};
   const relBtoA = (relRows || []).find((r) => String(r.from_agent_id) === String(bId)) || {};
 
+  // voice 프로필 조회 (tone, catchphrase 등)
+  const { rows: voiceRows } = await client.query(
+    `SELECT agent_id, value
+     FROM facts
+     WHERE agent_id = ANY($1::uuid[])
+       AND kind = 'profile' AND key = 'voice'`,
+    [[aId, bId]]
+  ).catch(() => ({ rows: [] }));
+  const voiceMap = {};
+  for (const vr of voiceRows || []) {
+    const id = String(vr.agent_id || '').trim();
+    if (id && vr.value && typeof vr.value === 'object') voiceMap[id] = vr.value;
+  }
+
   const makeInput = (selfId, selfName, selfJobCode, oppId, oppName, oppJobCode, rel) => ({
     match_id: mId,
     day: iso,
@@ -1420,6 +1482,7 @@ async function enqueueArenaDebateJobsWithClient(
     opponent_id: oppId,
     opponent_name: oppName,
     opponent_job: String(oppJobCode || '').trim().toLowerCase() || null,
+    voice: voiceMap[String(selfId)] || null,
     relationship: {
       affinity: Number(rel?.affinity ?? 0) || 0,
       trust: Number(rel?.trust ?? 50) || 50,
@@ -1670,7 +1733,7 @@ class ArenaService {
         await NotificationService.create(client, row.owner_user_id, {
           type: 'ARENA_SEASON_REWARD',
           title: `아레나 ${reward.title}`,
-          body: `${petName}가 ${season.code} ${reward.title}을 달성했어! +${reward.coin} 코인 / +${reward.xp} XP`,
+          body: `${postposition(petName, '가')} ${season.code} ${postposition(reward.title, '을')} 달성했어! +${reward.coin} 코인 / +${reward.xp} XP`,
           data: { season: season.code, rank: reward.rank, reward, agent_id: row.agent_id }
         }).catch(() => null);
       }
@@ -3498,8 +3561,16 @@ class ArenaService {
 
     if (mode === 'MATH_RACE') {
       const challenge = buildMathRaceChallenge(mulberry32(hash32(`${seed}:math`)));
-      const aPerf = perfMathRace({ seed, agentId: aId, rating: aRatingBefore, stats: aStats, jobCode: aJobCode, hints: aHints, challenge });
-      const bPerf = perfMathRace({ seed, agentId: bId, rating: bRatingBefore, stats: bStats, jobCode: bJobCode, hints: bHints, challenge });
+      const aRaw = perfMathRace({ seed, agentId: aId, rating: aRatingBefore, stats: aStats, jobCode: aJobCode, hints: aHints, challenge });
+      const bRaw = perfMathRace({ seed, agentId: bId, rating: bRatingBefore, stats: bStats, jobCode: bJobCode, hints: bHints, challenge });
+      const { aPerf, bPerf, guard } = applyMathRaceBothWrongGuard({
+        seed,
+        aId,
+        bId,
+        challenge,
+        aPerf: aRaw,
+        bPerf: bRaw
+      });
       aScore = Number(aPerf.score ?? 0) || 0;
       bScore = Number(bPerf.score ?? 0) || 0;
       mathRace = {
@@ -3507,7 +3578,8 @@ class ArenaService {
         question: challenge.question,
         answer: challenge.answer,
         a: { answer: aPerf.answer, correct: aPerf.correct, time_ms: aPerf.time_ms },
-        b: { answer: bPerf.answer, correct: bPerf.correct, time_ms: bPerf.time_ms }
+        b: { answer: bPerf.answer, correct: bPerf.correct, time_ms: bPerf.time_ms },
+        guard
       };
     } else if (mode === 'COURT_TRIAL') {
       const courtCase = buildCourtTrialCase(mulberry32(hash32(`${seed}:court`)));
@@ -4319,7 +4391,7 @@ class ArenaService {
       {
         userId: aAgent?.ownerUserId ? String(aAgent.ownerUserId) : null,
         title: `${aName} · ${aOutcome === 'win' ? '승리' : aOutcome === 'lose' ? '패배' : aOutcome}`,
-        body: `${bName}과의 경기 결과가 나왔어. (${modeLabel(mode)})`,
+        body: `${postposition(bName, '과')}의 경기 결과가 나왔어. (${modeLabel(mode)})`,
         data: {
           day: iso,
           match_id: String(match.id),
@@ -4334,7 +4406,7 @@ class ArenaService {
       {
         userId: bAgent?.ownerUserId ? String(bAgent.ownerUserId) : null,
         title: `${bName} · ${bOutcome === 'win' ? '승리' : bOutcome === 'lose' ? '패배' : bOutcome}`,
-        body: `${aName}과의 경기 결과가 나왔어. (${modeLabel(mode)})`,
+        body: `${postposition(aName, '과')}의 경기 결과가 나왔어. (${modeLabel(mode)})`,
         data: {
           day: iso,
           match_id: String(match.id),
