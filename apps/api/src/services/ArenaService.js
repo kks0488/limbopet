@@ -283,6 +283,81 @@ function coachingScoreBonusRate({ refs, hints }) {
   return Math.max(0.05, Math.min(0.10, Math.round(scaled * 1000) / 1000));
 }
 
+function coachingThemeLabel(text, dominant = []) {
+  const raw = String(text || '').trim();
+  const s = raw.toLowerCase();
+  if (/증거|근거|판례|팩트|자료|evidence/.test(s)) return '증거 집중 분석';
+  if (/논리|반박|핵심|요약|구조|프레임/.test(s)) return '논리적 반박';
+  if (/침착|차분|냉정|평정/.test(s)) return '침착한 톤 유지';
+  if (/공격|압박|밀어붙|강하게/.test(s)) return '공세 전개';
+  if (/공감|설득|상대/.test(s)) return '공감형 설득';
+  if (/예산|코인|절약|낭비|리스크/.test(s)) return '리스크 관리';
+  if (/충동|지름|흥분/.test(s)) return '충동 억제';
+
+  const top = Array.isArray(dominant) ? String(dominant[0] || '').trim() : '';
+  if (top === 'study') return '증거 집중 분석';
+  if (top === 'calm') return '침착한 톤 유지';
+  if (top === 'aggressive') return '공세 전개';
+  if (top === 'budget') return '리스크 관리';
+  if (top === 'impulse_stop') return '충동 억제';
+  return raw ? safeText(raw, 28) : '핵심 논점 정리';
+}
+
+function pickCoachingImpactRound(rounds, side) {
+  const key = String(side || '').trim().toLowerCase() === 'b' ? 'b' : 'a';
+  const mine = key === 'a' ? 'a_score_delta' : 'b_score_delta';
+  const opp = key === 'a' ? 'b_score_delta' : 'a_score_delta';
+  const list = Array.isArray(rounds) ? rounds : [];
+  let best = null;
+  let bestScore = -Infinity;
+  for (const r of list) {
+    const mineDelta = Number(r?.[mine] ?? 0) || 0;
+    const oppDelta = Number(r?.[opp] ?? 0) || 0;
+    const impact = mineDelta - oppDelta;
+    if (impact > bestScore) {
+      bestScore = impact;
+      best = r;
+    }
+  }
+  return best;
+}
+
+function buildCoachingNarrative({
+  mode,
+  ownerUserId,
+  coachingRefs,
+  coachingApplied,
+  dominantHints,
+  rounds,
+  side
+}) {
+  if (!coachingApplied) return null;
+  const refs = Array.isArray(coachingRefs) ? coachingRefs : [];
+  if (refs.length === 0) return null;
+  const topRef = refs[0] && typeof refs[0] === 'object' ? refs[0] : null;
+  const round = pickCoachingImpactRound(rounds, side);
+  if (!round) return null;
+
+  const action = String(round?.[side === 'b' ? 'b_action' : 'a_action'] || '').trim();
+  if (!action) return null;
+  const roundNum = Math.max(1, Math.trunc(Number(round?.round_num ?? 1) || 1));
+  const highlight = String(round?.highlight || '').trim();
+  const pivot = /역전|뒤집/.test(highlight) ? '결정적 반격' : '결정타';
+  const theme = coachingThemeLabel(topRef?.text, dominantHints);
+  const verb = mode === 'DEBATE_CLASH' || mode === 'COURT_TRIAL' ? '변론' : '플레이';
+  const prefix = ownerUserId ? '네가 가르친' : '코칭한';
+  return safeText(`${prefix} ${theme}이 ${roundNum}라운드 ${verb}에서 ${pivot}으로 이어졌어!`, 220);
+}
+
+function pickResultCoachingNarrative({ winnerId, aId, bId, bySide }) {
+  const src = bySide && typeof bySide === 'object' ? bySide : {};
+  const aText = typeof src.a === 'string' ? src.a.trim() : '';
+  const bText = typeof src.b === 'string' ? src.b.trim() : '';
+  if (String(winnerId || '') === String(aId || '') && aText) return aText;
+  if (String(winnerId || '') === String(bId || '') && bText) return bText;
+  return aText || bText || null;
+}
+
 function summarizePromptProfileMeta(profile) {
   const p = profile && typeof profile === 'object' ? profile : {};
   const hasCustom = Boolean(p.has_custom) || Boolean(String(p.prompt_text || '').trim());
@@ -4472,6 +4547,34 @@ class ArenaService {
       const pA = clamp01((Number(r.win_prob_a ?? 0.5) || 0.5) + cheerDelta);
       return { ...r, win_prob_a: Math.round(pA * 1000) / 1000, win_prob_b: Math.round((1 - pA) * 1000) / 1000 };
     });
+    const coachingNarrativeBySide = {
+      a: buildCoachingNarrative({
+        mode,
+        ownerUserId: aAgent?.ownerUserId,
+        coachingRefs: aMemoryRefs,
+        coachingApplied: aCoachingScoreBonusRate > 0,
+        dominantHints: trainingInfluence?.a?.weights?.dominant || [],
+        rounds,
+        side: 'a'
+      }),
+      b: buildCoachingNarrative({
+        mode,
+        ownerUserId: bAgent?.ownerUserId,
+        coachingRefs: bMemoryRefs,
+        coachingApplied: bCoachingScoreBonusRate > 0,
+        dominantHints: trainingInfluence?.b?.weights?.dominant || [],
+        rounds,
+        side: 'b'
+      })
+    };
+    trainingInfluence.a.coaching_narrative = coachingNarrativeBySide.a || null;
+    trainingInfluence.b.coaching_narrative = coachingNarrativeBySide.b || null;
+    const coachingNarrative = pickResultCoachingNarrative({
+      winnerId,
+      aId,
+      bId,
+      bySide: coachingNarrativeBySide
+    });
 
     // Auto tags (P1/P4): near-miss + comeback + underdog upset + round highlights.
     const tags = [];
@@ -4926,6 +5029,8 @@ class ArenaService {
       near_miss: nearMiss,
       training_influence: trainingInfluence,
       recent_memory_influence: recentMemoryInfluence,
+      coaching_narrative: coachingNarrative,
+      coaching_narrative_by_side: coachingNarrativeBySide,
       prompt_profile: { a: aPromptProfile, b: bPromptProfile },
       rounds,
       cheer: cheerMeta,
@@ -4946,7 +5051,7 @@ class ArenaService {
         cycle_state: cycleState,
         loss_penalty_coins: penaltyCoins
       },
-      result: { winnerId, winnerName, loserId, loserName, forfeit: Boolean(forfeit) },
+      result: { winnerId, winnerName, loserId, loserName, forfeit: Boolean(forfeit), coaching_narrative: coachingNarrative },
       live: { ...liveMeta, interventions },
       revenge: {
         a_had: hadRevengeA,

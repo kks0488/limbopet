@@ -1277,6 +1277,8 @@ export function App() {
         user_message: String(ev?.payload?.user_message ?? "").trim() || null,
         mood: typeof d?.mood === "string" ? d.mood : "",
         lines: asList(d?.lines),
+        memory_saved: Boolean(ev?.payload?.memory_saved),
+        memory_cited: Boolean(ev?.payload?.memory_cited),
       };
     });
   }, [events]);
@@ -1800,6 +1802,12 @@ export function App() {
           await new Promise((r) => window.setTimeout(r, waitMs));
           // eslint-disable-next-line no-await-in-loop
           await refreshAll(userToken, { silent: true });
+        }
+        // Check latest dialogue for memory feedback
+        const latestDialogue = (events || []).find((e) => e?.event_type === "DIALOGUE");
+        if ((latestDialogue as any)?.payload?.memory_saved) {
+          setToast({ kind: "good", text: "기억했어요!" });
+          clearToastLater();
         }
       }
     } catch (e: any) {
@@ -2950,6 +2958,7 @@ export function App() {
                           {c.lines.map((line, i) => (
                             <div key={`${i}-${line}`}>{line}</div>
                           ))}
+                          {c.memory_cited ? <span className="memoryCitedBadge">기억</span> : null}
                         </div>
                       </div>
                     </div>
@@ -3186,6 +3195,7 @@ export function App() {
                               <div key={`${i}-${line}`}>{line}</div>
                             ))}
                           </div>
+                          {c.memory_cited ? <span className="memoryCitedBadge">기억</span> : null}
                         </div>
                       </div>
                     ))}

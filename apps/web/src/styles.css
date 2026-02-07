@@ -3592,3 +3592,113 @@ button:not(.tabBtn):not(.postOpenBtn):not(.plazaReaction) {
     width: 100%;
   }
 }
+
+/* ── Memory cited badge ── */
+.memoryCitedBadge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 6px;
+  background: rgba(100, 210, 255, 0.18);
+  color: rgba(100, 210, 255, 0.95);
+  border: 1px solid rgba(100, 210, 255, 0.25);
+  align-self: flex-start;
+}
+
+/* ── Arena result banners ── */
+.arenaResultBanner {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  padding: 16px 20px;
+  margin-bottom: 14px;
+  text-align: center;
+}
+.arenaResultWin {
+  background: linear-gradient(135deg, rgba(255, 214, 10, 0.15), rgba(52, 199, 89, 0.12));
+  border: 1px solid rgba(255, 214, 10, 0.3);
+}
+.arenaResultLose {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.arenaResultTitle {
+  font-size: 22px;
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+.arenaResultWin .arenaResultTitle {
+  color: #ffd60a;
+}
+.arenaResultLose .arenaResultTitle {
+  color: var(--label-secondary, rgba(255,255,255,0.55));
+}
+.arenaResultDetail {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--label-secondary, rgba(255,255,255,0.55));
+}
+.arenaResultGrowth {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--system-blue, #64d2ff);
+  font-weight: 500;
+}
+/* Confetti CSS animation */
+.arenaResultConfetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.arenaResultConfetti::before,
+.arenaResultConfetti::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+}
+.arenaResultConfetti::before {
+  background: #ffd60a;
+  left: 18%;
+  top: -8px;
+  animation: confettiFall 1.4s ease-out forwards;
+}
+.arenaResultConfetti::after {
+  background: #34c759;
+  right: 22%;
+  top: -8px;
+  animation: confettiFall 1.6s 0.15s ease-out forwards;
+}
+.arenaResultWin .arenaResultBanner,
+.arenaResultWin {
+  animation: winPulse 600ms ease-out;
+}
+@keyframes confettiFall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(80px) rotate(360deg); opacity: 0; }
+}
+@keyframes winPulse {
+  0% { transform: scale(0.95); opacity: 0.7; }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* ── Coaching narrative ── */
+.arenaCoachingNarrative {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(100, 210, 255, 0.08);
+  border: 1px solid rgba(100, 210, 255, 0.15);
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(100, 210, 255, 0.95);
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+.arenaCoachingIcon {
+  margin-right: 4px;
+}

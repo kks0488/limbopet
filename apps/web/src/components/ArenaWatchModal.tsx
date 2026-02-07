@@ -247,6 +247,67 @@ export function ArenaWatchModal({
           ) : (
             <>
               {headline ? <div style={{ fontWeight: 800, marginBottom: 12 }}>{headline}</div> : null}
+
+              {/* 승패 감정 연출 — viewer가 참가자일 때만 */}
+              {(() => {
+                if (status !== "resolved" || !viewerId) return null;
+                const result = (meta as any)?.result && typeof (meta as any).result === "object" ? ((meta as any).result as any) : {};
+                const winnerId = String(result?.winnerId ?? result?.winner_id ?? "").trim();
+                const loserId = String(result?.loserId ?? result?.loser_id ?? "").trim();
+                const isViewer = viewerId === castAId || viewerId === castBId;
+                if (!isViewer) return null;
+
+                const isWinner = viewerId === winnerId;
+                const isLoser = viewerId === loserId;
+                const condition = (meta as any)?.condition && typeof (meta as any).condition === "object" ? ((meta as any).condition as any) : {};
+                const mySide = viewerId === castAId ? "a" : "b";
+                const ratingBefore = Number(condition?.[`${mySide}_before`] ?? 0) || 0;
+                const ratingAfter = Number(condition?.[`${mySide}_after`] ?? 0) || 0;
+                const ratingDelta = ratingAfter - ratingBefore;
+                const stake = meta?.stake && typeof meta.stake === "object" ? (meta.stake as any) : {};
+                const coinsWon = Number(stake?.to_winner ?? 0) || 0;
+
+                if (isWinner) {
+                  return (
+                    <div className="arenaResultBanner arenaResultWin">
+                      <div className="arenaResultConfetti" />
+                      <div className="arenaResultTitle">승리!</div>
+                      <div className="arenaResultDetail">
+                        +{coinsWon} 코인 · 레이팅 {ratingDelta >= 0 ? "+" : ""}{ratingDelta}
+                      </div>
+                    </div>
+                  );
+                }
+                if (isLoser) {
+                  const penalty = Number(stake?.loss_penalty_coins ?? 0) || 0;
+                  return (
+                    <div className="arenaResultBanner arenaResultLose">
+                      <div className="arenaResultTitle">아쉬워...</div>
+                      <div className="arenaResultDetail">
+                        -{penalty} 코인 · 레이팅 {ratingDelta >= 0 ? "+" : ""}{ratingDelta}
+                      </div>
+                      <div className="arenaResultGrowth">다음엔 더 강해질 거야. 코칭을 계속하면 달라져!</div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* 코칭 영향 서사 */}
+              {(() => {
+                if (status !== "resolved") return null;
+                const mySide = viewerId === castAId ? "a" : viewerId === castBId ? "b" : null;
+                if (!mySide) return null;
+                const t = trainingInfluence?.[mySide];
+                const narrative = String(t?.coaching_narrative ?? (meta as any)?.coaching_narrative ?? "").trim();
+                if (!narrative) return null;
+                return (
+                  <div className="arenaCoachingNarrative">
+                    <span className="arenaCoachingIcon">&#x1F3AF;</span> {narrative}
+                  </div>
+                );
+              })()}
+
               {nearMiss || tags.length ? (
                 <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
                   {nearMiss ? <span className="badge">니어미스 {nearMiss}</span> : null}
@@ -276,6 +337,7 @@ export function ArenaWatchModal({
                   const promptCustom = Boolean(p?.has_custom);
                   const promptVersion = Number(p?.version ?? 0) || 0;
                   const intervention = String(t?.intervention ?? "").trim();
+                  const coachingNarrative = String(t?.coaching_narrative ?? "").trim();
 
                   return (
                     <div key={sideName} className="event" style={{ minWidth: 260 }}>
@@ -287,12 +349,18 @@ export function ArenaWatchModal({
                           <span className="badge">점수 {memoryScore.toFixed(2)}</span>
                         </div>
                       </div>
-                      <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-                        <span className="badge">프롬프트 {promptEnabled ? "ON" : "OFF"}</span>
-                        <span className="badge">{promptCustom ? "커스텀" : "기본"}</span>
-                        {promptVersion > 0 ? <span className="badge">v{promptVersion}</span> : null}
-                        {intervention ? <span className="badge">개입 {intervention}</span> : null}
-                      </div>
+                      {coachingNarrative ? (
+                        <div className="arenaCoachingNarrative" style={{ marginTop: 8 }}>
+                          <span className="arenaCoachingIcon">&#x1F3AF;</span> {coachingNarrative}
+                        </div>
+                      ) : (
+                        <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                          <span className="badge">프롬프트 {promptEnabled ? "ON" : "OFF"}</span>
+                          <span className="badge">{promptCustom ? "커스텀" : "기본"}</span>
+                          {promptVersion > 0 ? <span className="badge">v{promptVersion}</span> : null}
+                          {intervention ? <span className="badge">개입 {intervention}</span> : null}
+                        </div>
+                      )}
                       {refs.length ? (
                         <div style={{ marginTop: 8, display: "grid", gap: 4 }}>
                           {refs.map((r, idx) => {

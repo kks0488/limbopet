@@ -83,6 +83,106 @@ function extractCoachingHintFromText(rawText) {
   return normalizeHintText(picked);
 }
 
+function collectDialogueSurfaceText(result) {
+  const out = [];
+  const src = result && typeof result === 'object' ? result : {};
+  if (Array.isArray(src.lines)) {
+    for (const line of src.lines.slice(0, 20)) {
+      if (typeof line === 'string') {
+        const s = line.trim();
+        if (s) out.push(s);
+        continue;
+      }
+      if (line && typeof line === 'object') {
+        const s = String(line.text ?? line.content ?? line.line ?? '').trim();
+        if (s) out.push(s);
+      }
+    }
+  }
+  const extras = [
+    src.reply,
+    src.response,
+    src.content,
+    src.body,
+    src.message,
+    src.closer,
+    src.highlight
+  ];
+  for (const x of extras) {
+    const s = String(x ?? '').trim();
+    if (s) out.push(s);
+  }
+  return out.join(' ').trim();
+}
+
+function normalizeCitationText(v) {
+  return String(v ?? '')
+    .toLowerCase()
+    .replace(/[^0-9a-z가-힣]+/gi, '');
+}
+
+const MEMORY_CITATION_STOP_WORDS = new Set([
+  '지난번에',
+  '지난번',
+  '이번에',
+  '이번',
+  '저번에',
+  '저번',
+  '오늘',
+  '내일',
+  '너가',
+  '네가',
+  '내가',
+  '우리',
+  '그리고',
+  '그래서',
+  '해서',
+  '하면',
+  '이렇게',
+  '저렇게',
+  '그렇게',
+  '항상',
+  '절대'
+]);
+
+function citationTokens(v) {
+  const tokens = String(v ?? '').toLowerCase().match(/[0-9a-z가-힣]{2,}/gi) || [];
+  return [...new Set(tokens)].filter((t) => !MEMORY_CITATION_STOP_WORDS.has(String(t)));
+}
+
+function dialogueCitesMemoryRefs(result, memoryRefs) {
+  const refs = Array.isArray(memoryRefs) ? memoryRefs : [];
+  if (refs.length === 0) return false;
+  const dialogueText = collectDialogueSurfaceText(result);
+  if (!dialogueText) return false;
+  const dialogueNorm = normalizeCitationText(dialogueText);
+  const dialogueTokens = new Set(citationTokens(dialogueText));
+
+  for (const ref of refs) {
+    const text = String(ref?.text ?? '').trim();
+    if (!text || text.length < 4) continue;
+
+    const refNorm = normalizeCitationText(text);
+    if (refNorm.length >= 8) {
+      if (dialogueNorm.includes(refNorm)) return true;
+      const partial = refNorm.slice(0, Math.min(16, refNorm.length));
+      if (partial.length >= 8 && dialogueNorm.includes(partial)) return true;
+    }
+
+    const refTokens = citationTokens(text);
+    if (refTokens.length === 0) continue;
+    let hits = 0;
+    for (const token of refTokens) {
+      if (!dialogueTokens.has(token)) continue;
+      hits += 1;
+      if (refTokens.length >= 3 && hits >= 2) return true;
+      if (refTokens.length <= 2 && token.length >= 5) return true;
+    }
+  }
+
+  return false;
+}
+
 class BrainJobService {
   /**
    * Server-side worker polling.
@@ -404,18 +504,32 @@ class BrainJobService {
         job.input && typeof job.input === 'object' && typeof job.input.user_message === 'string'
           ? String(job.input.user_message).trim().slice(0, 400) || null
           : null;
+      const memoryRefs = Array.isArray(job?.input?.memory_refs)
+        ? job.input.memory_refs.slice(0, 10).map((r) => ({
+          kind: String(r?.kind ?? '').slice(0, 32),
+          key: String(r?.key ?? '').slice(0, 64),
+          text: String(r?.text ?? '').slice(0, 220),
+          confidence: Number.isFinite(Number(r?.confidence)) ? Number(r.confidence) : 1.0
+        }))
+        : [];
+      const memoryCited = dialogueCitesMemoryRefs(result, memoryRefs);
+      const llmMemoryHint =
+        typeof result?.memory_hint === 'string'
+          ? normalizeHintText(String(result.memory_hint).trim().slice(0, 300), 140)
+          : null;
+      const fallbackHint = llmMemoryHint
+        ? null
+        : (() => {
+          const linesText = Array.isArray(result?.lines) ? result.lines.map((l) => String(l || '')).join(' ') : '';
+          return extractCoachingHintFromText(userMessage) || extractCoachingHintFromText(linesText);
+        })();
+      const directHint = userMessage ? extractCoachingHintFromText(userMessage) : null;
+      const memoryHintExtracted = Boolean(llmMemoryHint || fallbackHint || directHint);
       const payload = {
         job_id: job.id,
         user_message: userMessage,
         dialogue: result,
-        memory_refs: Array.isArray(job?.input?.memory_refs)
-          ? job.input.memory_refs.slice(0, 10).map((r) => ({
-            kind: String(r?.kind ?? '').slice(0, 32),
-            key: String(r?.key ?? '').slice(0, 64),
-            text: String(r?.text ?? '').slice(0, 220),
-            confidence: Number.isFinite(Number(r?.confidence)) ? Number(r.confidence) : 1.0
-          }))
-          : [],
+        memory_refs: memoryRefs,
         memory_score: Number.isFinite(Number(job?.input?.memory_score))
           ? Number(job.input.memory_score)
           : null,
@@ -435,11 +549,6 @@ class BrainJobService {
             }
             : { enabled: false, version: 0 }
       };
-      await client.query(
-        `INSERT INTO events (agent_id, event_type, payload, salience_score)
-         VALUES ($1, 'DIALOGUE', $2::jsonb, 3)`,
-        [job.agent_id, JSON.stringify(payload)]
-      );
 
       const knownHints = new Set();
       const persistCoachingHint = async ({ hint, source, confidence = 1.3, keyPrefix = 'hint' }) => {
@@ -463,37 +572,43 @@ class BrainJobService {
         return true;
       };
 
-      // Primary source: explicit memory_hint from LLM
-      const llmMemoryHint =
-        typeof result?.memory_hint === 'string' ? normalizeHintText(String(result.memory_hint).trim().slice(0, 300), 140) : null;
+      let memorySaved = memoryHintExtracted;
       if (llmMemoryHint) {
-        await persistCoachingHint({ hint: llmMemoryHint, source: 'dialogue', confidence: 1.5, keyPrefix: 'hint' });
+        memorySaved = (await persistCoachingHint({
+          hint: llmMemoryHint,
+          source: 'dialogue',
+          confidence: 1.5,
+          keyPrefix: 'hint'
+        })) || memorySaved;
       } else {
-        // Fallback when LLM omitted memory_hint: pattern+keyword extraction.
-        const linesText = Array.isArray(result?.lines) ? result.lines.map((l) => String(l || '')).join(' ') : '';
-        const fallbackHint = extractCoachingHintFromText(userMessage) || extractCoachingHintFromText(linesText);
         if (fallbackHint) {
-          await persistCoachingHint({
+          memorySaved = (await persistCoachingHint({
             hint: fallbackHint,
             source: 'dialogue_fallback',
             confidence: 1.4,
             keyPrefix: 'hintfb'
-          });
+          })) || memorySaved;
         }
       }
 
       // Extra direct extraction from user message (expanded keywords) for reliability.
-      if (userMessage) {
-        const directHint = extractCoachingHintFromText(userMessage);
-        if (directHint) {
-          await persistCoachingHint({
-            hint: directHint,
-            source: 'user_message',
-            confidence: 1.3,
-            keyPrefix: 'user'
-          });
-        }
+      if (directHint) {
+        memorySaved = (await persistCoachingHint({
+          hint: directHint,
+          source: 'user_message',
+          confidence: 1.3,
+          keyPrefix: 'user'
+        })) || memorySaved;
       }
+
+      if (memorySaved) payload.memory_saved = true;
+      if (memoryCited) payload.memory_cited = true;
+
+      await client.query(
+        `INSERT INTO events (agent_id, event_type, payload, salience_score)
+         VALUES ($1, 'DIALOGUE', $2::jsonb, 3)`,
+        [job.agent_id, JSON.stringify(payload)]
+      );
       return;
     }
 
