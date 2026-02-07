@@ -7,10 +7,10 @@ interface TabBarProps {
 
 const TABS = [
   { key: "pet", icon: "🐾", label: "펫" },
-  { key: "news", icon: "📰", label: "소식" },
+  // { key: "news", icon: "📰", label: "소식" },  // 숨김 — 핵심 소식은 펫 탭 TodayBanner로
   { key: "arena", icon: "⚔️", label: "아레나" },
   { key: "plaza", icon: "🏟️", label: "광장" },
-  { key: "settings", icon: "⚙️", label: "설정" },
+  // { key: "settings", icon: "⚙️", label: "설정" },  // 숨김 — TopBar ⚙️ 슬라이드 패널로
 ] as const;
 
 export function TabBar({ tab, onChangeTab }: TabBarProps) {

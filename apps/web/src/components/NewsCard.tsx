@@ -12,11 +12,12 @@ interface NewsCardProps {
 export function NewsCard({ day, summary, civicLine, directorView = false, featured = false }: NewsCardProps) {
   const rawScenario = String(summary?.scenario ?? "").trim().toUpperCase();
   const scenarioLabel =
-    rawScenario === "ROMANCE" ? "로맨스"
+    rawScenario === "ROMANCE" ? "동맹"
     : rawScenario === "DEAL" ? "거래"
-    : rawScenario === "TRIANGLE" ? "질투"
-    : rawScenario === "BEEF" ? "신경전"
-    : rawScenario === "OFFICE" || rawScenario === "CREDIT" ? "회사"
+    : rawScenario === "TRIANGLE" ? "세력전"
+    : rawScenario === "BEEF" ? "라이벌"
+    : rawScenario === "OFFICE" || rawScenario === "CREDIT" ? "소속"
+    : rawScenario === "RECONCILE" ? "화해"
     : rawScenario ? rawScenario : "";
 
   const aName = String(summary?.cast?.aName ?? "").trim();

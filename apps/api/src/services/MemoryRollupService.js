@@ -97,18 +97,64 @@ function summarizeNudges(nudges) {
   return top.length ? `중력: ${top.join(', ')}` : '';
 }
 
-function buildWeeklySummary({ weekStartDay, weekEndDay, dailySummaries, nudges }) {
+function summarizeDialogueCore(dialogueCore) {
+  const list = Array.isArray(dialogueCore) ? dialogueCore : [];
+  if (list.length === 0) return '';
+  const top = list
+    .slice(0, 2)
+    .map((x) => safeText(x?.line, 120))
+    .filter(Boolean);
+  return top.length ? `대화 코어: ${top.join(' / ')}` : '';
+}
+
+function pickDialogueCoreFromEvents(eventRows, { limit = 2 } = {}) {
+  const n = clampInt(limit, 1, 5);
+  const lines = [];
+  const pushUnique = (line) => {
+    const s = safeText(line, 120);
+    if (!s) return;
+    if (lines.some((x) => String(x.line).toLowerCase() === s.toLowerCase())) return;
+    lines.push({ line: s });
+  };
+
+  for (const row of Array.isArray(eventRows) ? eventRows : []) {
+    const payload = row?.payload && typeof row.payload === 'object' ? row.payload : null;
+    if (!payload) continue;
+
+    const userMessage = safeText(payload?.user_message, 90);
+    const hint = safeText(payload?.dialogue?.memory_hint, 90);
+    const firstLine = safeText(Array.isArray(payload?.dialogue?.lines) ? payload.dialogue.lines[0] : '', 90);
+
+    if (userMessage && hint) {
+      pushUnique(`'${userMessage}' → ${hint}`);
+    } else if (userMessage && firstLine) {
+      pushUnique(`'${userMessage}' → ${firstLine}`);
+    } else if (hint) {
+      pushUnique(hint);
+    } else if (firstLine) {
+      pushUnique(firstLine);
+    }
+
+    if (lines.length >= n) break;
+  }
+
+  return lines.slice(0, n);
+}
+
+function buildWeeklySummary({ weekStartDay, weekEndDay, dailySummaries, nudges, dialogueCore }) {
   const highlights = pickTopHighlights(dailySummaries, { limit: 3 });
   const moodFlow = pickMoodFlow(dailySummaries);
 
   const lastTomorrow = safeText(dailySummaries[dailySummaries.length - 1]?.summary?.tomorrow, 200);
   const nudgeLine = summarizeNudges(nudges);
+  const dialogueLine = summarizeDialogueCore(dialogueCore);
+  const signalLine = [dialogueLine, nudgeLine].filter(Boolean).join(' | ');
 
   const memory5 = [
     `${weekStartDay}~${weekEndDay} 한 주 요약.`,
     highlights[0] ? `대표 장면: ${highlights[0]}` : '대표 장면: …',
     highlights.length > 1 ? `이번 주 키워드: ${highlights.slice(0, 3).join(' / ')}` : '이번 주 키워드: …',
-    nudgeLine || '중력: (아직 없음)',
+    signalLine || '대화 코어/중력: (아직 없음)',
     lastTomorrow ? `다음 주 예고: ${lastTomorrow}` : '다음 주 예고: …'
   ].map((x) => safeText(x, 180));
 
@@ -119,6 +165,7 @@ function buildWeeklySummary({ weekStartDay, weekEndDay, dailySummaries, nudges }
     highlights,
     mood_flow: moodFlow,
     tomorrow: lastTomorrow ? `다음 주엔… ${lastTomorrow}` : '',
+    dialogue_core: (Array.isArray(dialogueCore) ? dialogueCore : []).slice(0, 3).map((d) => safeText(d?.line, 140)).filter(Boolean),
     nudges: (Array.isArray(nudges) ? nudges : []).slice(0, 8).map((n) => ({
       kind: safeText(n?.kind, 24),
       key: safeText(n?.key, 64),
@@ -177,11 +224,25 @@ class MemoryRollupService {
       [agentId]
     );
 
+    const { rows: dialogueRows } = await client.query(
+      `SELECT payload, created_at
+       FROM events
+       WHERE agent_id = $1
+         AND event_type = 'DIALOGUE'
+         AND created_at >= $2::date
+         AND created_at < ($3::date + INTERVAL '1 day')
+       ORDER BY created_at DESC
+       LIMIT 40`,
+      [agentId, weekStart, clampedEnd]
+    );
+    const dialogueCore = pickDialogueCoreFromEvents(dialogueRows || [], { limit: 2 });
+
     const weekly = buildWeeklySummary({
       weekStartDay: weekStart,
       weekEndDay: clampedEnd,
       dailySummaries,
-      nudges: nudgeRows || []
+      nudges: nudgeRows || [],
+      dialogueCore
     });
 
     const { rows: upserted } = await client.query(
@@ -198,4 +259,3 @@ class MemoryRollupService {
 }
 
 module.exports = MemoryRollupService;
-

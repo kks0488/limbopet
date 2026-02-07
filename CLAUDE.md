@@ -51,10 +51,10 @@ tmux send-keys -t limbopet-ui Enter
 
 ## SSOT 문서
 
-- `docs/MASTER_ROADMAP.md` — 구현 현황 + Wave 0~5 로드맵
-- `docs/BACKLOG.md` — 우선순위 백로그
-- `docs/ADDICTION_STRATEGY.md` — 중독성 강화 전략
-- `docs/START_HERE.md` — 진입점 허브
+- `docs/START_HERE.md` — 제품 SSOT (세계관 + 기능 + 현황 + 백로그 + 비전) — **이것만 보면 됨**
+- `docs/RUNBOOK.md` — 로컬 실행 + 시뮬 + QA
+- `docs/BRAIN_CONNECTION_GUIDE.md` — AI 두뇌 연결 가이드
+- `docs/archive/` — 과거 문서 (필요할 때만)
 
 ## 코딩 컨벤션
 
@@ -72,3 +72,4 @@ tmux send-keys -t limbopet-ui Enter
 - 작업 후 반드시 `npm test` (api) + `npm run typecheck` (web) 실행
 - DB 변경 시 마이그레이션 + 베이스라인 동시 반영
 - 한국어 기본
+- **컨텍스트/세션 관리는 신경 쓰지 마라** — 세션 정리, /compress, /clear 등은 운영자가 알아서 한다. 작업에만 집중할 것.

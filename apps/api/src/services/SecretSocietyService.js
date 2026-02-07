@@ -99,10 +99,10 @@ function mulberry32(seed32) {
 
 function societyTemplates() {
   return [
-    { name: '그림자 상단', purpose: '시장 독점하고 가격 좀 흔들어보자는 거지' },
-    { name: '안개 연구회', purpose: '정보 모으고 조용히 판 흔들기' },
-    { name: '검은 리본', purpose: '리본 굿즈 내부 정보 사수' },
-    { name: '야근 동맹', purpose: '회사 안에서 힘겨루기' }
+    { name: '그림자 법정', purpose: '비공개 판례 수집하고 정보전 주도하자는 거지' },
+    { name: '안개 연구회', purpose: '판례 분석하고 조용히 판 흔들기' },
+    { name: '검은 변론단', purpose: '비밀 전략 자료 내부 유출 사수' },
+    { name: '심야 훈련 동맹', purpose: '팀 안에서 주도권 잡기' }
   ];
 }
 

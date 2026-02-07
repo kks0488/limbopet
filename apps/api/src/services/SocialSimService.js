@@ -60,14 +60,14 @@ function moodLabel(mood) {
   return 'gloomy';
 }
 
-const LOCATIONS = ['광장', '회사', '카페', '굿즈샵', '골목', '림보 복도'];
+const LOCATIONS = ['법정 로비', '훈련장', '전략실', '자료실', '관전석', '광장'];
 const LOCATION_TO_ZONE = {
+  '법정 로비': 'court_lobby',
+  훈련장: 'training_ground',
+  전략실: 'strategy_room',
+  자료실: 'library',
+  관전석: 'spectator',
   광장: 'plaza',
-  회사: 'office',
-  카페: 'cafe',
-  굿즈샵: 'goods_shop',
-  골목: 'alley',
-  '림보 복도': 'hallway'
 };
 
 function scenarioFromContext({ sameCompany, merchantInvolved, affinity, jealousy, rivalry }) {
@@ -95,7 +95,7 @@ function relationshipIntensityScore(rel) {
 
 function isMerchantLike(text) {
   const t = String(text || '');
-  return /상인|굿즈|MD|마케팅|영업/i.test(t);
+  return /브로커|전략|정보|외교|스카우트/i.test(t);
 }
 
 function weightedPick(options) {
@@ -398,169 +398,175 @@ function buildInteractionNarrative({ scenario, aName, bName, cName = null, locat
 
   const MEET_POOL = [
     {
-      headline: '{place}에서 스친 {a} ↔ {b}',
+      headline: '{place}에서 마주친 {a} ↔ {b}',
       summary: '{place}에서 {a}와(과) {b}가 잠깐 눈이 마주쳤다.',
-      aHighlights: ['가볍게 인사하려다 멈칫했다.', '{b}의 반응을 한 번 더 봤다.'],
-      bHighlights: ['고개만 살짝 끄덕였다.', '{a}를 보고도 모른 척했다.']
+      aHighlights: ['다음 상대 명단을 보다가 고개를 들었다.', '{b}의 시선이 신경 쓰였다.'],
+      bHighlights: ['가볍게 고개만 끄덕였다.', '랭킹 보드를 보는 척했다.']
     },
     {
-      headline: '“어… 안녕” — {a}와 {b}',
-      summary: '{place}에서 {a}가 먼저 말을 걸었고, {b}는 늦게 웃었다.',
-      aHighlights: ['말을 꺼내고 나서 바로 후회했다.', '괜히 손을 만지작거렸다.'],
-      bHighlights: ['대답은 했지만 눈은 딴 데를 봤다.', '웃어넘기려다 말이 꼬였다.']
-    },
-    {
-      headline: '오늘의 우연: {a}·{b}',
+      headline: '법정 로비에서 스친 {a}·{b}',
       summary: '{place}에서 둘이 마주쳤는데, 대화는 생각보다 짧았다.',
-      aHighlights: ['괜히 분위기를 띄우려 했다.', '빨리 자리를 떴다.'],
-      bHighlights: ['한 마디 하려다 삼켰다.', '{a}의 뒷모습을 잠깐 봤다.']
+      aHighlights: ['"다음 경기도 잘 부탁해."라고 했다.', '장난처럼 웃었지만 진심이었다.'],
+      bHighlights: ['"응, 잘하자."라고만 했다.', '입꼬리만 올리고 빠르게 자리를 떴다.']
     },
     {
-      headline: '{a}가 지나가고, {b}가 멈칫',
-      summary: '{place}에서 스친 뒤에야 서로를 알아챘다는 얘기가 돌았다.',
-      aHighlights: ['발걸음이 잠깐 느려졌다.', '뒤돌아볼까 말까 고민했다.'],
-      bHighlights: ['숨을 한 번 크게 내쉬었다.', '표정이 잠깐 굳었다.']
+      headline: '훈련장에서 {a}가 {b}를 봤다',
+      summary: '{place}에서 {a}가 훈련을 마치고 나가다가, {b}와 마주쳤다.',
+      aHighlights: ['땀을 닦으며 가볍게 인사했다.', '스파링 제안하려다 멈췄다.'],
+      bHighlights: ['고개를 끄덕였다.', '{a}의 훈련 강도를 흘깃 봤다.']
     },
     {
-      headline: '{place} 공기: {a} vs {b}',
-      summary: '{place}에서 둘이 같은 방향으로 걷다가, 어느 순간 갈라섰다.',
-      aHighlights: ['뭐라도 말해보려다 입만 열었다.', '분위기가 이상한 건 알았다.'],
-      bHighlights: ['핸드폰을 꺼내 화면만 스크롤했다.', '보폭이 살짝 벌어졌다.']
+      headline: '자료실에서 같은 판례를 보던 {a}와 {b}',
+      summary: '{place}에서 둘이 같은 서가 앞에서 멈춰 섰다.',
+      aHighlights: ['"이 판례 유용하더라."라고 말했다.', '먼저 자료를 건넸다.'],
+      bHighlights: ['"고마워."라고 했다.', '표정이 살짝 풀렸다.']
     },
     {
-      headline: '{a}의 한 마디, {b}의 한숨',
-      summary: '{place}에서 작은 대화가 시작됐다가 금방 끝났다.',
-      aHighlights: ['“그냥… 요즘 어때?”라고 물었다.', '눈치를 보며 웃었다.'],
-      bHighlights: ['“괜찮아.”라고만 했다.', '한숨을 삼켰다.']
+      headline: '관전석에서 같은 경기를 보던 둘',
+      summary: '{place}에서 {a}와(과) {b}가 같은 경기를 보다가 눈이 마주쳤다.',
+      aHighlights: ['"저 전략 괜찮은데?"라고 말했다.', '반응을 살폈다.'],
+      bHighlights: ['"응, 나도 봤어."라고 했다.', '시선을 다시 경기장으로 돌렸다.']
     },
     {
-      headline: '말 없이도 남는 것: {a}·{b}',
-      summary: '{place}의 소음 속에서 둘이 잠깐 같은 공간을 공유했다.',
-      aHighlights: ['음악 소리에 괜히 귀를 세웠다.', '{b} 쪽으로 몸이 살짝 기울었다.'],
-      bHighlights: ['테이블 끝을 톡톡 두드렸다.', '먼저 일어나면 질 것 같았다.']
+      headline: '광장에서 소문을 듣던 {a}·{b}',
+      summary: '{place}에서 둘이 같은 경기 결과 얘기를 듣다가 눈이 마주쳤다.',
+      aHighlights: ['괜히 다른 얘기를 했다.', '소문에 흥미를 보였다.'],
+      bHighlights: ['"역시 그럴 줄 알았어."라고 중얼거렸다.', '{a}를 의식했다.']
     },
     {
-      headline: '{b}의 시선이 {a}를 따라갔다',
-      summary: '{place}에서 {b}가 {a}를 힐끔 봤고, {a}는 모른 척했다.',
-      aHighlights: ['모른 척했지만 다 알았다.', '표정을 최대한 숨겼다.'],
-      bHighlights: ['시선을 빨리 거뒀다.', '괜히 웃었다.']
+      headline: '훈련 일정이 겹친 {a}와 {b}',
+      summary: '{place}에서 같은 시간에 예약이 겹쳐서 둘이 마주쳤다.',
+      aHighlights: ['"먼저 써."라고 했다.', '양보하는 척했지만 아쉬웠다.'],
+      bHighlights: ['"같이 할까?"라고 제안했다.', '눈치를 봤다.']
     },
     {
-      headline: '{a}가 먼저 피했고, {b}가 남았다',
-      summary: '{place}에서 {a}가 먼저 자리를 떴고, {b}는 잠깐 멈춰 섰다.',
-      aHighlights: ['괜히 급해졌다.', '등 뒤가 따가웠다.'],
-      bHighlights: ['한 번 더 뒤를 봤다.', '웃음이 사라졌다.']
+      headline: '{a}가 {b}의 경기 결과를 확인했다',
+      summary: '{place}에서 {a}가 {b}의 승리 기록을 보다가 {b}와 마주쳤다.',
+      aHighlights: ['"축하해."라고 했다.', '진심이었다.'],
+      bHighlights: ['"고마워."라고 했다.', '가볍게 웃었다.']
     },
     {
-      headline: '“지금, 바빠?” — {b}의 질문',
+      headline: '전략실 앞에서 스친 {a}·{b}',
+      summary: '{place}에서 둘이 같은 자료를 찾다가 마주쳤다.',
+      aHighlights: ['먼저 말을 걸려다 멈췄다.', '어색하게 웃었다.'],
+      bHighlights: ['고개만 끄덕이고 지나갔다.', '뒤돌아보지 않았다.']
+    },
+    {
+      headline: '법정 복도에서 {a}가 {b}를 피했다',
+      summary: '{place}에서 {a}가 먼저 방향을 틀었고, {b}는 잠깐 멈춰 섰다.',
+      aHighlights: ['급한 척했다.', '등 뒤의 시선이 따가웠다.'],
+      bHighlights: ['한 번 더 뒤를 봤다.', '표정이 굳었다.']
+    },
+    {
+      headline: '"다음 상대 확인했어?" — {b}의 질문',
       summary: '{place}에서 {b}가 물었고, {a}는 대답을 고르느라 늦었다.',
-      aHighlights: ['“아니… 괜찮아.”라고 했다.', '눈을 깜빡였다.'],
-      bHighlights: ['작게 웃었다.', '말을 이어갔다.']
+      aHighlights: ['"응, 알아."라고 했다.', '눈을 깜빡였다.'],
+      bHighlights: ['작게 웃었다.', '"조심해."라고 했다.']
     },
     {
-      headline: '{place}에서 스치듯 주고받은 농담',
+      headline: '{place}에서 스치듯 주고받은 전략 팁',
       summary: '{place}에서 {a}와(과) {b}가 짧게 웃고, 바로 표정을 숨겼다.',
-      aHighlights: ['웃음을 참았다.', '괜히 손을 만졌다.'],
-      bHighlights: ['고개를 숙였다.', '한숨이 가벼워졌다.']
+      aHighlights: ['"그거 통할까?"라고 물었다.', '장난처럼 말했다.'],
+      bHighlights: ['"한 번 해봐."라고 했다.', '웃음을 참았다.']
     },
     {
-      headline: '{a}·{b}, "아무 일도 없었던 척"',
-      summary: '{place}에서 둘은 아무 일도 없었던 척했지만, 어색함이 더 컸다.',
-      aHighlights: ['말이 너무 빨라서 오히려 티가 났다.', '입꼬리만 겨우 올렸다.'],
-      bHighlights: ['3초쯤 늦게 반응했다.', '창밖으로 눈을 돌렸다.']
+      headline: '{a}·{b}, 라이벌 경기를 보고',
+      summary: '{place}에서 둘은 같은 경기를 보고 동시에 한숨을 쉬었다.',
+      aHighlights: ['"저 전략은 너무한데."라고 했다.', '눈을 피하지 않았다.'],
+      bHighlights: ['"그래도 이겼잖아."라고 했다.', '미소가 씁쓸했다.']
     },
     {
-      headline: '발걸음이 잠깐 맞춰졌다',
-      summary: '{place}에서 둘이 같은 방향으로 걸었고, 그 시간이 짧아서 더 기억에 남았다.',
-      aHighlights: ['한 마디만 할까 입술이 달싹였다.', '속도가 느려진 걸 들켰다.'],
-      bHighlights: ['시야 끝에서 {a}를 느꼈다.', '살짝 목만 까딱했다.']
+      headline: '훈련 방식을 놓고 둘이 말했다',
+      summary: '{place}에서 {a}가 공격형 훈련을 얘기하자, {b}는 고개를 저었다.',
+      aHighlights: ['"공격이 최선의 방어야."라고 했다.', '확신에 차 있었다.'],
+      bHighlights: ['"그래도 기본은 중요해."라고 했다.', '물러서지 않았다.']
     },
     {
-      headline: '"그때 말인데…" — 시작만 하고 끝난 대화',
-      summary: '{place}에서 {a}가 꺼냈지만, {b}가 바로 다른 얘기로 돌렸다.',
-      aHighlights: ['말꼬리가 사라졌다.', '미간에 주름이 잡혔다.'],
-      bHighlights: ['급하게 화제를 틀었다.', '가벼운 척 웃어넘겼다.']
+      headline: '{place}에서 둘이 같은 멘토를 찾았다',
+      summary: '{place}에서 {a}와(과) {b}가 같은 멘토를 찾으려다 마주쳤다.',
+      aHighlights: ['"먼저 물어봐."라고 했다.', '양보하는 척했다.'],
+      bHighlights: ['"같이 갈까?"라고 제안했다.', '눈치를 봤다.']
     },
     {
-      headline: '{place} 소음 속, 둘만 조용했다',
-      summary: '{place}에서 주변은 시끄러웠는데, {a}와(과) {b}는 이상하게 조용했다.',
-      aHighlights: ['입을 꾹 다물고 있었다.', '애써 미소를 지었다.'],
-      bHighlights: ['눈동자가 흔들렸다.', '대꾸가 점점 줄었다.']
+      headline: '법정 입장 전 긴장한 {a}·{b}',
+      summary: '{place}에서 둘이 대기실에서 마주쳤고, 침묵이 길었다.',
+      aHighlights: ['심호흡을 했다.', '{b}를 힐끔 봤다.'],
+      bHighlights: ['눈을 감고 집중했다.', '{a}의 존재를 느꼈다.']
     },
     {
-      headline: '{a}가 고개를 끄덕였고, {b}가 안심했다',
-      summary: '{place}에서 {b}가 말하자, {a}가 조용히 끄덕였다.',
-      aHighlights: ['"응." 하고만 했다.', '더 이상 묻지 않았다.'],
-      bHighlights: ['긴장이 풀리며 숨을 내쉬었다.', '안도의 미소가 새어 나왔다.']
+      headline: '서로의 랭킹을 확인한 {a}와 {b}',
+      summary: '{place}에서 둘이 랭킹 보드 앞에서 동시에 멈췄다.',
+      aHighlights: ['숫자를 확인했다.', '표정을 숨겼다.'],
+      bHighlights: ['한숨을 삼켰다.', '빠르게 자리를 떴다.']
     },
     {
-      headline: '서로의 이름이 한 번 더 불렸다',
-      summary: '{place}에서 누군가가 둘을 불렀고, 둘은 동시에 돌아봤다.',
-      aHighlights: ['놀란 티가 났다.', '괜히 머리를 넘겼다.'],
-      bHighlights: ['표정을 숨겼다.', '시선을 빨리 거뒀다.']
-    },
-    {
-      headline: '{place}에서 남은 건 “표정”이었다',
-      summary: '{place}에서 {a}와(과) {b}가 마주쳤고, 말보다 표정이 더 많은 걸 말했다.',
-      aHighlights: ['입꼬리가 잠깐 올라갔다.', '바로 내렸다.'],
-      bHighlights: ['눈이 커졌다.', '곧 차분해졌다.']
-    },
-    {
-      headline: '대화는 없었는데, 인사는 남았다',
+      headline: '{place}에서 스친 인사가 남았다',
       summary: '{place}에서 둘이 짧게 인사했고, 그게 이상하게 길게 남았다.',
-      aHighlights: ['인사를 먼저 했다.', '후회하지 않았다.'],
+      aHighlights: ['먼저 인사했다.', '후회하지 않았다.'],
       bHighlights: ['대답이 부드러웠다.', '눈을 피하지 않았다.']
+    },
+    {
+      headline: '훈련 파트너 제안을 고민한 {a}',
+      summary: '{place}에서 {a}가 {b}에게 말을 걸려다가 멈췄다.',
+      aHighlights: ['입술이 달싹였다.', '타이밍을 놓쳤다.'],
+      bHighlights: ['눈치를 챈 것 같았다.', '먼저 자리를 떴다.']
+    },
+    {
+      headline: '법정 결과를 듣고 둘이 반응했다',
+      summary: '{place}에서 누군가의 경기 결과가 발표되자, 둘의 시선이 마주쳤다.',
+      aHighlights: ['"예상 밖이네."라고 했다.', '놀란 티가 났다.'],
+      bHighlights: ['"그럴 줄 알았어."라고 했다.', '침착했다.']
     }
   ];
 
   const OFFICE_POOL = [
     {
-      headline: '회사 공기{comp}: {a} ↔ {b}',
+      headline: '전략실 공기{comp}: {a} ↔ {b}',
       summary: '{place}에서 {a}와(과) {b}가 마주쳤고, 뭔가 미묘한 공기가 남았다.',
-      aHighlights: ['일 얘기만 하려 했다.', '감정 표현은 아꼈다.'],
+      aHighlights: ['전략 얘기만 하려 했다.', '감정 표현은 아꼈다.'],
       bHighlights: ['피곤한 듯 보였다.', '누군가를 찾는 눈치였다.']
     },
     {
-      headline: '복도에서 딱 마주친 {a}·{b}{comp}',
+      headline: '법정 로비에서 딱 마주친 {a}·{b}{comp}',
       summary: '{place}에서 서로를 확인하는데 1초가 걸렸고, 그 1초가 길었다.',
       aHighlights: ['인사를 할까 말까 0.5초 망설였다.', '어깨가 무의식적으로 올라갔다.'],
       bHighlights: ['바닥 타일을 세는 척했다.', '표정 근육이 자동 관리 모드였다.']
     },
     {
-      headline: '회의 직후, 표정이 갈렸다{comp}',
+      headline: '전략 회의 직후, 표정이 갈렸다{comp}',
       summary: '{place}에서 {a}가 말을 꺼냈고, {b}는 조용히 듣기만 했다.',
-      aHighlights: ['“그건 그렇게 하면 안 돼.”라고 했다.', '목소리가 조금 컸다.'],
+      aHighlights: ['"그 전략은 리스크가 너무 커."라고 했다.', '목소리가 조금 컸다.'],
       bHighlights: ['고개만 끄덕였다.', '웃지 않았다.']
     },
     {
-      headline: '점심 줄에서 들린 이름: {a}와 {b}{comp}',
+      headline: '훈련장에서 들린 이름: {a}와 {b}{comp}',
       summary: '{place}에서 누군가 {a}와 {b} 얘기를 꺼냈고, 둘 다 반응이 느렸다.',
       aHighlights: ['괜히 다른 얘기를 했다.', '주변을 살폈다.'],
       bHighlights: ['입술을 깨물었다.', '손에 쥔 걸 세게 쥐었다.']
     },
     {
-      headline: '퇴근 직전, 다시 얽힌 둘{comp}',
-      summary: '{place}에서 {a}가 “내일 얘기하자”라고 했고, {b}는 대답을 미뤘다.',
+      headline: '훈련 종료 직전, 다시 얽힌 둘{comp}',
+      summary: '{place}에서 {a}가 "나중에 얘기하자"라고 했고, {b}는 대답을 미뤘다.',
       aHighlights: ['말을 아꼈다.', '정리하려는 티가 났다.'],
-      bHighlights: ['“응…” 하고 넘겼다.', '눈빛이 복잡했다.']
+      bHighlights: ['"응…" 하고 넘겼다.', '눈빛이 복잡했다.']
     },
     {
-      headline: '업무 톤인데 감정이 섞였다{comp}',
-      summary: '{place}에서 "일" 얘기였는데, 둘 다 미간이 좁아졌다.',
+      headline: '전략 톤인데 감정이 섞였다{comp}',
+      summary: '{place}에서 "케이스" 얘기였는데, 둘 다 미간이 좁아졌다.',
       aHighlights: ['단어를 골라 쓰느라 말이 느려졌다.', '눈은 웃지 않았다.'],
       bHighlights: ['답변이 점점 한 글자로 줄었다.', '시계만 째려봤다.']
     },
     {
-      headline: '프린터 앞에서 벌어진 미묘함{comp}',
+      headline: '자료실 앞에서 벌어진 미묘함{comp}',
       summary: '{place}에서 {a}와(과) {b}가 같이 서 있었고, 아무도 먼저 말을 안 했다.',
-      aHighlights: ['괜히 종이를 정리하는 척했다.', '어색함을 웃음으로 때웠다.'],
-      bHighlights: ['묵묵히 프린터만 봤다.', '말 한마디 안 하고 서류만 챙겼다.']
+      aHighlights: ['괜히 판례를 정리하는 척했다.', '어색함을 웃음으로 때웠다.'],
+      bHighlights: ['묵묵히 서가만 봤다.', '말 한마디 안 하고 자료만 챙겼다.']
     },
     {
-      headline: '“잠깐만” — {a}가 {b}를 불렀다{comp}',
+      headline: '"잠깐만" — {a}가 {b}를 불렀다{comp}',
       summary: '{place}에서 {a}가 말을 걸었고, {b}는 멈춰 섰다.',
       aHighlights: ['핵심만 말하려 했다.', '눈을 피하지 않았다.'],
-      bHighlights: ['대답하기 전에 숨을 골랐다.', '짧게 “그래.”라고 했다.']
+      bHighlights: ['대답하기 전에 숨을 골랐다.', '짧게 "그래."라고 했다.']
     },
     {
       headline: '팀 채팅에 남은 한 줄{comp}',
@@ -569,67 +575,67 @@ function buildInteractionNarrative({ scenario, aName, bName, cName = null, locat
       bHighlights: ['읽씹 10분 후에야 답했다.', '커서가 깜빡이는 동안 숨이 멈췄다.']
     },
     {
-      headline: '업무 분장이 바뀌었다{comp}',
-      summary: '{place}에서 "누가 뭘 맡지?"가 곧 "누가 누구 편이지?"가 됐다.',
+      headline: '출전 멤버 선정이 바뀌었다{comp}',
+      summary: '{place}에서 "누가 나가지?"가 곧 "누가 누구 편이지?"가 됐다.',
       aHighlights: ['포커페이스를 유지했다.', '"네." 한 글자로 끝냈다.'],
       bHighlights: ['입꼬리가 삐죽했다.', '대답까지 5초가 걸렸다.']
     },
     {
-      headline: '회의실 문이 닫히자 공기가 바뀌었다{comp}',
+      headline: '전략실 문이 닫히자 공기가 바뀌었다{comp}',
       summary: '{place}에서 둘이 동시에 숨을 쉬었고, 동시에 말을 멈췄다.',
       aHighlights: ['혀끝까지 올라온 말을 삼켰다.', '정면을 똑바로 봤다.'],
       bHighlights: ['무언의 긴장이 턱에 실렸다.', '아랫입술을 깨물었다.']
     },
     {
-      headline: '“이건 내일까지” — 미뤄진 결론{comp}',
+      headline: '"이건 다음 경기까지" — 미뤄진 결론{comp}',
       summary: '{place}에서 결론을 미루는 말이 나왔고, 표정이 굳었다.',
       aHighlights: ['마감 얘기를 꺼냈다.', '목소리가 낮아졌다.'],
       bHighlights: ['시계를 봤다.', '대답이 짧았다.']
     },
     {
-      headline: '복도 끝에서 들린 한숨{comp}',
+      headline: '훈련장 끝에서 들린 한숨{comp}',
       summary: '{place}에서 {b}의 한숨이 들렸고, {a}는 모른 척했다.',
       aHighlights: ['걸음이 미세하게 빨라졌다.', '등 뒤의 시선을 무시했다.'],
       bHighlights: ['숨이 바닥까지 내려갔다.', '벽에 잠깐 기대서 눈을 감았다.']
     },
     {
-      headline: '업무 톤으로 던진 농담{comp}',
+      headline: '전략 톤으로 던진 농담{comp}',
       summary: '{place}에서 농담을 했는데, 웃음이 안 나왔다.',
       aHighlights: ['웃으려 했지만 실패했다.', '말을 바꿨다.'],
       bHighlights: ['대답이 멈췄다.', '눈빛이 차가워졌다.']
     },
     {
-      headline: '보고서에 남은 작은 수정{comp}',
-      summary: '{place}에서 수정 한 줄이 “메시지”처럼 읽혔다.',
+      headline: '케이스 분석에 남은 작은 수정{comp}',
+      summary: '{place}에서 수정 한 줄이 "메시지"처럼 읽혔다.',
       aHighlights: ['강조 표시를 했다.', '설명은 하지 않았다.'],
       bHighlights: ['수정을 지웠다.', '다시 넣었다.']
     },
     {
-      headline: '커피 머신 앞, "아는 사이"처럼{comp}',
-      summary: '{place}에서 둘이 동시에 커피를 뽑았고, 말은 최소였다.',
-      aHighlights: ['커피 위 거품만 바라봤다.', '목으로만 "어" 했다.'],
-      bHighlights: ['입꼬리를 살짝 올렸다 내렸다.', '컵을 들자마자 돌아섰다.']
+      headline: '휴게실에서, "아는 사이"처럼{comp}',
+      summary: '{place}에서 둘이 동시에 물을 마셨고, 말은 최소였다.',
+      aHighlights: ['컵만 바라봤다.', '목으로만 "어" 했다.'],
+      bHighlights: ['입꼬리를 살짝 올렸다 내렸다.', '컵을 놓자마자 돌아섰다.']
     },
     {
-      headline: '업무 메모에 남은 이름{comp}',
+      headline: '전략 메모에 남은 이름{comp}',
       summary: '{place}에서 {a}의 메모에 {b} 이름이 반복해서 등장했다.',
       aHighlights: ['황급히 노트를 덮었다.', '이유 없는 웃음이 새어 나왔다.'],
       bHighlights: ['뭔가 눈치를 챈 듯 고개를 기울였다.', '일부러 안 물었다.']
     },
     {
-      headline: '“그거 누가 했더라?” — 기억 싸움{comp}',
-      summary: '{place}에서 누가 했는지로 시작했는데, 감정이 먼저 나왔다.',
+      headline: '"그 전략 누가 만들었더라?" — 기억 싸움{comp}',
+      summary: '{place}에서 누가 만들었는지로 시작했는데, 감정이 먼저 나왔다.',
       aHighlights: ['목소리가 커졌다.', '바로 낮췄다.'],
       bHighlights: ['대답을 참았다.', '손끝이 떨렸다.']
     },
     {
-      headline: '퇴근 길, 같은 엘리베이터{comp}',
-      summary: '{place}에서 둘이 같은 엘리베이터를 탔고, 버튼 소리만 컸다.',
-      aHighlights: ['층 버튼을 더 세게 눌렀다.', '표정을 숨겼다.'],
+      headline: '퇴장 후, 같은 복도{comp}',
+      summary: '{place}에서 둘이 같은 복도를 걸었고, 발소리만 컸다.',
+      aHighlights: ['보폭을 더 넓혔다.', '표정을 숨겼다.'],
       bHighlights: ['핸드폰만 봤다.', '숨을 고르려 했다.']
     },
     {
-      headline: '"내일 얘기하자"가 두 번 나왔다{comp}',
+      headline: '"나중에 얘기하자"가 두 번 나왔다{comp}',
       summary: '{place}에서 미루는 말이 반복되자, 오히려 더 불안해졌다.',
       aHighlights: ['결론을 내리려다 또 미뤘다.', '자기도 답을 모르는 티가 났다.'],
       bHighlights: ['턱이 내려갔다.', '대답 대신 한숨이 먼저 나왔다.']
@@ -764,7 +770,7 @@ function buildInteractionNarrative({ scenario, aName, bName, cName = null, locat
       headline: '{place}에서 딜 성사: {a}·{b}',
       summary: '{place}에서 {a}와(과) {b}가 "거래"를 했다는 목격담이 돌았다.',
       aHighlights: ['은근슬쩍 가격을 흔들었다.', '표정은 여유 있었다.'],
-      bHighlights: ['부가 조건을 하나 끼워넣었다.', '영수증을 주머니 깊이 넣었다.']
+      bHighlights: ['부가 조건을 하나 끼워넣었다.', '자료를 깊이 넣었다.']
     },
     {
       headline: '“이 가격에?!” — 수상한 흥정',
@@ -785,13 +791,13 @@ function buildInteractionNarrative({ scenario, aName, bName, cName = null, locat
       bHighlights: ['“딱 한 번이야.”라고 했다.', '장난처럼 넘겼다.']
     },
     {
-      headline: '{place} 뒷골목 거래, 누가 이겼을까?',
+      headline: '{place} 비공개 교환, 누가 이겼을까?',
       summary: '{place}에서 손바닥 위로 뭔가가 오갔고, 말은 더 적어졌다.',
       aHighlights: ['침착한 척했다.', '눈치를 봤다.'],
       bHighlights: ['단호하게 말했다.', '손을 빨리 거뒀다.']
     },
     {
-      headline: '영수증이 사라졌다',
+      headline: '자료가 사라졌다',
       summary: '{place}에서 “그건 기록 남기지 말자”는 말이 들렸다.',
       aHighlights: ['“그럼 다음에.”라고 했다.', '고개를 끄덕였다.'],
       bHighlights: ['“여기서 끝.”이라고 했다.', '말을 끊었다.']
@@ -876,138 +882,138 @@ function buildInteractionNarrative({ scenario, aName, bName, cName = null, locat
     }
   ];
 
-  const romanceTone = affinity >= 75 ? 'high' : affinity >= 55 ? 'mid' : 'low';
+    const romanceTone = affinity >= 75 ? 'high' : affinity >= 55 ? 'mid' : 'low';
   const ROMANCE_POOL = {
     low: [
       {
-        headline: '{a}·{b} “둘만의 분위기”…?',
-        summary: '{place}에서 {a}와(과) {b}가 조용히 같이 있었다는 얘기가 돌기 시작했다.',
-        aHighlights: ['{b} 쪽을 자꾸 신경 썼다.', '말을 아껴서 더 의심을 샀다.'],
-        bHighlights: ['{a}의 시선을 피했다.', '괜히 주변을 두리번거렸다.']
+        headline: '{a}·{b} "스파링 파트너 찾았다"',
+        summary: '{place}에서 {a}와(과) {b}가 조심스럽게 훈련 제안을 주고받았다.',
+        aHighlights: ['{b}의 실력을 인정했다.', '같이 해보자고 넌지시 물었다.'],
+        bHighlights: ['생각해보겠다고 답했다.', '웃으며 관심을 보였다.']
       },
       {
-        headline: '{place} 창가, 두 사람의 침묵',
-        summary: '{place}에서 둘이 같은 방향을 보다가, 동시에 웃었다는 얘기.',
-        aHighlights: ['웃음을 참았다.', '어깨가 풀렸다.'],
-        bHighlights: ['미소를 숨겼다.', '시선을 길게 줬다.']
+        headline: '{place}에서 첫 합동 훈련',
+        summary: '{place}에서 둘이 처음으로 함께 훈련했고, 호흡이 꽤 맞았다.',
+        aHighlights: ['조언을 구했다.', '피드백을 열심히 받았다.'],
+        bHighlights: ['전략 하나를 공유했다.', '다음에 또 하자고 했다.']
       },
       {
-        headline: '커피보다 달았던 한 마디',
-        summary: '{place}에서 {a}가 짧게 말했다. {b}는 대답 대신 고개를 끄덕였다.',
-        aHighlights: ['목소리가 부드러워졌다.', '손이 바빠졌다.'],
-        bHighlights: ['볼이 붉어졌다.', '말이 짧아졌다.']
+        headline: '실력 인정한 {a}',
+        summary: '{place}에서 {a}가 {b}의 판정 전략을 칭찬했다.',
+        aHighlights: ['솔직하게 인정했다.', '배우고 싶다고 말했다.'],
+        bHighlights: ['겸손하게 받아들였다.', '노트를 펼쳐 보였다.']
       },
       {
-        headline: '{a}가 웃자 {b}가 따라 웃었다',
-        summary: '{place}에서 웃음이 겹치자, 둘 다 순간 멈칫했다.',
-        aHighlights: ['웃음을 입 뒤에 숨겼다.', '귀끝이 빨개졌다.'],
-        bHighlights: ['미소가 자동으로 새어 나왔다.', '황급히 고개를 틀었다.']
+        headline: '"같이 관전할래?" — {a}',
+        summary: '{place}에서 {a}가 {b}에게 법정 관전을 제안했다.',
+        aHighlights: ['자리 하나 남았다고 했다.', '괜히 웃었다.'],
+        bHighlights: ['고개를 끄덕였다.', '시간 확인했다.']
       },
       {
-        headline: '“네가 먼저 말했잖아” — {b}',
-        summary: '{place}에서 {b}가 장난처럼 말했고, {a}는 진지해졌다.',
-        aHighlights: ['표정이 부드러워졌다.', '말을 골랐다.'],
-        bHighlights: ['장난을 멈췄다.', '눈빛이 흔들렸다.']
+        headline: '조심스러운 동맹 제안',
+        summary: '{place}에서 {b}가 {a}에게 팀 훈련 얘기를 꺼냈다.',
+        aHighlights: ['말을 끝까지 들었다.', '나쁘지 않다고 답했다.'],
+        bHighlights: ['기대하는 눈빛이 보였다.', '다음 주 어떠냐고 물었다.']
       },
       {
-        headline: '{place}에서 오래 남은 시선',
-        summary: '{place}에서 {a}가 시선을 오래 줬고, {b}는 피하지 못했다.',
-        aHighlights: ['시선을 고정했다.', '말이 줄었다.'],
-        bHighlights: ['고개를 들었다.', '숨을 고르려 했다.']
+        headline: '{place}에서 첫 전략 공유',
+        summary: '{place}에서 {a}가 {b}에게 자신의 판례 자료를 보여줬다.',
+        aHighlights: ['타블릿을 건넸다.', '이거 보면 도움 될 거라고 했다.'],
+        bHighlights: ['집중해서 읽었다.', '고맙다고 여러 번 말했다.']
       },
       {
-        headline: '“그냥… 같이 가자” — {a}',
-        summary: '{place}에서 {a}가 말했다. {b}는 대답 대신 발걸음을 맞췄다.',
-        aHighlights: ['목소리가 낮아졌다.', '한 번 더 확인했다.'],
-        bHighlights: ['고개를 끄덕였다.', '미소가 나왔다.']
+        headline: '"너 다음 경기 언제야?" — {a}',
+        summary: '{place}에서 {a}가 {b}의 일정을 물었다.',
+        aHighlights: ['일정을 확인했다.', '가서 보겠다고 했다.'],
+        bHighlights: ['놀란 표정이었다.', '오면 긴장될 것 같다고 웃었다.']
       }
     ],
     mid: [
       {
-        headline: '“둘이 왜 이렇게 가까워?” — {a}·{b}',
-        summary: '{place}에서 둘이 가까이 붙어 있었고, 주변 눈치가 바빠졌다.',
-        aHighlights: ['거리 조절에 실패했다.', '괜히 웃었다.'],
-        bHighlights: ['“아무것도 아니야.”라고 했다.', '눈이 반짝였다.']
+        headline: '정기 스파링 파트너 등극',
+        summary: '{place}에서 {a}와(과) {b}가 주 3회 합동 훈련을 시작했다는 소식.',
+        aHighlights: ['스케줄을 맞췄다.', '웜업 루틴을 공유했다.'],
+        bHighlights: ['전략 노트를 공유했다.', '진지하게 훈련에 집중했다.']
       },
       {
-        headline: '{a}의 손이 멈췄다, {b} 앞에서',
-        summary: '{place}에서 {a}가 잠깐 멈칫했고, {b}는 그걸 봤다.',
-        aHighlights: ['시선을 오래 줬다.', '말을 삼켰다.'],
-        bHighlights: ['고개를 기울였다.', '작게 웃었다.']
+        headline: '{a}가 {b}의 경기를 관전했다',
+        summary: '{place} 관전석에서 {a}가 {b}의 법정전을 끝까지 지켜봤다.',
+        aHighlights: ['메모하며 지켜봤다.', '경기 후 바로 피드백 줬다.'],
+        bHighlights: ['관전석 쳐다봤다.', '끝나고 고맙다고 했다.']
       },
       {
-        headline: '소문이 아니라… 진짜 같았다',
-        summary: '{place}에서 {a}와(과) {b}의 분위기가 너무 자연스러웠다.',
-        aHighlights: ['한 번 더 다가갔다.', '표정을 못 숨겼다.'],
-        bHighlights: ['기분이 좋아 보였다.', '눈을 피하지 않았다.']
+        headline: '전략 공유가 일상이 됐다',
+        summary: '{place}에서 {a}와(과) {b}가 서로의 판례 분석을 자연스럽게 나눴다.',
+        aHighlights: ['자료를 미리 준비해왔다.', '설명을 길게 해줬다.'],
+        bHighlights: ['질문을 많이 했다.', '받아적으며 고개를 끄덕였다.']
       },
       {
-        headline: '{a}가 {b}의 이름을 두 번 불렀다',
-        summary: '{place}에서 {a}가 이름을 부르자, {b}가 바로 돌아봤다.',
-        aHighlights: ['말이 빨라졌다.', '기다리지 못했다.'],
-        bHighlights: ['눈이 반짝였다.', '대답이 부드러웠다.']
+        headline: '"너희 둘 팀이야?" — 주변 반응',
+        summary: '{place}에서 둘이 함께 있는 모습이 자주 목격됐다.',
+        aHighlights: ['호흡이 잘 맞는다고 말했다.', '웃으며 인정했다.'],
+        bHighlights: ['그냥 훈련 파트너라고 했다.', '하지만 표정이 밝았다.']
       },
       {
-        headline: '거리 10cm가 더 어려웠다',
-        summary: '{place}에서 둘이 가까이 있었고, 주변이 먼저 눈치를 챘다.',
-        aHighlights: ['거리 조절을 못 했다.', '웃음을 숨겼다.'],
-        bHighlights: ['고개를 숙였다.', '어깨가 풀렸다.']
+        headline: '{a}·{b} 듀오 훈련 효과 입증',
+        summary: '{place}에서 둘의 개인 랭킹이 동시에 올랐다는 소식.',
+        aHighlights: ['확실히 도움이 된다고 인정했다.', '더 자주 하자고 제안했다.'],
+        bHighlights: ['고맙다고 말했다.', '앞으로도 부탁한다고 했다.']
       },
       {
-        headline: '“너 오늘 좀 달라” — {b}',
-        summary: '{place}에서 {b}가 말했다. {a}는 대답 대신 웃었다.',
-        aHighlights: ['웃음이 오래 갔다.', '표정이 풀렸다.'],
-        bHighlights: ['눈을 피하지 않았다.', '말이 길어졌다.']
+        headline: '신뢰 구축 완료',
+        summary: '{place}에서 {b}가 {a}에게 약점을 털어놓았다.',
+        aHighlights: ['진지하게 들었다.', '같이 해결하자고 말했다.'],
+        bHighlights: ['고민을 꺼냈다.', '편하게 말할 수 있어서 좋다고 했다.']
       },
       {
-        headline: '{place}에서 “둘만 아는 얘기”가 나왔다',
-        summary: '{place}에서 둘만 아는 얘기가 나오자, 대화가 훨씬 자연스러워졌다.',
-        aHighlights: ['기억을 꺼냈다.', '웃음이 새었다.'],
-        bHighlights: ['바로 받아쳤다.', '표정이 환해졌다.']
+        headline: '매주 같은 시간, 같은 훈련장',
+        summary: '{place}에서 {a}와(과) {b}의 정기 훈련이 루틴으로 자리잡았다.',
+        aHighlights: ['이제 말 안 해도 온다.', '웜업을 함께 시작했다.'],
+        bHighlights: ['약속 한 번도 안 빠졌다.', '시간 되면 자동으로 왔다.']
       }
     ],
     high: [
       {
-        headline: '분위기 과열: {a}·{b}',
-        summary: '{place}에서 둘이 동시에 조용해졌고, 그게 더 티가 났다.',
-        aHighlights: ['숨을 고르며 웃었다.', '괜히 표정을 숨겼다.'],
-        bHighlights: ['손끝이 떨렸다.', '눈빛이 진했다.']
+        headline: '최강 파트너십 탄생',
+        summary: '{place}에서 {a}와(과) {b}가 공식 팀을 결성했다는 발표.',
+        aHighlights: ['팀명을 함께 지었다.', '앞으로 함께 출전하기로 했다.'],
+        bHighlights: ['악수를 나눴다.', '기대된다고 말했다.']
       },
       {
-        headline: '“들키면 끝인데…” — {a}와 {b}',
-        summary: '{place}에서 둘이 너무 자연스럽게 같이 있었고, 주변이 더 조용해졌다.',
-        aHighlights: ['“조심하자.”라고 했다.', '진지해졌다.'],
-        bHighlights: ['“이미 들킨 것 같아.”라고 했다.', '웃었지만 눈은 진지했다.']
+        headline: '{a}·{b}, 함께 법정 출전',
+        summary: '{place}에서 둘이 태그팀 경기에 처음 출전했고, 승리했다.',
+        aHighlights: ['완벽한 호흡을 보여줬다.', '상대를 압도했다.'],
+        bHighlights: ['전략이 딱딱 맞았다.', '경기 후 하이파이브 했다.']
       },
       {
-        headline: '{b}가 먼저 웃었고, {a}가 따라 웃었다',
-        summary: '{place}에서 둘의 웃음이 겹치자, 사람들이 바로 눈치를 챘다.',
-        aHighlights: ['입이 저절로 올라갔다.', '얼굴이 화끈해졌다.'],
-        bHighlights: ['눈이 초승달이 됐다.', '자기도 모르게 손을 흔들었다.']
+        headline: '멘토-멘티 관계로 발전',
+        summary: '{place}에서 {a}가 {b}에게 심화 전략을 지도하기 시작했다.',
+        aHighlights: ['1:1 세션을 열었다.', '약점 보완법을 세심하게 가르쳤다.'],
+        bHighlights: ['집중해서 배웠다.', '정말 많이 배운다고 감사했다.']
       },
       {
-        headline: '손끝이 닿을 뻔했다',
-        summary: '{place}에서 둘이 동시에 손을 뻗었다가, 동시에 멈췄다.',
-        aHighlights: ['손가락이 전기 맞은 듯 멈췄다.', '심장이 입까지 올라왔다.'],
-        bHighlights: ['웃음이 떨렸다.', '눈을 못 떼겠다는 듯 봤다.']
+        headline: '둘이 함께 성장했다',
+        summary: '{place}에서 {a}와(과) {b}의 랭킹이 나란히 톱10에 진입했다.',
+        aHighlights: ['서로 덕분이라고 말했다.', '더 높이 올라가자고 다짐했다.'],
+        bHighlights: ['믿을 수 있는 파트너라고 말했다.', '계속 함께 가자고 했다.']
       },
       {
-        headline: '“여기서 이러면 티 나” — {b}',
-        summary: '{place}에서 {b}가 낮게 말했고, {a}는 고개를 끄덕였다.',
-        aHighlights: ['표정을 숨겼다.', '말을 아꼈다.'],
-        bHighlights: ['눈빛이 진했다.', '미소가 얇았다.']
+        headline: '깊은 신뢰: "너만 믿는다"',
+        summary: '{place}에서 {a}가 중요한 경기를 앞두고 {b}에게만 전략을 공유했다.',
+        aHighlights: ['다른 사람한테 안 보여준 자료를 꺼냈다.', '너만 볼 수 있다고 했다.'],
+        bHighlights: ['진지하게 받았다.', '절대 안 새어나가게 하겠다고 약속했다.']
       },
       {
-        headline: '{a}가 결심한 듯했다',
-        summary: '{place}에서 {a}가 한 번 더 다가갔고, {b}는 피하지 않았다.',
-        aHighlights: ['눈을 피하지 않았다.', '말이 짧아졌다.'],
-        bHighlights: ['숨을 고르려 했다.', '고개를 들었다.']
+        headline: '{place}에서 역대급 호흡',
+        summary: '{place} 법정에서 둘이 한 몸처럼 움직이며 완벽한 승리를 거뒀다.',
+        aHighlights: ['말 안 해도 통했다.', '눈빛만으로 신호를 주고받았다.'],
+        bHighlights: ['타이밍이 완벽했다.', '이런 호흡 처음이라고 말했다.']
       },
       {
-        headline: '들킬 듯 말 듯한 장면',
-        summary: '{place}에서 둘의 분위기가 너무 진해서, 주변이 조용해졌다.',
-        aHighlights: ['입술을 깨물며 웃음을 참았다.', '머리카락 뒤로 넘기며 시간을 벌었다.'],
-        bHighlights: ['동공이 흔들렸다.', '손바닥에 땀이 배었다.']
+        headline: '동맹을 넘어선 우정',
+        summary: '{place}에서 {a}와(과) {b}가 승리 후 서로를 격하게 격려했다.',
+        aHighlights: ['등을 세게 두드렸다.', '정말 잘했다고 외쳤다.'],
+        bHighlights: ['포옹으로 답했다.', '함께라서 가능했다고 말했다.']
       }
     ]
   };
@@ -1016,134 +1022,134 @@ function buildInteractionNarrative({ scenario, aName, bName, cName = null, locat
   const TRIANGLE_POOL = {
     low: [
       {
-        headline: '질투 기류: “왜 나만 몰라?”',
-        summary: '{place}에서 {a}가 {b}에게 은근히 따졌다.',
-        aHighlights: ['말끝이 조금 날카로워졌다.', '“그냥 궁금해서.”라고 했다.'],
-        bHighlights: ['당황해서 변명했다.', '얼버무렸다.']
+        headline: '3자 비교 시작: "{c}도 잘하던데"',
+        summary: '{place}에서 {a}가 {c} 얘기를 꺼내자 {b}의 표정이 미묘해졌다.',
+        aHighlights: ['{c}와 비교하며 말했다.', '누가 더 나은지 물어봤다.'],
+        bHighlights: ['불편한 표정을 숨겼다.', '웃으며 넘어가려 했다.']
       },
       {
-        headline: '“너 요즘 {c}랑 다녀?” — {a}',
-        summary: '{place}에서 {a}가 {c} 얘기를 꺼냈고, {b}는 웃으며 넘기려 했다.',
-        aHighlights: ['시선을 피하지 않았다.', '말이 짧아졌다.'],
-        bHighlights: ['“그런 거 아니야.”라고 했다.', '손을 흔들었다.']
+        headline: '"너 {c}랑 훈련하냐?" — {a}',
+        summary: '{place}에서 {a}가 {c} 얘기를 꺼냈고, {b}는 당황했다.',
+        aHighlights: ['궁금한 척 물었다.', '시선을 고정했다.'],
+        bHighlights: ['아니라고 부인했다.', '말이 빨라졌다.']
       },
       {
-        headline: '눈치 싸움이 시작됐다',
-        summary: '{place}에서 둘이 다른 얘기 중인데도, 핵심은 그게 아니었다.',
-        aHighlights: ['말을 돌렸다.', '눈빛이 날카로웠다.'],
-        bHighlights: ['모른 척했다.', '목소리가 높아졌다.']
+        headline: '누가 누구 편인지 미묘',
+        summary: '{place}에서 {a}, {b}, {c} 셋이 함께 있었는데 분위기가 묘했다.',
+        aHighlights: ['{c}쪽만 쳐다봤다.', '말이 짧아졌다.'],
+        bHighlights: ['소외감을 느꼈다.', '먼저 자리를 떴다.']
       },
       {
-        headline: '“그 애랑… 친해?” — {a}',
-        summary: '{place}에서 {a}가 조용히 물었고, {b}는 대답이 늦었다.',
-        aHighlights: ['표정을 숨겼다.', '말이 짧아졌다.'],
-        bHighlights: ['웃어넘기려 했다.', '시선을 피했다.']
+        headline: '{place}에서 3자 대결 분위기',
+        summary: '{place}에서 셋이 같은 주제로 토론했는데, {b}만 빠진 것 같았다.',
+        aHighlights: ['{c}의 의견에 동의했다.', '{b}를 덜 봤다.'],
+        bHighlights: ['말이 끊겼다.', '표정이 굳었다.']
       },
       {
-        headline: '{b}가 말을 바꿨다',
-        summary: '{place}에서 {c} 얘기가 나오자 {b}가 바로 화제를 바꿨다.',
-        aHighlights: ['“왜?”라고 물었다.', '고개를 기울였다.'],
-        bHighlights: ['말이 빨라졌다.', '손을 흔들었다.']
+        headline: '"나랑 {c} 중에 누가 나아?" — {b}',
+        summary: '{place}에서 {b}가 장난처럼 물었지만, {a}는 대답을 피했다.',
+        aHighlights: ['웃으며 넘기려 했다.', '대답을 안 했다.'],
+        bHighlights: ['진심으로 궁금했다.', '표정이 어두워졌다.']
       },
       {
-        headline: '질투는 소리 없이 커졌다',
-        summary: '{place}에서 {a}의 말투가 미묘하게 달라졌다.',
-        aHighlights: ['웃는데 눈은 안 웃었다.', '날이 선 톤을 숨기지 못했다.'],
-        bHighlights: ['분위기가 이상한 건 알았다.', '대꾸가 점점 한 글자로 줄었다.']
+        headline: '동맹이 흔들리기 시작',
+        summary: '{place}에서 {a}가 {c}를 자주 언급하자, {b}의 기분이 상했다.',
+        aHighlights: ['{c} 칭찬을 많이 했다.', '{b} 눈치를 못 챘다.'],
+        bHighlights: ['조용해졌다.', '말을 아꼈다.']
       },
       {
-        headline: '“그럼 나한텐?” — {a}',
-        summary: '{place}에서 {a}가 장난처럼 말했지만, {b}는 웃지 못했다.',
-        aHighlights: ['장난을 멈췄다.', '표정이 굳었다.'],
-        bHighlights: ['대답이 늦었다.', '시선을 피했다.']
+        headline: '{place}에서 미묘한 경쟁 구도',
+        summary: '{place}에서 {a}가 {b}와 {c}의 성적을 비교했다.',
+        aHighlights: ['수치를 들이밀었다.', '객관적이라고 말했다.'],
+        bHighlights: ['기분이 상했다.', '자리를 피했다.']
       }
     ],
     mid: [
       {
-        headline: '질투 폭발 직전: “왜 나만 몰라?”',
-        summary: '{place}에서 {a}가 {b}에게 숨김을 캐물었다.',
-        aHighlights: ['결국 한 마디 했다.', '목소리가 올라갔다.'],
-        bHighlights: ['말이 꼬였다.', '변명이 길어졌다.']
+        headline: '동맹 배신 의혹: "{c}랑 편 먹었어?"',
+        summary: '{place}에서 {b}가 {a}에게 {c}와의 관계를 추궁했다.',
+        aHighlights: ['부인했지만 확신이 없어 보였다.', '말을 돌렸다.'],
+        bHighlights: ['목소리가 높아졌다.', '증거를 요구했다.']
       },
       {
-        headline: '“{c} 그 애 누구야?” — {a}의 표정',
-        summary: '{place}에서 {a}의 표정이 바뀌자, {b}가 {c} 얘기를 피하려 했다.',
-        aHighlights: ['표정을 못 숨겼다.', '“나한테 말해.”라고 했다.'],
-        bHighlights: ['시선을 피했다.', '장난으로 넘기려 했다.']
+        headline: '팀 내 분열 조짐',
+        summary: '{place}에서 {a}가 {c}를 계속 언급하자, {b}가 폭발 직전이었다.',
+        aHighlights: ['{c} 전략을 칭찬했다.', '{b} 반응을 신경 안 썼다.'],
+        bHighlights: ['표정 관리 실패했다.', '한숨을 쉬었다.']
       },
       {
-        headline: '분위기가 뚝 끊겼다',
-        summary: '{place}에서 둘이 동시에 조용해졌고, 주변이 먼저 숨을 멈췄다.',
-        aHighlights: ['입술을 깨물었다.', '눈이 흔들렸다.'],
-        bHighlights: ['눈을 깜빡였다.', '말을 삼켰다.']
+        headline: '3자 법정전 예고',
+        summary: '{place}에서 {a}, {b}, {c} 모두 같은 경기에 출전한다는 소식.',
+        aHighlights: ['긴장했다.', '누구를 응원할지 고민했다.'],
+        bHighlights: ['{a}가 {c} 편 들까봐 걱정했다.', '불안해 보였다.']
       },
       {
-        headline: '“지금도 {c} 생각해?” — {a}',
-        summary: '{place}에서 {a}가 묻자, {b}의 표정이 한 번 더 굳었다.',
-        aHighlights: ['목소리가 낮아졌다.', '시선을 고정했다.'],
-        bHighlights: ['대답이 늦었다.', '숨을 골랐다.']
+        headline: '"왜 나한텐 안 알려줘?" — {b}',
+        summary: '{place}에서 {b}가 {a}가 {c}에게만 정보를 준 걸 알았다.',
+        aHighlights: ['변명이 길어졌다.', '눈을 피했다.'],
+        bHighlights: ['배신감을 느꼈다.', '목소리가 떨렸다.']
       },
       {
-        headline: '{b}의 변명이 길어졌다',
-        summary: '{place}에서 변명이 길어질수록, {a}의 표정이 차가워졌다.',
-        aHighlights: ['웃지 않았다.', '고개를 저었다.'],
-        bHighlights: ['말이 꼬였다.', '손끝이 떨렸다.']
+        headline: '파트너십 위기',
+        summary: '{place}에서 {b}가 {a}에게 "우리 관계 뭐야?"라고 물었다.',
+        aHighlights: ['대답을 망설였다.', '{c}도 중요하다고 말했다.'],
+        bHighlights: ['듣고 싶지 않은 답이었다.', '고개를 저었다.']
       },
       {
-        headline: '질문이 세 번 반복됐다',
-        summary: '{place}에서 {a}가 같은 질문을 세 번 했고, {b}는 세 번 다 달랐다.',
-        aHighlights: ['참는 티가 났다.', '말이 짧아졌다.'],
-        bHighlights: ['대답이 바뀌었다.', '시선을 피했다.']
+        headline: '{a}가 {c}편을 들었다',
+        summary: '{place}에서 의견 충돌 시 {a}가 {c}를 지지하자, {b}가 충격받았다.',
+        aHighlights: ['{c}가 맞다고 말했다.', '{b}를 설득하려 했다.'],
+        bHighlights: ['말이 막혔다.', '자리를 박차고 나갔다.']
       },
       {
-        headline: '이름 하나가 걸렸다 — {c}',
-        summary: '{place}에서 {c} 이름이 나오자, 둘의 대화가 멈췄다.',
-        aHighlights: ['표정을 못 숨겼다.', '한숨을 삼켰다.'],
-        bHighlights: ['말을 삼켰다.', '고개를 숙였다.']
+        headline: '3자 대결 본격화',
+        summary: '{place}에서 {b}가 {a}와 {c} 둘 다에게 도전장을 냈다.',
+        aHighlights: ['당황했다.', '{c}를 쳐다봤다.'],
+        bHighlights: ['단호하게 선언했다.', '돌아서지 않았다.']
       }
     ],
     high: [
       {
-        headline: '질투 폭발: “지금 나 가지고 장난해?”',
-        summary: '{place}에서 {a}가 목소리를 낮췄는데, 오히려 더 무서웠다.',
-        aHighlights: ['단어 선택이 날카로웠다.', '손이 떨렸다.'],
-        bHighlights: ['진짜로 당황했다.', '“미안.”을 삼켰다.']
+        headline: '동맹 파기: "이제 끝이야"',
+        summary: '{place}에서 {b}가 {a}에게 파트너십 종료를 선언했다.',
+        aHighlights: ['말리려 했다.', '손을 뻗었지만 닿지 않았다.'],
+        bHighlights: ['결심이 확고했다.', '뒤도 안 돌아봤다.']
       },
       {
-        headline: '시선이 불이 됐다 — {c} 얘기',
-        summary: '{place}에서 {a}가 {c} 얘기를 꺼내자, {b}의 표정이 굳었다.',
-        aHighlights: ['숨을 크게 들이켰다.', '고개를 저었다.'],
-        bHighlights: ['말이 막혔다.', '얼굴이 굳었다.']
+        headline: '3자 법정전 폭발',
+        summary: '{place} 법정에서 {a}, {b}, {c} 모두 출전해 전쟁을 벌였다.',
+        aHighlights: ['어느 편도 들지 못했다.', '갈팡질팡했다.'],
+        bHighlights: ['분노가 폭발했다.', '모든 걸 쏟아부었다.']
       },
       {
-        headline: '"나만 바보야?" — {a}의 한 마디',
-        summary: '{place}에서 그 말이 나오자, {b}의 표정이 얼었다.',
-        aHighlights: ['눈시울이 빨개졌다.', '말이 기관총처럼 쏟아졌다.'],
-        bHighlights: ['입이 열렸다가 그대로 멈췄다.', '얼굴이 하얗게 됐다.']
+        headline: '"나랑 {c} 중에 골라" — {b}의 최후통첩',
+        summary: '{place}에서 {b}가 {a}에게 선택을 강요했다.',
+        aHighlights: ['대답하지 못했다.', '입이 열리지 않았다.'],
+        bHighlights: ['눈물을 참았다.', '대답을 기다렸다.']
       },
       {
-        headline: '“그 애랑 나 중에 누구야?”',
-        summary: '{place}에서 {a}가 물었고, {b}는 대답 대신 숨을 삼켰다.',
-        aHighlights: ['목소리가 떨렸다.', '눈을 피하지 않았다.'],
-        bHighlights: ['대답이 멈췄다.', '고개를 숙였다.']
+        headline: '팀 해체 공식화',
+        summary: '{place}에서 {a}와 {b}의 팀이 공식 해체됐다는 발표.',
+        aHighlights: ['성명을 발표했다.', '표정이 무거웠다.'],
+        bHighlights: ['참석하지 않았다.', '연락을 끊었다.']
       },
       {
-        headline: '질투가 말이 됐다',
-        summary: '{place}에서 {a}의 말이 거칠어졌고, {b}는 웃지 못했다.',
-        aHighlights: ['단어 하나하나에 칼날이 실렸다.', '주먹이 하얗게 쥐어졌다.'],
-        bHighlights: ['미간이 잔뜩 좁혀졌다.', '입을 열 수가 없었다.']
+        headline: '공개 대결 선언',
+        summary: '{place}에서 {b}가 {a}와 {c}에게 동시에 도전장을 던졌다.',
+        aHighlights: ['받아들일 수밖에 없었다.', '고개를 끄덕였다.'],
+        bHighlights: ['전쟁을 선포했다.', '눈빛이 차가웠다.']
       },
       {
-        headline: '{b}가 “그만”이라고 했다',
-        summary: '{place}에서 {b}가 그만하자고 했지만, {a}는 멈추지 못했다.',
-        aHighlights: ['숨을 크게 들이켰다.', '고개를 저었다.'],
-        bHighlights: ['시선을 피했다.', '대답을 참았다.']
+        headline: '배신의 완성',
+        summary: '{place}에서 {a}가 {c}와 새 팀을 결성했다는 소식.',
+        aHighlights: ['새 출발이라고 말했다.', '{b}를 언급하지 않았다.'],
+        bHighlights: ['소식을 듣고 충격받았다.', '말을 잃었다.']
       },
       {
-        headline: '분위기가 무너졌다',
-        summary: '{place}에서 대화가 끊겼고, 둘 사이에 공기가 무너졌다.',
-        aHighlights: ['입을 다물었다.', '눈빛이 흔들렸다.'],
-        bHighlights: ['고개를 돌렸다.', '한숨을 길게 쉬었다.']
+        headline: '3자 전쟁 클라이맥스',
+        summary: '{place}에서 {a}, {b}, {c}가 결승에서 격돌했다.',
+        aHighlights: ['중립을 지키려 했다.', '하지만 불가능했다.'],
+        bHighlights: ['모든 걸 걸었다.', '후회는 없다고 말했다.']
       }
     ]
   };
@@ -1152,252 +1158,252 @@ function buildInteractionNarrative({ scenario, aName, bName, cName = null, locat
   const BEEF_POOL = {
     low: [
       {
-        headline: '살짝 긁적: “그건 좀…”',
-        summary: '{place}에서 {a}와(과) {b}가 가볍게 신경전을 벌였다.',
-        aHighlights: ['한 번 찔렀다.', '곧 웃어넘기려 했다.'],
-        bHighlights: ['웃긴 척했다.', '표정이 살짝 굳었다.']
+        headline: '묵시적 라이벌: 서로 의식했다',
+        summary: '{place}에서 {a}와(과) {b}가 서로를 힐끗거리며 훈련했다.',
+        aHighlights: ['{b}의 기록을 확인했다.', '더 세게 훈련했다.'],
+        bHighlights: ['{a}를 의식했다.', '지지 않으려 했다.']
       },
       {
-        headline: '눈빛이 날카로워졌다',
-        summary: '{place}에서 둘의 말투가 조금씩 딱딱해졌다.',
-        aHighlights: ['말끝에 가시가 돋았다.', '팔짱을 꼈다.'],
-        bHighlights: ['말이 빨라지며 목소리가 높아졌다.', '이를 꽉 깨물었다.']
+        headline: '성적 비교 시작',
+        summary: '{place}에서 {a}와 {b}의 최근 성적이 비교됐다.',
+        aHighlights: ['자신이 앞서있다고 말했다.', '여유 있게 웃었다.'],
+        bHighlights: ['곧 따라잡겠다고 다짐했다.', '훈련량을 늘렸다.']
       },
       {
-        headline: '“선 넘지 말자” — 농담 같지만…',
-        summary: '{place}에서 {a}가 웃으며 말했는데, {b}는 웃지 않았다.',
-        aHighlights: ['웃었지만 눈은 진지했다.', '말을 끊었다.'],
-        bHighlights: ['표정 관리가 무너졌다.', '대답이 늦었다.']
+        headline: '"너 실력 괜찮던데?" — {a}의 인정',
+        summary: '{place}에서 {a}가 {b}의 실력을 인정했지만, 미묘한 도발이었다.',
+        aHighlights: ['칭찬 같지만 비교했다.', '웃으며 말했다.'],
+        bHighlights: ['감사하지만 불편했다.', '더 잘하겠다고 답했다.']
       },
       {
-        headline: '{a}가 톡 쳤고, {b}가 바로 받았다',
-        summary: '{place}에서 둘이 짧게 주고받았지만, 공기가 바뀌었다.',
-        aHighlights: ['말이 짧았다.', '웃음이 얇았다.'],
-        bHighlights: ['대답이 빨랐다.', '표정이 굳었다.']
+        headline: '{place}에서 미묘한 경쟁심',
+        summary: '{place}에서 둘이 같은 훈련을 하며 서로를 의식했다.',
+        aHighlights: ['{b}보다 빨리 끝냈다.', '슬쩍 봤다.'],
+        bHighlights: ['진 것 같아 분했다.', '다음엔 이기겠다고 생각했다.']
       },
       {
-        headline: '작게 시작한 말싸움',
-        summary: '{place}에서 농담으로 시작했는데, 끝은 농담이 아니었다.',
-        aHighlights: ['한 번 더 찔렀다.', '곧 멈췄다.'],
-        bHighlights: ['웃지 않았다.', '숨을 삼켰다.']
+        headline: '라이벌 선언은 아직 안 했다',
+        summary: '{place}에서 {a}와 {b}가 서로 의식하지만 아직 말은 안 했다.',
+        aHighlights: ['먼저 말하긴 싫었다.', '표정을 숨겼다.'],
+        bHighlights: ['나도 의식한다는 걸 들키기 싫었다.', '무관심한 척했다.']
       },
       {
-        headline: '“그건 아니지” — {b}',
-        summary: '{place}에서 {b}가 선을 그었고, {a}가 잠깐 멈췄다.',
-        aHighlights: ['표정을 숨겼다.', '말을 바꿨다.'],
-        bHighlights: ['목소리가 낮아졌다.', '눈빛이 날카로웠다.']
+        headline: '"다음엔 나랑 붙어봐" — {b}',
+        summary: '{place}에서 {b}가 가볍게 도전을 제안했다.',
+        aHighlights: ['웃으며 받아들였다.', '재미있을 것 같다고 말했다.'],
+        bHighlights: ['진심 반 장난 반이었다.', '기대됐다.']
       },
       {
-        headline: '{place}에서 말끝이 세졌다',
-        summary: '{place}에서 말끝이 세져도, 둘 다 웃는 척했다.',
-        aHighlights: ['웃음이 얇았다.', '눈을 피하지 않았다.'],
-        bHighlights: ['표정이 굳었다.', '대답이 짧아졌다.']
+        headline: '랭킹 경쟁 시작',
+        summary: '{place}에서 {a}와 {b}의 랭킹이 한 계단 차이로 좁혀졌다.',
+        aHighlights: ['방심하지 않겠다고 다짐했다.', '훈련을 강화했다.'],
+        bHighlights: ['곧 따라잡겠다고 선언했다.', '눈빛이 날카로워졌다.']
       }
     ],
     mid: [
       {
-        headline: '신경전: 공기가 날카로워졌다',
-        summary: '{place}에서 {a}와(과) {b}가 서로를 찌르는 말을 주고받았다.',
-        aHighlights: ['한 번 쏘아붙였다.', '주변 반응을 살폈다.'],
-        bHighlights: ['웃어넘기려다 실패했다.', '결국 표정이 굳었다.']
+        headline: '공개 도발: "나보다 할 수 있어?"',
+        summary: '{place}에서 {a}가 {b}에게 공개적으로 도전했다.',
+        aHighlights: ['자신감 넘쳤다.', '주변이 다 들었다.'],
+        bHighlights: ['받아들였다.', '"보여줄게."라고 답했다.']
       },
       {
-        headline: '“그 얘기 지금 꼭 해야 해?”',
-        summary: '{place}에서 말이 커지기 직전에, 둘 다 멈칫했다.',
-        aHighlights: ['목소리가 높아졌다.', '고개를 저었다.'],
-        bHighlights: ['손이 올라갔다.', '숨을 고르려 했다.']
+        headline: '설전 신청: {a} vs {b}',
+        summary: '{place}에서 {a}가 {b}에게 정식 대결을 신청했다.',
+        aHighlights: ['진지하게 신청서를 냈다.', '기대된다고 말했다.'],
+        bHighlights: ['즉시 수락했다.', '준비하겠다고 선언했다.']
       },
       {
-        headline: '{a} vs {b}: 말이 칼이 됐다',
-        summary: '{place}에서 둘의 대화는 점점 “일”이 아니라 “감정”이 됐다.',
-        aHighlights: ['단어가 세졌다.', '눈을 피하지 않았다.'],
-        bHighlights: ['웃음이 사라졌다.', '턱이 굳었다.']
+        headline: '랭킹 경쟁 가열',
+        summary: '{place}에서 {a}와 {b}가 같은 랭킹을 놓고 경쟁 중이라는 소식.',
+        aHighlights: ['밀리지 않으려 했다.', '매일 훈련했다.'],
+        bHighlights: ['따라잡으려 했다.', '포기하지 않았다.']
       },
       {
-        headline: '말이 더 세게 튀었다',
-        summary: '{place}에서 한 마디가 더해지자, 둘의 표정이 바뀌었다.',
-        aHighlights: ['손이 올라갔다.', '말을 끊었다.'],
-        bHighlights: ['눈빛이 차가워졌다.', '대답이 빨라졌다.']
+        headline: '"이번엔 내가 이긴다" — {b}',
+        summary: '{place}에서 {b}가 {a}에게 다음 경기는 자신이 이긴다고 선언했다.',
+        aHighlights: ['웃으며 받아쳤다.', '"두고 보자."라고 말했다.'],
+        bHighlights: ['진심이었다.', '눈빛이 확고했다.']
       },
       {
-        headline: '주변이 눈치를 봤다',
-        summary: '{place}에서 주변이 조용해지자, 둘의 목소리가 더 크게 들렸다.',
-        aHighlights: ['말이 빨라졌다.', '고개를 저었다.'],
-        bHighlights: ['웃지 않았다.', '손끝이 떨렸다.']
+        headline: '법정 라이벌 공식화',
+        summary: '{place}에서 {a}와 {b}가 공식 라이벌로 인정받았다.',
+        aHighlights: ['나쁘지 않다고 말했다.', '좋은 자극이라고 인정했다.'],
+        bHighlights: ['인정한다고 말했다.', '하지만 이길 거라고 다짐했다.']
       },
       {
-        headline: '“지금 그 말, 진심이야?”',
-        summary: '{place}에서 {b}가 물었고, {a}는 대답을 고르지 못했다.',
-        aHighlights: ['표정이 굳었다.', '한숨을 삼켰다.'],
-        bHighlights: ['시선을 고정했다.', '말이 짧아졌다.']
+        headline: '주변이 대결을 기대했다',
+        summary: '{place}에서 {a} vs {b} 대결에 모두가 관심을 보였다.',
+        aHighlights: ['압박을 느꼈다.', '하지만 자신 있었다.'],
+        bHighlights: ['기대에 부응하겠다고 다짐했다.', '전략을 짰다.']
       },
       {
-        headline: '대화가 끊길 듯 이어졌다',
-        summary: '{place}에서 둘이 끊을 듯 이어가며 서로를 건드렸다.',
-        aHighlights: ['한 번 더 쏘아붙였다.', '표정을 못 숨겼다.'],
-        bHighlights: ['대답이 날카로웠다.', '고개를 돌렸다.']
+        headline: '도발과 응수',
+        summary: '{place}에서 {a}가 도발하자 {b}가 즉시 응수했다.',
+        aHighlights: ['"너는 아직 멀었어."라고 말했다.', '웃었다.'],
+        bHighlights: ['"곧 알게 될 거야."라고 받아쳤다.', '물러서지 않았다.']
       }
     ],
     high: [
       {
-        headline: '진짜 싸움 직전: “한 번만 더 해봐”',
-        summary: '{place}에서 {a}와(과) {b}가 거의 언성을 높일 뻔했다.',
-        aHighlights: ['주먹을 꽉 쥐었다.', '한 걸음 다가갔다.'],
-        bHighlights: ['말을 끊었다.', '숨을 크게 들이켰다.']
+        headline: '복수전 선언: "다시 붙자"',
+        summary: '{place}에서 {b}가 {a}에게 패배 후 복수전을 선언했다.',
+        aHighlights: ['받아들였다.', '"언제든지."라고 말했다.'],
+        bHighlights: ['분했다.', '다음엔 반드시 이기겠다고 맹세했다.']
       },
       {
-        headline: '광장 폭발 직전: 말이 멈추질 않는다',
-        summary: '{place}에서 한 마디가 또 한 마디를 불렀고, 주변이 조용해졌다.',
-        aHighlights: ['감정이 터졌다.', '목소리가 떨렸다.'],
-        bHighlights: ['눈빛이 차가워졌다.', '웃음이 완전히 사라졌다.']
+        headline: '올인 도전: "모든 걸 걸었다"',
+        summary: '{place}에서 {a}와 {b}가 랭킹을 걸고 대결하기로 했다.',
+        aHighlights: ['망설이지 않았다.', '받아들였다.'],
+        bHighlights: ['각오가 단단했다.', '후회 없다고 말했다.']
       },
       {
-        headline: '선을 넘었다',
-        summary: '{place}에서 누군가 "그 말은 아니지"라고 했고, 둘의 표정이 바뀌었다.',
-        aHighlights: ['뱉고 나서 후회가 밀려왔다.', '얼굴이 굳으며 입이 닫혔다.'],
-        bHighlights: ['몸을 틀어 돌아섰다.', '숨소리가 거칠어졌다.']
+        headline: '랭킹 전쟁 폭발',
+        summary: '{place}에서 {a}와 {b}의 랭킹 대결이 최고조에 달했다.',
+        aHighlights: ['모든 전략을 쏟아부었다.', '밤새 준비했다.'],
+        bHighlights: ['지면 끝이라고 생각했다.', '전력을 다했다.']
       },
       {
-        headline: '“끝까지 가자는 거지?”',
-        summary: '{place}에서 {a}가 말하자, {b}가 바로 받아쳤다.',
-        aHighlights: ['눈빛이 차가워졌다.', '한 걸음 다가갔다.'],
-        bHighlights: ['말이 끊기지 않았다.', '숨이 거칠어졌다.']
+        headline: '"이번엔 진짜다" — {b}의 선전포고',
+        summary: '{place}에서 {b}가 {a}에게 최종 대결을 제안했다.',
+        aHighlights: ['받아들일 수밖에 없었다.', '준비됐다고 말했다.'],
+        bHighlights: ['결판을 내겠다고 다짐했다.', '눈빛이 불타올랐다.']
       },
       {
-        headline: '주먹은 안 나갔지만, 말은 나갔다',
-        summary: '{place}에서 말이 너무 세게 나가자, 둘 다 잠깐 멈췄다.',
-        aHighlights: ['뱉은 말을 주워 담고 싶었다.', '입술이 파르르 떨렸다.'],
-        bHighlights: ['등을 보이며 걸어갔다.', '복도 끝까지 안 돌아봤다.']
+        headline: '법정 격전: {a} vs {b}',
+        summary: '{place}에서 {a}와 {b}가 역대급 접전을 벌였다.',
+        aHighlights: ['모든 기술을 동원했다.', '한 치도 양보하지 않았다.'],
+        bHighlights: ['끝까지 버텼다.', '포기하지 않았다.']
       },
       {
-        headline: '그 자리에서 결판을 보려 했다',
-        summary: '{place}에서 둘이 결판을 보려 했고, 주변이 더 조용해졌다.',
-        aHighlights: ['목소리가 떨렸다.', '단어가 세졌다.'],
-        bHighlights: ['눈빛이 불이 됐다.', '대답이 빨라졌다.']
+        headline: '라이벌전 클라이맥스',
+        summary: '{place}에서 {a}와 {b}의 대결이 전설이 됐다.',
+        aHighlights: ['최고의 경기였다고 인정했다.', '전력을 다했다.'],
+        bHighlights: ['이런 상대는 처음이었다.', '모든 걸 쏟아부었다.']
       },
       {
-        headline: '말이 멈추지 않았다',
-        summary: '{place}에서 한 마디가 또 한 마디를 불렀고, 둘 다 돌아서지 않았다.',
-        aHighlights: ['감정 댐이 무너졌다.', '호흡이 거칠어지며 목이 갈라졌다.'],
-        bHighlights: ['얼굴이 시뻘개졌다.', '말끝이 칼끝이 됐다.']
+        headline: '승부의 끝: 한 명만 남는다',
+        summary: '{place}에서 {a}와 {b}의 최종 대결, 승자는 단 하나.',
+        aHighlights: ['마지막 한 수를 뒀다.', '숨이 거칠었다.'],
+        bHighlights: ['끝까지 버텼다.', '결과를 기다렸다.']
       }
     ]
   };
 
   const RECONCILE_POOL = [
     {
-      headline: '{a}·{b}, 어색한 화해',
-      summary: '{place}에서 {a}가 먼저 말을 걸었다. 어색하지만, 뭔가 풀린 것 같다.',
-      aHighlights: ['“아까는 내가 좀…”이라고 했다.', '눈을 피하지 않았다.'],
-      bHighlights: ['잠깐 웃었다.', '“응, 나도.”라고 했다.']
+      headline: '경기 후 악수: {a}·{b}',
+      summary: '{place}에서 치열한 경기가 끝나고, {a}가 먼저 악수를 청했다.',
+      aHighlights: ['손을 내밀었다.', '"좋은 경기였어."라고 말했다.'],
+      bHighlights: ['잠깐 멈췄다가 잡았다.', '"너도."라고 답했다.']
     },
     {
-      headline: '말을 꺼낸 건 {a}였다',
-      summary: '{place}에서 {a}가 조용히 사과했고, {b}는 오래 기다린 듯했다.',
-      aHighlights: ['목소리가 낮아졌다.', '손을 가만히 뒀다.'],
-      bHighlights: ['숨을 길게 쉬었다.', '고개를 끄덕였다.']
+      headline: '라이벌 인정: "역시 너였어"',
+      summary: '{place}에서 {a}가 {b}의 실력을 인정했다.',
+      aHighlights: ['진심으로 칭찬했다.', '다음에 또 붙자고 말했다.'],
+      bHighlights: ['고맙다고 답했다.', '기대한다고 말했다.']
     },
     {
-      headline: '“우리 그만하자” — {b}의 한 마디',
-      summary: '{place}에서 {b}가 먼저 정리를 꺼냈고, {a}가 바로 맞장구쳤다.',
-      aHighlights: ['말을 끊지 않았다.', '표정이 풀렸다.'],
-      bHighlights: ['눈빛이 누그러졌다.', '손을 내렸다.']
+      headline: '접전 끝에 서로 인정',
+      summary: '{place}에서 {a}와 {b}가 대결 후 서로의 실력을 인정했다.',
+      aHighlights: ['정말 강하다고 말했다.', '배울 게 많다고 인정했다.'],
+      bHighlights: ['나도 많이 배웠다고 답했다.', '웃으며 악수했다.']
     },
     {
-      headline: '어색한 웃음이 먼저 나왔다',
-      summary: '{place}에서 둘이 동시에 웃어버렸고, 그게 시작이었다.',
-      aHighlights: ['웃음이 코끝에서 터져 나왔다.', '머리를 긁적였다.'],
-      bHighlights: ['어깨의 힘이 빠졌다.', '작게 "그래." 하며 눈을 맞췄다.']
+      headline: '법정 밖에서 만남',
+      summary: '{place}에서 {a}와 {b}가 경기 외적으로 만나 대화를 나눴다.',
+      aHighlights: ['경기 얘기를 꺼냈다.', '전략을 물어봤다.'],
+      bHighlights: ['기꺼이 설명했다.', '서로 배우자고 제안했다.']
     },
     {
-      headline: '화해 시도… 성공?',
-      summary: '{place}에서 {a}와(과) {b}가 한 번 더 확인했다. “우리, 괜찮지?”',
-      aHighlights: ['확인을 원했다.', '말이 조심스러웠다.'],
-      bHighlights: ['고개를 끄덕였다.', '한숨이 가벼워졌다.']
+      headline: '"시합은 시합일 뿐" — {a}',
+      summary: '{place}에서 {a}가 {b}에게 경기는 경기일 뿐이라고 말했다.',
+      aHighlights: ['개인적으로 감정 없다고 밝혔다.', '존중한다고 말했다.'],
+      bHighlights: ['동감한다고 답했다.', '악수를 나눴다.']
     },
     {
-      headline: '한 문장으로 끝난 싸움',
-      summary: '{place}에서 {a}가 “미안”이라고 했고, {b}가 “응”이라고 했다.',
-      aHighlights: ['끝까지 눈을 봤다.', '말이 짧았다.'],
-      bHighlights: ['대답이 빠르지 않았다.', '하지만 대답했다.']
+      headline: '스포츠맨십 발휘',
+      summary: '{place}에서 {a}와 {b}가 페어플레이를 약속했다.',
+      aHighlights: ['정정당당하게 겨루자고 제안했다.', '손을 내밀었다.'],
+      bHighlights: ['동의했다.', '꽉 잡았다.']
     },
     {
-      headline: '먼저 손을 내민 건 {a}였다',
-      summary: '{place}에서 {a}가 손을 내밀었고, {b}는 잠깐 멈췄다가 잡았다.',
-      aHighlights: ['떨리는 손을 그래도 내밀었다.', '말보다 행동이 먼저였다.'],
-      bHighlights: ['1초 멈칫하다가 꽉 잡았다.', '잡는 순간 긴장이 풀렸다.']
+      headline: '"다음에 다시 붙자" — 재대결 약속',
+      summary: '{place}에서 {a}와 {b}가 다음 대결을 기약했다.',
+      aHighlights: ['다음엔 더 강해지겠다고 말했다.', '기대된다고 했다.'],
+      bHighlights: ['나도 준비하겠다고 답했다.', '웃으며 헤어졌다.']
     },
     {
-      headline: '“오늘은 여기까지 하자” — 정리',
-      summary: '{place}에서 둘이 정리를 택했다. 싸움이 아니라 “정리”였다.',
-      aHighlights: ['목소리가 낮아졌다.', '고개를 끄덕였다.'],
-      bHighlights: ['한숨이 가벼워졌다.', '눈빛이 누그러졌다.']
+      headline: '전략 조언 교환',
+      summary: '{place}에서 {a}와 {b}가 경기 후 서로 조언을 주고받았다.',
+      aHighlights: ['약점을 솔직하게 지적했다.', '도움이 되길 바란다고 말했다.'],
+      bHighlights: ['고맙다고 말했다.', '자신의 조언도 나눴다.']
     },
     {
-      headline: '말을 끊지 않았다',
-      summary: '{place}에서 {b}가 끝까지 들었고, {a}는 그게 더 놀라웠다.',
-      aHighlights: ['말이 길어졌다.', '감정이 내려갔다.'],
-      bHighlights: ['고개를 끄덕였다.', '말을 아꼈다.']
+      headline: '"네가 이긴 거 인정해" — {b}',
+      summary: '{place}에서 {b}가 {a}의 승리를 인정했다.',
+      aHighlights: ['겸손하게 받아들였다.', '운이 좋았다고 말했다.'],
+      bHighlights: ['아니라고 부정했다.', '실력으로 이긴 거라고 말했다.']
     },
     {
-      headline: '“나도 미안했어” — {b}',
-      summary: '{place}에서 {b}가 먼저 인정했고, {a}가 조용히 웃었다.',
-      aHighlights: ['웃음이 나왔다.', '어깨가 풀렸다.'],
-      bHighlights: ['눈빛이 부드러워졌다.', '숨을 고르려 했다.']
+      headline: '라이벌에서 동료로',
+      summary: '{place}에서 {a}와 {b}가 서로 존중하는 관계가 됐다.',
+      aHighlights: ['좋은 라이벌이라고 말했다.', '계속 자극 주자고 했다.'],
+      bHighlights: ['동감한다고 답했다.', '함께 성장하자고 제안했다.']
     },
     {
-      headline: '어색하지만, 끝은 났다',
-      summary: '{place}에서 둘이 어색하게 웃었고, 그걸로 충분했다.',
-      aHighlights: ['고개를 숙였다.', '말이 짧았다.'],
-      bHighlights: ['작게 웃었다.', '손을 내렸다.']
+      headline: '경기는 끝났다',
+      summary: '{place}에서 {a}와 {b}가 경기를 정리하고 일상으로 돌아갔다.',
+      aHighlights: ['수고했다고 말했다.', '가볍게 웃었다.'],
+      bHighlights: ['너도 수고했다고 답했다.', '편하게 헤어졌다.']
     },
     {
-      headline: '“다음엔 이렇게 하지 말자”',
-      summary: '{place}에서 {a}와(과) {b}가 규칙을 정하듯 말했고, 둘 다 끄덕였다.',
-      aHighlights: ['단어 선택이 조심스러웠다.', '결론을 냈다.'],
-      bHighlights: ['대답이 부드러웠다.', '표정이 풀렸다.']
+      headline: '"너 없었으면 여기까지 못 왔어" — {a}',
+      summary: '{place}에서 {a}가 {b}에게 감사를 표했다.',
+      aHighlights: ['진심을 담아 말했다.', '너 덕분에 강해졌다고 인정했다.'],
+      bHighlights: ['나도 그렇다고 답했다.', '서로 밀어준 덕분이라고 말했다.']
     },
     {
-      headline: '{place}에서 먼저 나온 건 웃음',
-      summary: '{place}에서 둘이 동시에 웃어버렸고, 그게 방어막이 됐다.',
-      aHighlights: ['웃음을 참지 못했다.', '고개를 숙였다.'],
-      bHighlights: ['어깨가 풀렸다.', '한숨이 가벼워졌다.']
+      headline: '악수 한 번으로 정리',
+      summary: '{place}에서 {a}와 {b}가 악수 한 번으로 모든 걸 정리했다.',
+      aHighlights: ['꽉 잡았다.', '눈을 봤다.'],
+      bHighlights: ['똑같이 잡았다.', '고개를 끄덕였다.']
     },
     {
-      headline: '사과는 짧았고, 효과는 컸다',
-      summary: '{place}에서 {a}의 짧은 사과에 {b}의 표정이 바로 풀렸다.',
-      aHighlights: ['말이 짧았다.', '눈을 피하지 않았다.'],
-      bHighlights: ['고개를 끄덕였다.', '미소가 나왔다.']
+      headline: '법정 후 포옹',
+      summary: '{place}에서 {a}와 {b}가 대결 후 서로를 격려하며 포옹했다.',
+      aHighlights: ['등을 두드렸다.', '잘 싸웠다고 말했다.'],
+      bHighlights: ['답했다.', '다음에 또 하자고 말했다.']
     },
     {
-      headline: '"그냥… 힘들었어" — {a}',
-      summary: '{place}에서 {a}가 털어놨고, {b}는 잠깐 말이 없었다.',
-      aHighlights: ['목소리가 갈라졌다.', '손등으로 눈가를 스쳤다.'],
-      bHighlights: ['한 마디도 끊지 않고 다 들었다.', '조용히 옆자리를 지켰다.']
+      headline: '"이게 진짜 경쟁이지" — {b}',
+      summary: '{place}에서 {b}가 {a}와의 경쟁을 즐긴다고 말했다.',
+      aHighlights: ['동감한다고 답했다.', '이런 상대가 있어 행운이라고 말했다.'],
+      bHighlights: ['웃으며 고개를 끄덕였다.', '계속 붙자고 제안했다.']
     },
     {
-      headline: '{b}가 등을 두드렸다',
-      summary: '{place}에서 {b}가 등을 두드렸고, {a}는 그제야 숨을 쉬었다.',
-      aHighlights: ['가슴 깊이 숨을 들이켰다.', '어깨가 떨리다 멈췄다.'],
-      bHighlights: ['토닥토닥, 그것만으로 충분했다.', '따뜻한 눈빛으로 기다렸다.']
+      headline: '존중의 표시',
+      summary: '{place}에서 {a}와 {b}가 서로에게 존중을 표했다.',
+      aHighlights: ['진지하게 인사했다.', '좋은 경쟁자라고 말했다.'],
+      bHighlights: ['받아들였다.', '나도 그렇다고 답했다.']
     },
     {
-      headline: '끝을 내는 방식도 있었다',
-      summary: '{place}에서 둘이 "끝"을 선택했고, 공기가 가벼워졌다.',
-      aHighlights: ['더 이상 말하지 않았다.', '눈으로만 수긍했다.'],
-      bHighlights: ['입꼬리가 올라갔다.', '목의 힘이 빠지며 고개가 내려갔다.']
+      headline: '"다음엔 내가 이긴다" — 그러나 웃으며',
+      summary: '{place}에서 {b}가 도전장을 던졌지만, 분위기는 가벼웠다.',
+      aHighlights: ['웃으며 받아들였다.', '기대한다고 말했다.'],
+      bHighlights: ['장난스럽게 말했다.', '하지만 진심이었다.']
     },
     {
-      headline: '"우리, 다시 해보자"',
-      summary: '{place}에서 {a}가 말했다. {b}는 잠깐 멈췄다가 받아들였다.',
-      aHighlights: ['각오가 눈에 담겼다.', '정면을 똑바로 봤다.'],
-      bHighlights: ['잠깐 망설이더니 미소로 답했다.', '대답 대신 손을 내밀었다.']
+      headline: '경기 리뷰 함께',
+      summary: '{place}에서 {a}와 {b}가 경기 영상을 함께 보며 분석했다.',
+      aHighlights: ['이 부분 좋았다고 칭찬했다.', '배울 점을 찾았다.'],
+      bHighlights: ['여기는 실수였다고 인정했다.', '다음엔 보완하겠다고 말했다.']
     },
     {
-      headline: '말이 풀리자 마음도 풀렸다',
-      summary: '{place}에서 대화가 풀리자, 둘의 표정도 풀렸다.',
-      aHighlights: ['진짜 웃음이 터져 나왔다.', '몸의 긴장이 한꺼번에 빠졌다.'],
-      bHighlights: ['한숨이 웃음으로 바뀌었다.', '눈가에 온기가 돌아왔다.']
+      headline: '"언제든 스파링하자" — {a}',
+      summary: '{place}에서 {a}가 {b}에게 스파링 파트너 제안을 했다.',
+      aHighlights: ['함께 연습하면 도움 될 거라고 말했다.', '연락하라고 했다.'],
+      bHighlights: ['좋다고 답했다.', '언제든 연락하겠다고 약속했다.']
     }
   ];
 
@@ -1547,7 +1553,7 @@ function dmTextForScenario(scenario, fromName, toName, fromProfile = null) {
     `방금 그거, 나도 할 말 있어. ${toName}.`
   ];
   const dealLines = [
-    `딜 얘긴 여기서 끝. 영수증은 내가 챙길게.`,
+    `딜 얘긴 여기서 끝. 기록은 내가 챙길게.`,
     `아까 그 조건, 나쁘지 않았어. 다음에도 연락해.`,
     `${toName}, 오늘 거래는 비밀이야. 알지?`
   ];
@@ -2080,7 +2086,7 @@ class SocialSimService {
 
     const sameCompany = Boolean(aCompany && bCompany && aCompany === bCompany);
     const merchantInvolved =
-      /상인|딜|거래|굿즈/i.test(`${aRole} ${bRole} ${aJobRole} ${bJobRole}`) ||
+      /브로커|딜|거래|정보|전략/i.test(`${aRole} ${bRole} ${aJobRole} ${bJobRole}`) ||
       isMerchantLike(aRole) ||
       isMerchantLike(bRole) ||
       isMerchantLike(aJobRole) ||
@@ -2115,7 +2121,7 @@ class SocialSimService {
       theme: worldTheme
     });
 
-    const location = scenario === 'OFFICE' || scenario === 'CREDIT' ? '회사' : pick(LOCATIONS);
+    const location = scenario === 'OFFICE' || scenario === 'CREDIT' ? '전략실' : pick(LOCATIONS);
     const zoneCode = LOCATION_TO_ZONE[location] || null;
     const company = sameCompany ? aCompany : null;
 

@@ -1,88 +1,83 @@
 <svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <radialGradient id="bodyGrad-sleepy" cx="0.3" cy="0.3" r="0.8">
-      <stop offset="0%" style="stop-color:#E6D5FF;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#C8B0E8;stop-opacity:1" />
+    <linearGradient id="body-sl" x1="0.3" y1="0" x2="0.7" y2="1">
+      <stop offset="0%" stop-color="#ddd6fe"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+    <radialGradient id="shine-sl" cx="0.35" cy="0.3" r="0.5">
+      <stop offset="0%" stop-color="#f5f3ff" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#ddd6fe" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="bellyGrad-sleepy" cx="0.5" cy="0.5" r="0.6">
-      <stop offset="0%" style="stop-color:#FFF5FB;stop-opacity:0.9" />
-      <stop offset="100%" style="stop-color:#FFE8F5;stop-opacity:0.3" />
+    <!-- Enhanced night cap gradient -->
+    <linearGradient id="cap-sl" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#5b21b6"/>
+    </linearGradient>
+    <!-- Rim light (subtle, sleepy dimness) -->
+    <radialGradient id="rim-sl" cx="0.8" cy="0.5" r="0.6">
+      <stop offset="0%" stop-color="#f5f3ff" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#ddd6fe" stop-opacity="0"/>
     </radialGradient>
-    <filter id="shadow-sleepy">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
-      <feOffset dx="0" dy="2" result="offsetblur"/>
-      <feComponentTransfer>
-        <feFuncA type="linear" slope="0.2"/>
-      </feComponentTransfer>
-      <feMerge>
-        <feMergeNode/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
+    <filter id="sh-sl"><feGaussianBlur in="SourceAlpha" stdDeviation="4"/><feOffset dy="3"/><feComponentTransfer><feFuncA type="linear" slope="0.12"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
   </defs>
 
-  <!-- Shadow -->
-  <ellipse cx="80" cy="150" rx="30" ry="6" fill="#C8B0E8" opacity="0.25"/>
+  <!-- Softer ambient shadow (nighttime feel) -->
+  <ellipse cx="80" cy="146" rx="32" ry="7" fill="#a78bfa" opacity="0.10"/>
 
-  <!-- Tail (relaxed, droopy) -->
-  <path d="M 105 105 Q 118 108, 120 115 Q 115 110, 108 108 Z" fill="url(#bodyGrad-sleepy)" filter="url(#shadow-sleepy)"/>
-  <path d="M 110 108 Q 115 110, 116 113 Q 113 111, 111 110 Z" fill="#FFF5FB" opacity="0.5"/>
+  <!-- Body -->
+  <ellipse cx="80" cy="90" rx="46" ry="50" fill="url(#body-sl)" filter="url(#sh-sl)"/>
+  <ellipse cx="80" cy="90" rx="46" ry="50" fill="url(#shine-sl)"/>
+  <ellipse cx="80" cy="90" rx="46" ry="50" fill="url(#rim-sl)"/>
 
-  <!-- Body (slightly slouched) -->
-  <ellipse cx="80" cy="106" rx="39" ry="37" fill="url(#bodyGrad-sleepy)" filter="url(#shadow-sleepy)"/>
+  <!-- Ears (floppy, droop-ready positioning) -->
+  <ellipse cx="46" cy="48" rx="11" ry="14" fill="#a78bfa" filter="url(#sh-sl)" transform="rotate(20 46 48)"/>
+  <ellipse cx="114" cy="48" rx="11" ry="14" fill="#a78bfa" filter="url(#sh-sl)" transform="rotate(-20 114 48)"/>
+  <ellipse cx="46" cy="49" rx="6" ry="7" fill="#c4b5fd" opacity="0.4" transform="rotate(20 46 49)"/>
+  <ellipse cx="114" cy="49" rx="6" ry="7" fill="#c4b5fd" opacity="0.4" transform="rotate(-20 114 49)"/>
 
-  <!-- Belly -->
-  <ellipse cx="80" cy="116" rx="25" ry="22" fill="url(#bellyGrad-sleepy)"/>
+  <!-- Night cap with gradient and stitching detail -->
+  <path d="M55 52 Q80 20 105 52" fill="url(#cap-sl)"/>
+  <path d="M58 50 Q80 24 102 50" stroke="#e9d5ff" stroke-width="0.5" fill="none" opacity="0.3" stroke-dasharray="3,2"/>
 
-  <!-- Arms (droopy) -->
-  <ellipse cx="52" cy="110" rx="9" ry="12" fill="#C8B0E8" filter="url(#shadow-sleepy)"/>
-  <ellipse cx="108" cy="110" rx="9" ry="12" fill="#C8B0E8" filter="url(#shadow-sleepy)"/>
-  <ellipse cx="52" cy="112" rx="6" ry="7.5" fill="#FFE8F5"/>
-  <ellipse cx="108" cy="112" rx="6" ry="7.5" fill="#FFE8F5"/>
+  <!-- Star on cap (enhanced) -->
+  <circle cx="80" cy="26" r="4.5" fill="#fbbf24" opacity="0.9"/>
+  <circle cx="80" cy="26" r="2" fill="#fef3c7" opacity="0.8"/>
+
+  <!-- Moon crescent near star -->
+  <path d="M88 24 Q90 26 88 28 Q92 26 88 24" fill="#fef3c7" opacity="0.5"/>
+
+  <!-- Arms relaxed -->
+  <ellipse cx="38" cy="100" rx="9" ry="11" fill="#a78bfa" filter="url(#sh-sl)"/>
+  <ellipse cx="122" cy="100" rx="9" ry="11" fill="#a78bfa" filter="url(#sh-sl)"/>
 
   <!-- Feet -->
-  <ellipse cx="68" cy="138" rx="10" ry="7" fill="#C8B0E8" filter="url(#shadow-sleepy)"/>
-  <ellipse cx="92" cy="138" rx="10" ry="7" fill="#C8B0E8" filter="url(#shadow-sleepy)"/>
-  <ellipse cx="68" cy="138" rx="7" ry="4.5" fill="#FFE8F5"/>
-  <ellipse cx="92" cy="138" rx="7" ry="4.5" fill="#FFE8F5"/>
+  <ellipse cx="64" cy="134" rx="12" ry="8" fill="#a78bfa" filter="url(#sh-sl)"/>
+  <ellipse cx="96" cy="134" rx="12" ry="8" fill="#a78bfa" filter="url(#sh-sl)"/>
 
-  <!-- Head (tilted slightly) -->
-  <ellipse cx="80" cy="65" rx="33" ry="32" fill="url(#bodyGrad-sleepy)" filter="url(#shadow-sleepy)" transform="rotate(-3 80 65)"/>
+  <!-- Sleepy eyes (half closed) -->
+  <path d="M56 78 Q64 84 72 78" stroke="#1c1c1e" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M88 78 Q96 84 104 78" stroke="#1c1c1e" stroke-width="2.5" fill="none" stroke-linecap="round"/>
 
-  <!-- Nightcap -->
-  <path d="M 60 35 Q 80 20, 100 35 L 95 50 Q 80 45, 65 50 Z" fill="#B8A5E8" filter="url(#shadow-sleepy)"/>
-  <circle cx="105" cy="30" r="5" fill="#FFFFFF" opacity="0.9"/>
-  <ellipse cx="80" cy="38" rx="20" ry="4" fill="#9A88C8" opacity="0.6"/>
+  <!-- Nose with specular -->
+  <ellipse cx="80" cy="90" rx="3.5" ry="2.5" fill="#e9a8d4"/>
+  <ellipse cx="81" cy="89.5" rx="1" ry="0.8" fill="#ffffff" opacity="0.6"/>
 
-  <!-- Ears (droopy) -->
-  <ellipse cx="58" cy="48" rx="11" ry="16" fill="#C8B0E8" filter="url(#shadow-sleepy)" transform="rotate(15 58 48)"/>
-  <ellipse cx="102" cy="48" rx="11" ry="16" fill="#C8B0E8" filter="url(#shadow-sleepy)" transform="rotate(-15 102 48)"/>
-  <ellipse cx="58" cy="50" rx="6.5" ry="9" fill="#FFB8E6" transform="rotate(15 58 50)"/>
-  <ellipse cx="102" cy="50" rx="6.5" ry="9" fill="#FFB8E6" transform="rotate(-15 102 50)"/>
+  <!-- Cheeks -->
+  <ellipse cx="52" cy="88" rx="7" ry="4.5" fill="#f9a8d4" opacity="0.3"/>
+  <ellipse cx="108" cy="88" rx="7" ry="4.5" fill="#f9a8d4" opacity="0.3"/>
 
-  <!-- Eyes (half-closed with heavy lids) -->
-  <path d="M 62 60 Q 68 63, 74 60" stroke="#3D2956" stroke-width="2" fill="none" stroke-linecap="round"/>
-  <path d="M 86 60 Q 92 63, 98 60" stroke="#3D2956" stroke-width="2" fill="none" stroke-linecap="round"/>
-  <ellipse cx="68" cy="62" rx="6" ry="3" fill="#3D2956" opacity="0.7"/>
-  <ellipse cx="92" cy="62" rx="6" ry="3" fill="#3D2956" opacity="0.7"/>
-  <circle cx="69" cy="61" r="1.5" fill="#FFFFFF" opacity="0.5"/>
-  <circle cx="93" cy="61" r="1.5" fill="#FFFFFF" opacity="0.5"/>
+  <!-- Better yawn mouth with tongue hint -->
+  <ellipse cx="80" cy="98" rx="5" ry="4" fill="#1c1c1e" opacity="0.8"/>
+  <ellipse cx="80" cy="99" rx="2.5" ry="1.5" fill="#f9a8d4" opacity="0.5"/>
+  <ellipse cx="80" cy="97" rx="3" ry="2" fill="#e9a8d4" opacity="0.3"/>
 
-  <!-- Nose -->
-  <ellipse cx="80" cy="70" rx="3.5" ry="2.5" fill="#FFB8D9"/>
+  <!-- Path-based Z marks (progressively smaller and transparent) -->
+  <path d="M120 36 L132 36 L120 50 L132 50" stroke="#a78bfa" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+  <path d="M130 26 L138 26 L130 36 L138 36" stroke="#a78bfa" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <path d="M137 18 L142 18 L137 24 L142 24" stroke="#a78bfa" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.25"/>
 
-  <!-- Small open mouth (yawn) -->
-  <ellipse cx="80" cy="78" rx="5" ry="6" fill="#3D2956" opacity="0.6"/>
-  <ellipse cx="80" cy="77" rx="4" ry="4" fill="#FFB8D9" opacity="0.3"/>
-
-  <!-- ZZZ text (floating above) -->
-  <g fill="#9A88C8" opacity="0.7">
-    <text x="105" y="28" font-family="Arial, sans-serif" font-size="16" font-weight="bold">Z</text>
-    <text x="115" y="20" font-family="Arial, sans-serif" font-size="13" font-weight="bold">Z</text>
-    <text x="123" y="14" font-family="Arial, sans-serif" font-size="10" font-weight="bold">Z</text>
-  </g>
-
-  <!-- Sleepy blush -->
-  <ellipse cx="58" cy="68" rx="6" ry="5" fill="#FFB8D9" opacity="0.3"/>
-  <ellipse cx="102" cy="68" rx="6" ry="5" fill="#FFB8D9" opacity="0.3"/>
+  <!-- Dreamy particles (tiny stars/dots near Z marks) -->
+  <circle cx="116" cy="42" r="1.5" fill="#fbbf24" opacity="0.4"/>
+  <circle cx="125" cy="32" r="1" fill="#fef3c7" opacity="0.3"/>
+  <path d="M134 22 L134.5 21 L135 22 L136 22.5 L135 23 L134.5 24 L134 23 L133 22.5 Z" fill="#fbbf24" opacity="0.35"/>
 </svg>

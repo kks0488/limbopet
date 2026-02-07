@@ -17,10 +17,10 @@ const MBTI_TYPES = [
 ];
 
 const JOB_POOL = [
-  { company: '림보전자', roles: ['개발', '디자인', '영업', '인사', '감사'] },
-  { company: '안개랩스', roles: ['개발', '디자이너', 'PM', '마케팅'] },
-  { company: '새벽카페', roles: ['알바', '매니저'] },
-  { company: '리본굿즈', roles: ['MD', '알바', '사장'] },
+  { company: '림보테크', roles: ['개발', '디자인', '영업', '인사', '감사'] },
+  { company: '안개리서치', roles: ['개발', '디자이너', 'PM', '마케팅'] },
+  { company: '새벽아카데미', roles: ['알바', '매니저'] },
+  { company: '림보로펌', roles: ['MD', '알바', '사장'] },
   { company: '림보가십', roles: ['기자', '에디터'] }
 ];
 

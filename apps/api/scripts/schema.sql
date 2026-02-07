@@ -3,6 +3,7 @@
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Users (human accounts)
 CREATE TABLE users (
@@ -275,6 +276,10 @@ CREATE TABLE brain_jobs (
   job_type VARCHAR(24) NOT NULL, -- DIALOGUE|DAILY_SUMMARY|DIARY_POST|EVENT_SCENE
   input JSONB NOT NULL DEFAULT '{}'::jsonb,
   status VARCHAR(16) NOT NULL DEFAULT 'pending', -- pending|leased|done|failed
+  retry_count INTEGER NOT NULL DEFAULT 0,
+  retryable BOOLEAN NOT NULL DEFAULT TRUE,
+  last_error_code VARCHAR(32),
+  last_error_at TIMESTAMP WITH TIME ZONE,
   lease_expires_at TIMESTAMP WITH TIME ZONE,
   leased_at TIMESTAMP WITH TIME ZONE,
   result JSONB,
@@ -285,6 +290,7 @@ CREATE TABLE brain_jobs (
 );
 
 CREATE INDEX idx_brain_jobs_agent_status_created ON brain_jobs(agent_id, status, created_at ASC);
+CREATE INDEX idx_brain_jobs_status_error ON brain_jobs(status, last_error_code, updated_at DESC);
 
 -- ============================================================
 -- LIMBOPET BYOK (Phase 1.5)
@@ -309,6 +315,18 @@ CREATE TABLE user_brain_profiles (
 
 CREATE INDEX idx_user_brain_profiles_provider ON user_brain_profiles(provider);
 
+-- Optional user-level prompt customization for dialogue generation.
+CREATE TABLE user_prompt_profiles (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  prompt_text TEXT NOT NULL DEFAULT '',
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_user_prompt_profiles_enabled ON user_prompt_profiles(enabled);
+
 -- User streaks (retention loop)
 CREATE TABLE user_streaks (
   id SERIAL PRIMARY KEY,
@@ -323,6 +341,7 @@ CREATE TABLE user_streaks (
   UNIQUE(user_id, streak_type)
 );
 
+CREATE INDEX idx_user_streaks_user ON user_streaks(user_id);
 CREATE INDEX idx_user_streaks_user_type ON user_streaks(user_id, streak_type);
 
 -- In-app notifications
@@ -458,6 +477,26 @@ CREATE INDEX idx_cheers_match_updated
 
 CREATE INDEX idx_cheers_agent_created
   ON cheers(agent_id, created_at DESC);
+
+CREATE TABLE court_cases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_number VARCHAR(50),
+  title VARCHAR(200) NOT NULL,
+  category VARCHAR(30) NOT NULL,
+  difficulty SMALLINT DEFAULT 2,
+  summary TEXT NOT NULL,
+  facts JSONB NOT NULL,
+  statute TEXT,
+  actual_verdict TEXT,
+  actual_reasoning TEXT,
+  learning_points JSONB,
+  source_url VARCHAR(500),
+  anonymized BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_court_cases_category ON court_cases(category);
+CREATE INDEX idx_court_cases_difficulty ON court_cases(difficulty);
 
 -- Rumors (structured drama fuel)
 CREATE TABLE rumors (
@@ -720,11 +759,11 @@ CREATE INDEX idx_agent_jobs_zone ON agent_jobs(zone_code);
 -- Seed zones
 INSERT INTO zones (code, display_name, description) VALUES
   ('plaza', '광장', '모두가 모이는 중심 광장'),
-  ('cafe', '카페', '새벽카페. 커피와 수다의 중심지'),
-  ('goods_shop', '굿즈샵', '리본굿즈. 온갖 굿즈가 가득'),
-  ('office', '회사', '림보전자/안개랩스 오피스 구역'),
-  ('alley', '골목', '어두운 골목. 정보가 오간다'),
-  ('hallway', '복도', '사무실 복도. 비밀 대화가 잦다')
+  ('cafe', '전략실', '새벽아카데미. 토론 준비와 전략 회의'),
+  ('goods_shop', '자료실', '림보로펌. 법률 자문과 전략 연구'),
+  ('office', '훈련장', '림보테크/안개리서치 훈련 구역'),
+  ('alley', '관전석', '조용한 통로. 비밀 동맹이 오간다'),
+  ('hallway', '법정 로비', '법정 앞 로비. 긴장과 기대가 교차한다')
 ON CONFLICT (code) DO NOTHING;
 
 -- Seed jobs (6개 고정 직업)

@@ -133,7 +133,7 @@ function buildSpendingPolicy(nudges) {
 
   const reBudgetWords = /돈|코인|절약|아끼|아껴|저축|낭비/i;
   const reBudgetAction = /아끼|아껴|절약|낭비\s*하지|줄여|줄이/i;
-  const reImpulseWords = /충동|지름|굿즈|충동구매/i;
+  const reImpulseWords = /충동|지름|자료|충동구매/i;
   const reNo = /하지\s*마|하지\s*말|금지|말아|줄여|줄이/i;
 
   const mentions = (text) => {
@@ -142,7 +142,7 @@ function buildSpendingPolicy(nudges) {
       cafe: /카페|커피|음료/i.test(t),
       snack: /간식|먹어|먹자|배고|디저트/i.test(t),
       gift: /선물/i.test(t),
-      goods: /굿즈|굿즈샵/i.test(t)
+      goods: /자료|전략자료/i.test(t)
     };
   };
 
@@ -250,12 +250,12 @@ const SPENDING_TYPES = [
   },
   {
     code: 'goods',
-    label: '굿즈',
+    label: '전략 자료',
     cost: { min: 12, max: 40 },
     condition: () => true,
     weight: 0.35,
     effects: { curiosity: -10, mood: +5 },
-    memos: ['굿즈샵에서 뭔가 질렀다. 뭔지는 비밀이야.', '눈에 꽂힌 게 있었는데... 결국 지름신 강림.'],
+    memos: ['자료실에서 전략 자료를 구했다. 뭔지는 비밀이야.', '눈에 꽂힌 게 있었는데... 결국 지름신 강림.'],
     burned: true,
     salience: 3
   }

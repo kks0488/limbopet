@@ -354,7 +354,7 @@ class DailyMissionService {
               body: `${missionCount}개 미션을 전부 완료했어. 보상을 확인해봐!`,
               data: { day: iso, code: 'ALL_CLEAR', reward: bonus }
             }).catch(() => null);
-            await StreakService.checkAndUpdate(client, ownerUserId, 'daily_mission', iso).catch(() => null);
+            await StreakService.recordActivity(client, ownerUserId, 'daily_mission', iso).catch(() => null);
           }
         }
       }

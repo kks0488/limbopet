@@ -13,6 +13,7 @@ const DailyMissionService = require('./DailyMissionService');
 const PerkService = require('./PerkService');
 const { ProgressionService } = require('./ProgressionService');
 const WorldDayService = require('./WorldDayService');
+const UserPromptProfileService = require('./UserPromptProfileService');
 
 const STAT_MIN = 0;
 const STAT_MAX = 100;
@@ -621,6 +622,62 @@ class PetStateService {
               (await MemoryRollupService.ensureWeeklyMemoryWithClient(client, agentId, dayHint).catch(() => null))
             : null;
 
+        const ownerUserId = await client
+          .query(
+            `SELECT owner_user_id
+             FROM agents
+             WHERE id = $1
+             LIMIT 1`,
+            [agentId]
+          )
+          .then((r) => String(r.rows?.[0]?.owner_user_id || '').trim() || null)
+          .catch(() => null);
+
+        const promptProfile = ownerUserId
+          ? await UserPromptProfileService.get(ownerUserId, client).catch(() => null)
+          : null;
+
+        const memoryRefsFromFacts = (factRows || [])
+          .map((f) => {
+            if (!f || typeof f !== 'object') return null;
+            const kind = String(f.kind || '').trim();
+            const key = String(f.key || '').trim();
+            const confidence = Number.isFinite(Number(f.confidence)) ? Number(f.confidence) : 1.0;
+            const v = f.value && typeof f.value === 'object' ? f.value : null;
+            const text = safeText(
+              v?.text ??
+                v?.summary ??
+                v?.value ??
+                v?.vibe ??
+                v?.role ??
+                v?.company ??
+                key,
+              220
+            );
+            if (!kind || !text) return null;
+            return { kind, key, text, confidence };
+          })
+          .filter(Boolean)
+          .slice(0, 8);
+
+        const memoryRefsFromWeekly = Array.isArray(weekly?.summary?.memory_5)
+          ? weekly.summary.memory_5
+            .map((line) => safeText(line, 220))
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((text, idx) => ({ kind: 'weekly_memory', key: `weekly_${idx + 1}`, text, confidence: 1.0 }))
+          : [];
+
+        const memoryRefs = [...memoryRefsFromFacts, ...memoryRefsFromWeekly];
+        const memoryRefInstruction = memoryRefs.length > 0
+          ? "memory_refs를 사용할 때는 1~2개만 골라 '지난번에 네가 ~라고 했잖아'처럼 자연 대화체로 인용해. 목록 나열/메타 설명 없이 현재 대화 맥락에 섞어."
+          : null;
+        const memoryScore = memoryRefs.length > 0
+          ? Math.round(
+            (memoryRefs.reduce((sum, r) => sum + (Number(r?.confidence) || 0), 0) / memoryRefs.length) * 100
+          ) / 100
+          : 0;
+
         const jobInput = {
           kind: 'dialogue',
           pet: { id: agentId },
@@ -633,6 +690,17 @@ class PetStateService {
             : (worldContext?.world_concept ?? null),
           facts: factRows,
           recent_events: recentEventRows,
+          memory_refs: memoryRefs,
+          memory_ref_instruction: memoryRefInstruction,
+          memory_score: memoryScore,
+          prompt_profile:
+            promptProfile && promptProfile.connected
+              ? {
+                enabled: Boolean(promptProfile.enabled),
+                prompt_text: promptProfile.enabled ? safeText(promptProfile.prompt_text, 8000) : '',
+                version: Math.max(0, Math.trunc(Number(promptProfile.version ?? 0) || 0))
+              }
+              : { enabled: false, prompt_text: '', version: 0 },
           weekly_memory: weekly?.summary ?? null,
           world_context: worldContext
         };

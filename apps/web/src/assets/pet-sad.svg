@@ -1,81 +1,87 @@
 <svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <radialGradient id="bodyGrad-sad" cx="0.3" cy="0.3" r="0.8">
-      <stop offset="0%" style="stop-color:#D8C8F0;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#B8A0D8;stop-opacity:1" />
-    </radialGradient>
-    <radialGradient id="bellyGrad-sad" cx="0.5" cy="0.5" r="0.6">
-      <stop offset="0%" style="stop-color:#F5EEFF;stop-opacity:0.8" />
-      <stop offset="100%" style="stop-color:#E8D8F5;stop-opacity:0.3" />
-    </radialGradient>
-    <filter id="shadow-sad">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
-      <feOffset dx="0" dy="2" result="offsetblur"/>
-      <feComponentTransfer>
-        <feFuncA type="linear" slope="0.2"/>
-      </feComponentTransfer>
-      <feMerge>
-        <feMergeNode/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-    <linearGradient id="tearGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#A8D8FF;stop-opacity:0.9" />
-      <stop offset="100%" style="stop-color:#7FB8E8;stop-opacity:0.7" />
+    <linearGradient id="body-s" x1="0.3" y1="0" x2="0.7" y2="1">
+      <stop offset="0%" stop-color="#c4b5fd"/>
+      <stop offset="100%" stop-color="#9b7ad8"/>
     </linearGradient>
+    <radialGradient id="shine-s" cx="0.35" cy="0.3" r="0.5">
+      <stop offset="0%" stop-color="#ede9fe" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#c4b5fd" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Enhanced belly highlight (cooler/muted tint for sadness) -->
+    <radialGradient id="belly-s" cx="0.5" cy="0.65" r="0.35">
+      <stop offset="0%" stop-color="#bdb4f3" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#9b7ad8" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Iris detail gradient -->
+    <radialGradient id="iris-s" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#2d1b4e"/>
+      <stop offset="100%" stop-color="#1c1c1e"/>
+    </radialGradient>
+    <!-- Tear gradient (transparent to blue) -->
+    <linearGradient id="tear-s" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#93c5fd" stop-opacity="0.2"/>
+      <stop offset="50%" stop-color="#93c5fd" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#60a5fa" stop-opacity="0.9"/>
+    </linearGradient>
+    <!-- Softer ambient glow (more muted purple shadow) -->
+    <filter id="sh-s"><feGaussianBlur in="SourceAlpha" stdDeviation="4"/><feOffset dy="3"/><feComponentTransfer><feFuncA type="linear" slope="0.12"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
   </defs>
+  <!-- Softer ambient glow -->
+  <ellipse cx="80" cy="146" rx="32" ry="7" fill="#a78bfa" opacity="0.12"/>
 
-  <!-- Shadow -->
-  <ellipse cx="80" cy="150" rx="30" ry="6" fill="#B8A0D8" opacity="0.25"/>
+  <!-- Body with rim light -->
+  <ellipse cx="80" cy="90" rx="46" ry="50" fill="url(#body-s)" filter="url(#sh-s)"/>
+  <!-- Body rim light (upper-left subtle bright edge) -->
+  <path d="M 46 60 Q 60 45 80 42 Q 100 45 114 60" stroke="#ede9fe" stroke-width="2" fill="none" opacity="0.35" stroke-linecap="round"/>
+  <!-- Main body highlight -->
+  <ellipse cx="80" cy="90" rx="46" ry="50" fill="url(#shine-s)"/>
+  <!-- Belly highlight -->
+  <ellipse cx="80" cy="90" rx="46" ry="50" fill="url(#belly-s)"/>
 
-  <!-- Tail (droopy) -->
-  <path d="M 105 105 Q 118 108, 120 115 Q 115 110, 108 108 Z" fill="url(#bodyGrad-sad)" filter="url(#shadow-sad)"/>
-  <path d="M 110 108 Q 115 110, 116 113 Q 113 111, 111 110 Z" fill="#F5EEFF" opacity="0.4"/>
+  <!-- Ears (droopy) -->
+  <ellipse cx="48" cy="46" rx="11" ry="15" fill="#a78bfa" filter="url(#sh-s)" transform="rotate(10 48 46)"/>
+  <ellipse cx="112" cy="46" rx="11" ry="15" fill="#a78bfa" filter="url(#sh-s)" transform="rotate(-10 112 46)"/>
+  <ellipse cx="48" cy="47" rx="6" ry="8" fill="#d8b4fe" opacity="0.4" transform="rotate(10 48 47)"/>
+  <ellipse cx="112" cy="47" rx="6" ry="8" fill="#d8b4fe" opacity="0.4" transform="rotate(-10 112 47)"/>
 
-  <!-- Body (hunched) -->
-  <ellipse cx="80" cy="105" rx="40" ry="38" fill="url(#bodyGrad-sad)" filter="url(#shadow-sad)"/>
-
-  <!-- Belly -->
-  <ellipse cx="80" cy="115" rx="25" ry="22" fill="url(#bellyGrad-sad)"/>
-
-  <!-- Arms (slightly forward, sad posture) -->
-  <ellipse cx="52" cy="108" rx="9" ry="12" fill="#B8A0D8" filter="url(#shadow-sad)"/>
-  <ellipse cx="108" cy="108" rx="9" ry="12" fill="#B8A0D8" filter="url(#shadow-sad)"/>
-  <ellipse cx="52" cy="110" rx="6" ry="7.5" fill="#E8D8F5"/>
-  <ellipse cx="108" cy="110" rx="6" ry="7.5" fill="#E8D8F5"/>
+  <!-- Arms drooping -->
+  <ellipse cx="37" cy="100" rx="9" ry="11" fill="#a78bfa" filter="url(#sh-s)"/>
+  <ellipse cx="123" cy="100" rx="9" ry="11" fill="#a78bfa" filter="url(#sh-s)"/>
 
   <!-- Feet -->
-  <ellipse cx="68" cy="138" rx="10" ry="7" fill="#B8A0D8" filter="url(#shadow-sad)"/>
-  <ellipse cx="92" cy="138" rx="10" ry="7" fill="#B8A0D8" filter="url(#shadow-sad)"/>
-  <ellipse cx="68" cy="138" rx="7" ry="4.5" fill="#E8D8F5"/>
-  <ellipse cx="92" cy="138" rx="7" ry="4.5" fill="#E8D8F5"/>
+  <ellipse cx="64" cy="134" rx="12" ry="8" fill="#a78bfa" filter="url(#sh-s)"/>
+  <ellipse cx="96" cy="134" rx="12" ry="8" fill="#a78bfa" filter="url(#sh-s)"/>
 
-  <!-- Head -->
-  <circle cx="80" cy="66" r="33" fill="url(#bodyGrad-sad)" filter="url(#shadow-sad)"/>
+  <!-- Sad eyes with iris detail -->
+  <ellipse cx="64" cy="80" rx="9" ry="10" fill="url(#iris-s)"/>
+  <ellipse cx="96" cy="80" rx="9" ry="10" fill="url(#iris-s)"/>
+  <!-- Eye highlights -->
+  <circle cx="66" cy="78" r="3.5" fill="#fff"/>
+  <circle cx="98" cy="78" r="3.5" fill="#fff"/>
 
-  <!-- Ears (droopy - tilted down) -->
-  <ellipse cx="58" cy="48" rx="11" ry="16" fill="#B8A0D8" filter="url(#shadow-sad)" transform="rotate(25 58 48)"/>
-  <ellipse cx="102" cy="48" rx="11" ry="16" fill="#B8A0D8" filter="url(#shadow-sad)" transform="rotate(-25 102 48)"/>
-  <ellipse cx="58" cy="50" rx="6.5" ry="9" fill="#E8B8D6" transform="rotate(25 58 50)"/>
-  <ellipse cx="102" cy="50" rx="6.5" ry="9" fill="#E8B8D6" transform="rotate(-25 102 50)"/>
+  <!-- Eyebrows (sad tilt) -->
+  <line x1="56" y1="68" x2="68" y2="66" stroke="#1c1c1e" stroke-width="2" stroke-linecap="round"/>
+  <line x1="92" y1="66" x2="104" y2="68" stroke="#1c1c1e" stroke-width="2" stroke-linecap="round"/>
 
-  <!-- Eyes (sad, looking down) -->
-  <ellipse cx="68" cy="62" rx="6" ry="7" fill="#3D2956"/>
-  <ellipse cx="92" cy="62" rx="6" ry="7" fill="#3D2956"/>
-  <circle cx="69" cy="60" r="2.5" fill="#FFFFFF"/>
-  <circle cx="93" cy="60" r="2.5" fill="#FFFFFF"/>
+  <!-- Nose with specular highlight -->
+  <ellipse cx="80" cy="92" rx="3.5" ry="2.5" fill="#e9a8d4"/>
+  <circle cx="79" cy="91.5" r="1.5" fill="#fff" opacity="0.4"/>
 
-  <!-- Eyebrows (sad angle) -->
-  <path d="M 62 52 Q 65 50, 72 51" stroke="#3D2956" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-  <path d="M 88 51 Q 95 50, 98 52" stroke="#3D2956" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <!-- Enhanced tears with gradient -->
+  <!-- Main tear on right eye -->
+  <path d="M100 84 Q102 90 100 96" stroke="url(#tear-s)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <circle cx="100" cy="97" r="2.5" fill="#60a5fa" opacity="0.6"/>
+  <!-- Smaller tear on left eye -->
+  <path d="M62 82 Q61 86 62 90" stroke="url(#tear-s)" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <circle cx="62" cy="91" r="2" fill="#60a5fa" opacity="0.5"/>
+  <!-- Tear puddle/drop below main tear -->
+  <ellipse cx="100" cy="103" rx="2.5" ry="1.8" fill="#93c5fd" opacity="0.3"/>
 
-  <!-- Nose -->
-  <ellipse cx="80" cy="70" rx="3.5" ry="2.5" fill="#E8B8D6"/>
+  <!-- Better cheek coloring (softer, slightly bluer tint for cold/sad) -->
+  <ellipse cx="56" cy="96" rx="8" ry="6" fill="#b4a5ed" opacity="0.25"/>
+  <ellipse cx="104" cy="96" rx="8" ry="6" fill="#b4a5ed" opacity="0.25"/>
 
-  <!-- Sad mouth (downturned) -->
-  <path d="M 70 80 Q 80 76, 90 80" stroke="#3D2956" stroke-width="2" fill="none" stroke-linecap="round"/>
-
-  <!-- Teardrop -->
-  <ellipse cx="98" cy="72" rx="4" ry="6" fill="url(#tearGrad)" filter="url(#shadow-sad)"/>
-  <circle cx="98" cy="70" r="2" fill="#D8F0FF" opacity="0.8"/>
+  <!-- Sad mouth -->
+  <path d="M70 100 Q80 94 90 100" stroke="#1c1c1e" stroke-width="2" fill="none" stroke-linecap="round"/>
 </svg>

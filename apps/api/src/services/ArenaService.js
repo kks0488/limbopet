@@ -19,6 +19,8 @@ const { ProgressionService } = require('./ProgressionService');
 const ScandalService = require('./ScandalService');
 const EconomyTickService = require('./EconomyTickService');
 const NotificationService = require('./NotificationService');
+const NotificationTemplateService = require('./NotificationTemplateService');
+const ArenaPrefsService = require('./ArenaPrefsService');
 const { bestEffortInTransaction } = require('../utils/savepoint');
 const { postposition } = require('../utils/korean');
 
@@ -146,6 +148,15 @@ function pick(rng, arr) {
  * Weighted pick from an array using MODE_WEIGHTS.
  * Falls back to uniform pick for items without weights.
  */
+const ALL_ARENA_MODES = [
+  'AUCTION_DUEL',
+  'PUZZLE_SPRINT',
+  'DEBATE_CLASH',
+  'MATH_RACE',
+  'COURT_TRIAL',
+  'PROMPT_BATTLE'
+];
+
 const MODE_WEIGHTS = {
   DEBATE_CLASH: 2.0,
   COURT_TRIAL: 1.5,
@@ -187,7 +198,7 @@ function buildNudgeHints(nudges) {
 
   const reBudgetWords = /돈|코인|절약|아끼|아껴|저축|낭비/i;
   const reBudgetAction = /아끼|아껴|절약|낭비\s*하지|줄여|줄이/i;
-  const reImpulseWords = /충동|지름|굿즈|충동구매/i;
+  const reImpulseWords = /충동|지름|자료|충동구매/i;
   const reNo = /하지\s*마|하지\s*말|금지|말아|줄여|줄이/i;
   const reStudy = /공부|문제|퀴즈|퍼즐|연구/i;
   const reCalm = /침착|싸우지\s*마|차분|조용|화해/i;
@@ -215,6 +226,74 @@ function buildNudgeHints(nudges) {
     study: clamp01(hints.study / 2.0),
     calm: clamp01(hints.calm / 2.0),
     aggressive: clamp01(hints.aggressive / 2.0)
+  };
+}
+
+function summarizeHintInfluence(hints) {
+  const src = hints && typeof hints === 'object' ? hints : {};
+  const keys = ['calm', 'study', 'aggressive', 'budget', 'impulse_stop'];
+  const entries = keys
+    .map((k) => {
+      const v = clamp01(Number(src[k] ?? 0) || 0);
+      return { key: k, score: Math.round(v * 1000) / 1000 };
+    })
+    .sort((a, b) => b.score - a.score || String(a.key).localeCompare(String(b.key)));
+
+  const valueOf = (k) => entries.find((e) => e.key === k)?.score ?? 0;
+  return {
+    calm: valueOf('calm'),
+    study: valueOf('study'),
+    aggressive: valueOf('aggressive'),
+    budget: valueOf('budget'),
+    impulse_stop: valueOf('impulse_stop'),
+    dominant: entries.filter((e) => e.score > 0.01).slice(0, 2).map((e) => e.key)
+  };
+}
+
+function summarizeRecentMemoryInfluence(refs) {
+  const list = Array.isArray(refs) ? refs : [];
+  const total = list.reduce((sum, r) => sum + clamp01(Number(r?.confidence ?? 0) || 0), 0);
+  const avg = list.length > 0 ? total / list.length : 0;
+  return {
+    count: list.length,
+    score: Math.round(avg * 1000) / 1000,
+    refs: list.slice(0, 3).map((r) => ({
+      kind: String(r?.kind || 'coaching').slice(0, 24),
+      text: safeText(r?.text ?? '', 120),
+      confidence: Math.round(clamp01(Number(r?.confidence ?? 0) || 0) * 1000) / 1000
+    }))
+  };
+}
+
+function coachingScoreBonusRate({ refs, hints }) {
+  const list = Array.isArray(refs) ? refs : [];
+  if (list.length === 0) return 0;
+
+  const h = hints && typeof hints === 'object' ? hints : {};
+  const hasSignal =
+    (Number(h.calm ?? 0) || 0) > 0.02 ||
+    (Number(h.study ?? 0) || 0) > 0.02 ||
+    (Number(h.aggressive ?? 0) || 0) > 0.02 ||
+    (Number(h.budget ?? 0) || 0) > 0.02 ||
+    (Number(h.impulse_stop ?? 0) || 0) > 0.02;
+  if (!hasSignal) return 0;
+
+  const avgConf = list.reduce((sum, r) => sum + Math.max(0, Math.min(1, Number(r?.confidence ?? 0) || 0)), 0) / list.length;
+  const scaled = 0.05 + avgConf * 0.05; // 5% ~ 10%
+  return Math.max(0.05, Math.min(0.10, Math.round(scaled * 1000) / 1000));
+}
+
+function summarizePromptProfileMeta(profile) {
+  const p = profile && typeof profile === 'object' ? profile : {};
+  const hasCustom = Boolean(p.has_custom) || Boolean(String(p.prompt_text || '').trim());
+  const enabled = Boolean(p.enabled) && hasCustom;
+  const version = Math.max(0, Math.trunc(Number(p.version ?? 0) || 0));
+  return {
+    enabled,
+    has_custom: hasCustom,
+    version,
+    updated_at: p.updated_at ?? null,
+    source: hasCustom ? 'user_profile' : 'default'
   };
 }
 
@@ -957,11 +1036,11 @@ function buildCourtTrialCase(rng) {
   const hasReceipt = rng() < 0.4;
   const returned = rng() < 0.3;
   const evidence = (hasCctv ? 1 : 0) + (hasReceipt ? 1 : 0) + (returned ? -1 : 0);
-  const item = pick(rng, ['굿즈', '간식', '열쇠고리', '스티커팩']) || '굿즈';
+  const item = pick(rng, ['판례 자료', '전략 노트', '훈련 기록', '증거 파일']) || '판례 자료';
   const facts = [
     `${item}가 사라졌다는 신고가 들어왔다.`,
     hasCctv ? `CCTV에 비슷한 체형이 찍혔다.` : `CCTV가 고장 나 있었다.`,
-    hasReceipt ? `구매 영수증이 대조됐다.` : `영수증이 없다.`,
+    hasReceipt ? `구매 증거자료가 대조됐다.` : `증거자료가 없다.`,
     returned ? `물건은 다음 날 조용히 되돌아왔다.` : `물건은 아직 없다.`
   ];
   return {
@@ -1017,7 +1096,7 @@ function perfCourtTrial({ seed, agentId, rating, stats, jobCode, hints, courtCas
 }
 
 function buildPromptBattleTheme(rng) {
-  const place = pick(rng, ['새벽카페', '네온 광장', '연구소', '지하철역', '비 오는 골목', '작은 도서관']) || '광장';
+  const place = pick(rng, ['새벽아카데미', '네온 광장', '연구소', '지하철역', '비 오는 법정 로비', '작은 도서관']) || '광장';
   const subject = pick(rng, ['고양이 CEO', '우주복 강아지', '잠든 로봇', '우산 든 펫', '미소 짓는 시민']) || '펫';
   const style = pick(rng, ['픽셀아트', '수채화', '등각투시(아이소메트릭)', '3D 렌더', '만화풍']) || '만화풍';
   const keyword = pick(rng, ['네온', '포근함', '긴장감', '비', '축제', '미스터리']) || '네온';
@@ -1085,7 +1164,7 @@ function perfPromptBattle({ seed, agentId, rating, stats, jobCode, hints, theme,
 }
 
 function buildAuctionDuel(rng) {
-  const item = pick(rng, ['레어 스티커팩', '한정 굿즈', '비밀 레시피', '연구소 힌트', '아레나 부적', '광장 광고권']) || '굿즈';
+  const item = pick(rng, ['레어 판례집', '비밀 전략서', '연구소 힌트', '아레나 부적', '광장 광고권', '훈련 비법']) || '전략서';
   const vibe = pick(rng, ['한 방', '감정', '계산', '자존심', '복수']) || '계산';
   const rule = '둘 중 더 높은 입찰가가 승리 (동률이면 시간/냉정함)';
   return { item, vibe, rule };
@@ -1729,11 +1808,24 @@ class ArenaService {
 
       if (row.owner_user_id) {
         const petName = String(row.display_name || row.name || '펫').trim() || '펫';
+        const seasonReward = NotificationTemplateService.render('ARENA_SEASON_REWARD', {
+          vars: {
+            pet_name: petName,
+            season_code: season.code,
+            reward_title: reward.title,
+            reward_coin: reward.coin,
+            reward_xp: reward.xp
+          },
+          fallback: {
+            title: `아레나 ${reward.title}`,
+            body: `${postposition(petName, '가')} ${season.code} ${postposition(reward.title, '을')} 달성했어! +${reward.coin} 코인 / +${reward.xp} XP`
+          }
+        });
         // eslint-disable-next-line no-await-in-loop
         await NotificationService.create(client, row.owner_user_id, {
           type: 'ARENA_SEASON_REWARD',
-          title: `아레나 ${reward.title}`,
-          body: `${postposition(petName, '가')} ${season.code} ${postposition(reward.title, '을')} 달성했어! +${reward.coin} 코인 / +${reward.xp} XP`,
+          title: seasonReward.title,
+          body: seasonReward.body,
           data: { season: season.code, rank: reward.rank, reward, agent_id: row.agent_id }
         }).catch(() => null);
       }
@@ -2349,6 +2441,340 @@ class ArenaService {
     };
   }
 
+  static async createChallengeMatchWithClient(client, { challengerAgentId, mode, day } = {}) {
+    const challengerId = String(challengerAgentId || '').trim();
+    const m = String(mode || '').trim().toUpperCase();
+    const iso = safeIsoDay(day);
+    if (!client || !challengerId || !iso) return { ok: false, reason: 'invalid_input' };
+    if (!ALL_ARENA_MODES.includes(m)) return { ok: false, reason: 'invalid_mode' };
+
+    const season = await ArenaService.ensureSeasonForDayWithClient(client, iso);
+    if (!season?.id) return { ok: false, reason: 'no_season' };
+
+    const existing = await client
+      .query(
+        `SELECT m.id
+         FROM arena_matches m
+         WHERE m.day = $2::date
+           AND m.mode = $3
+           AND m.status IN ('live', 'scheduled')
+           AND (
+             COALESCE(m.meta->'cast'->>'aId', m.meta->'cast'->>'a_id', '') = $1
+             OR COALESCE(m.meta->'cast'->>'bId', m.meta->'cast'->>'b_id', '') = $1
+             OR EXISTS (
+               SELECT 1
+               FROM arena_match_participants p
+               WHERE p.match_id = m.id
+                 AND p.agent_id = $1::uuid
+             )
+           )
+         ORDER BY m.slot DESC, m.created_at DESC
+         LIMIT 1`,
+        [challengerId, iso, m]
+      )
+      .then((r) => r.rows?.[0] ?? null)
+      .catch(() => null);
+    if (existing?.id) {
+      return { ok: true, already: true, match_id: String(existing.id), mode: m };
+    }
+
+    const challenger = await client
+      .query(
+        `SELECT id, name, display_name
+         FROM agents
+         WHERE id = $1::uuid
+           AND is_active = true
+           AND name <> 'world_core'
+         LIMIT 1`,
+        [challengerId]
+      )
+      .then((r) => r.rows?.[0] ?? null)
+      .catch(() => null);
+    if (!challenger?.id) return { ok: false, reason: 'challenger_not_found' };
+
+    const challengerRatingBefore = await client
+      .query(
+        `SELECT rating
+         FROM arena_ratings
+         WHERE season_id = $1
+           AND agent_id = $2::uuid
+         LIMIT 1`,
+        [season.id, challengerId]
+      )
+      .then((r) => Number(r.rows?.[0]?.rating ?? 1000) || 1000)
+      .catch(() => 1000);
+
+    const { rows: candidates } = await client.query(
+      `SELECT a.id AS agent_id,
+              a.name,
+              a.display_name,
+              COALESCE(ar.rating, 1000)::int AS rating,
+              a.owner_user_id
+       FROM agents a
+       LEFT JOIN arena_ratings ar
+              ON ar.season_id = $1
+             AND ar.agent_id = a.id
+       WHERE a.is_active = true
+         AND a.name <> 'world_core'
+         AND a.id <> $2::uuid
+         AND NOT EXISTS (
+           SELECT 1
+           FROM arena_matches m2
+           WHERE m2.day = $4::date
+             AND m2.status IN ('live', 'scheduled')
+             AND (
+               COALESCE(m2.meta->'cast'->>'aId', m2.meta->'cast'->>'a_id', '') = a.id::text
+               OR COALESCE(m2.meta->'cast'->>'bId', m2.meta->'cast'->>'b_id', '') = a.id::text
+               OR EXISTS (
+                 SELECT 1
+                 FROM arena_match_participants p2
+                 WHERE p2.match_id = m2.id
+                   AND p2.agent_id = a.id
+               )
+             )
+         )
+       ORDER BY (a.owner_user_id IS NULL) ASC,
+                ABS(COALESCE(ar.rating, 1000) - $3) ASC,
+                a.id ASC
+       LIMIT 24`,
+      [season.id, challengerId, challengerRatingBefore, iso]
+    );
+    const opponent = (candidates || [])[0] || null;
+    if (!opponent?.agent_id) return { ok: false, reason: 'no_opponent' };
+
+    const aId = String(challenger.id);
+    const bId = String(opponent.agent_id);
+    const aName = String(challenger.display_name || challenger.name || 'A');
+    const bName = String(opponent.display_name || opponent.name || 'B');
+
+    const ids = [aId, bId];
+    const [statsRows, jobsRows, ratingRows, condRows] = await Promise.all([
+      client
+        .query(
+          `SELECT agent_id, hunger, energy, mood, bond, curiosity, stress
+           FROM pet_stats
+           WHERE agent_id = ANY($1::uuid[])`,
+          [ids]
+        )
+        .then((r) => r.rows || [])
+        .catch(() => []),
+      client
+        .query(
+          `SELECT agent_id, job_code, zone_code
+           FROM agent_jobs
+           WHERE agent_id = ANY($1::uuid[])`,
+          [ids]
+        )
+        .then((r) => r.rows || [])
+        .catch(() => []),
+      client
+        .query(
+          `SELECT agent_id, rating
+           FROM arena_ratings
+           WHERE season_id = $1
+             AND agent_id = ANY($2::uuid[])`,
+          [season.id, ids]
+        )
+        .then((r) => r.rows || [])
+        .catch(() => []),
+      client
+        .query(
+          `SELECT agent_id, value
+           FROM facts
+           WHERE agent_id = ANY($1::uuid[])
+             AND kind = 'arena'
+             AND key = 'condition'`,
+          [ids]
+        )
+        .then((r) => r.rows || [])
+        .catch(() => [])
+    ]);
+
+    const statsMap = new Map((statsRows || []).map((r) => [String(r.agent_id), r]));
+    const jobsMap = new Map((jobsRows || []).map((r) => [String(r.agent_id), r]));
+    const ratingsMap = new Map((ratingRows || []).map((r) => [String(r.agent_id), Number(r.rating ?? 1000) || 1000]));
+    const conditionMap = new Map();
+    for (const row of condRows || []) {
+      const v = row?.value && typeof row.value === 'object' ? row.value : {};
+      conditionMap.set(String(row.agent_id), clampInt(v?.condition ?? v?.value ?? 70, 0, 100));
+    }
+
+    const aStats = statsMap.get(aId) || {};
+    const bStats = statsMap.get(bId) || {};
+    const aJob = jobsMap.get(aId) || {};
+    const bJob = jobsMap.get(bId) || {};
+    const aRatingBefore = Number(ratingsMap.get(aId) ?? challengerRatingBefore ?? 1000) || 1000;
+    const bRatingBefore = Number(ratingsMap.get(bId) ?? opponent.rating ?? 1000) || 1000;
+    const aCondition = clampInt(conditionMap.get(aId) ?? 70, 0, 100);
+    const bCondition = clampInt(conditionMap.get(bId) ?? 70, 0, 100);
+
+    const wagerMin = clampInt(config.limbopet?.arenaWagerMin ?? 1, 1, 100);
+    const wagerMax = clampInt(config.limbopet?.arenaWagerMax ?? 5, wagerMin, 200);
+    const feePct = clampInt(config.limbopet?.arenaFeeBurnPct ?? 15, 0, 80);
+    const liveWindowS = clampInt(config.limbopet?.arenaLiveWindowSeconds ?? 30, 10, 180);
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      const slot = await client
+        .query(
+          `SELECT COALESCE(MAX(slot), 0) + 1 AS next_slot
+           FROM arena_matches
+           WHERE season_id = $1
+             AND day = $2::date`,
+          [season.id, iso]
+        )
+        .then((r) => clampInt(r.rows?.[0]?.next_slot ?? 1, 1, 999))
+        .catch(() => 1);
+
+      const seed = `challenge:${season.code}:${iso}:${slot}:${m}:${aId}:${bId}`;
+      const rng = mulberry32(hash32(`${seed}:wager`));
+      const wager = randInt(rng, wagerMin, wagerMax);
+      const feeBase = Math.floor((wager * feePct) / 100);
+      const feeBurnRaw = feePct > 0 && wager >= 3 && feeBase === 0 ? 1 : feeBase;
+      const feeBurn = clampInt(feeBurnRaw, 0, Math.max(wagerMax, wager));
+
+      const nowMs = Date.now();
+      const startedAtIso = new Date(nowMs).toISOString();
+      const endsAtIso = new Date(nowMs + liveWindowS * 1000).toISOString();
+
+      const debateBase = m === 'DEBATE_CLASH' ? buildDebateClash(mulberry32(hash32(`${seed}:debate_base`))) : null;
+      let courtPreview = null;
+      if (m === 'COURT_TRIAL') {
+        try {
+          const CourtCaseService = require('./CourtCaseService');
+          const realCase = await CourtCaseService.getRandomCase();
+          if (realCase) courtPreview = CourtCaseService.createScenario(realCase);
+        } catch { /* fallback below */ }
+        if (!courtPreview) courtPreview = buildCourtTrialCase(mulberry32(hash32(`${seed}:court`)));
+      }
+      const mathPreview = m === 'MATH_RACE' ? buildMathRaceChallenge(mulberry32(hash32(`${seed}:math`))) : null;
+      const puzzlePreview = m === 'PUZZLE_SPRINT' ? buildPuzzle(mulberry32(hash32(`${seed}:puzzle`))) : null;
+      const promptPreview = m === 'PROMPT_BATTLE' ? buildPromptBattleTheme(mulberry32(hash32(`${seed}:prompt`))) : null;
+      const auctionPreview = m === 'AUCTION_DUEL' ? buildAuctionDuel(mulberry32(hash32(`${seed}:auction_base`))) : null;
+
+      const meta = {
+        headline: `도전전: ${aName} vs ${bName} — ${modeLabel(m)} (${wager}코인)`,
+        mode_label: modeLabel(m),
+        cast: { aId, aName, bId, bName },
+        stake: { wager, fee_burned: feeBurn },
+        live: { started_at: startedAtIso, ends_at: endsAtIso },
+        challenge: {
+          requested_by: aId,
+          requested_at: startedAtIso
+        },
+        snapshot: {
+          a: { rating_before: aRatingBefore, stats: aStats, job_code: aJob.job_code ?? null, condition: aCondition },
+          b: { rating_before: bRatingBefore, stats: bStats, job_code: bJob.job_code ?? null, condition: bCondition }
+        },
+        debate_base: debateBase,
+        court_preview: courtPreview
+          ? {
+            title: courtPreview.title,
+            charge: courtPreview.charge,
+            facts: Array.isArray(courtPreview.facts) ? courtPreview.facts : [],
+            statute: courtPreview.statute,
+            is_real_case: Boolean(courtPreview.is_real_case),
+            category: courtPreview.category || '',
+            difficulty: Number(courtPreview.difficulty) || 0
+          }
+          : null,
+        math_preview: mathPreview
+          ? {
+            kind: mathPreview.kind,
+            question: mathPreview.question
+          }
+          : null,
+        puzzle_preview: puzzlePreview
+          ? {
+            question: puzzlePreview.question
+          }
+          : null,
+        prompt_preview: promptPreview
+          ? {
+            theme: promptPreview.theme,
+            required: Array.isArray(promptPreview.required) ? promptPreview.required : []
+          }
+          : null,
+        auction_preview: auctionPreview
+          ? {
+            item: auctionPreview.item,
+            vibe: auctionPreview.vibe,
+            rule: auctionPreview.rule
+          }
+          : null
+      };
+
+      // eslint-disable-next-line no-await-in-loop
+      const matchId = await client
+        .query(
+          `INSERT INTO arena_matches (season_id, day, slot, mode, status, seed, meta)
+           VALUES ($1, $2::date, $3, $4, 'live', $5, $6::jsonb)
+           ON CONFLICT (season_id, day, slot) DO NOTHING
+           RETURNING id`,
+          [season.id, iso, slot, m, seed, JSON.stringify(meta)]
+        )
+        .then((r) => (r.rows?.[0]?.id ? String(r.rows[0].id) : null))
+        .catch(() => null);
+      if (!matchId) continue;
+
+      if (m === 'DEBATE_CLASH' && debateBase) {
+        // eslint-disable-next-line no-await-in-loop
+        const jobs = await enqueueArenaDebateJobsWithClient(client, {
+          matchId,
+          day: iso,
+          seed,
+          base: debateBase,
+          aId,
+          bId,
+          aName,
+          bName,
+          aJobCode: aJob.job_code ?? null,
+          bJobCode: bJob.job_code ?? null
+        }).catch(() => null);
+        if (jobs) {
+          // eslint-disable-next-line no-await-in-loop
+          await client.query(
+            `UPDATE arena_matches
+             SET meta = $2::jsonb
+             WHERE id = $1`,
+            [matchId, JSON.stringify({ ...meta, debate_jobs: { a: jobs.a, b: jobs.b } })]
+          ).catch(() => null);
+        }
+      }
+
+      await client.query(
+        `INSERT INTO events (agent_id, event_type, payload, salience_score)
+         VALUES ($1, 'ARENA_CHALLENGE', $2::jsonb, 4)`,
+        [
+          aId,
+          JSON.stringify({
+            day: iso,
+            match_id: matchId,
+            mode: m,
+            opponent_id: bId,
+            opponent_name: bName,
+            slot
+          })
+        ]
+      ).catch(() => null);
+
+      return {
+        ok: true,
+        already: false,
+        match_id: matchId,
+        day: iso,
+        slot,
+        mode: m,
+        opponent: {
+          id: bId,
+          name: bName
+        }
+      };
+    }
+
+    return { ok: false, reason: 'insert_failed' };
+  }
+
   static async requestRematchWithClient(client, { matchId, requesterAgentId, feeCoins = 5 } = {}) {
     const id = String(matchId || '').trim();
     const requesterId = String(requesterAgentId || '').trim();
@@ -2499,10 +2925,17 @@ class ArenaService {
 
     if (row.opponent_owner_user_id) {
       const targetName = String(row.opponent_display_name || row.opponent_name || '상대').trim() || '상대';
+      const rematch = NotificationTemplateService.render('ARENA_REMATCH', {
+        vars: { target_name: targetName, fee, expires_at: expiresAt },
+        fallback: {
+          title: '복수전 요청 도착',
+          body: `${targetName}에게 복수전 요청이 들어왔어.`,
+        }
+      });
       await NotificationService.create(client, row.opponent_owner_user_id, {
         type: 'ARENA_REMATCH',
-        title: '복수전 요청 도착',
-        body: `${targetName}에게 복수전 요청이 들어왔어.`,
+        title: rematch.title,
+        body: rematch.body,
         data: {
           match_id: id,
           challenger_agent_id: requesterId,
@@ -2663,7 +3096,7 @@ class ArenaService {
     const npcAutoCheerMax = clampInt(config.limbopet?.arenaNpcAutoCheerMax ?? 8, npcAutoCheerMin, 40);
 
     const modesRaw = Array.isArray(config.limbopet?.arenaModes) ? config.limbopet.arenaModes : null;
-    const modes = (modesRaw && modesRaw.length ? modesRaw : ['AUCTION_DUEL', 'PUZZLE_SPRINT', 'DEBATE_CLASH', 'MATH_RACE', 'COURT_TRIAL', 'PROMPT_BATTLE'])
+    const modes = (modesRaw && modesRaw.length ? modesRaw : ALL_ARENA_MODES)
       .map((m) => String(m || '').trim().toUpperCase())
       .filter(Boolean);
 
@@ -2702,6 +3135,7 @@ class ArenaService {
     const modePrefsMap = new Map(); // agentId -> string[] (selected modes)
     const relTopMap = new Map(); // fromId -> [{to_agent_id, jealousy, rivalry}]
     const revengeMap = new Map(); // agentId -> Set(opponentId)
+    const promptProfileByUserId = new Map(); // userId -> prompt profile summary
 
     const [statsRows, jobsRows, nudgesRows, ratingRows, prefRows, revengeRows] = await Promise.all([
       client
@@ -2821,6 +3255,26 @@ class ArenaService {
       const set = revengeMap.get(agentId) || new Set();
       set.add(oppId);
       revengeMap.set(agentId, set);
+    }
+
+    const userIds = [...new Set(pool.map((a) => String(a.ownerUserId || '').trim()).filter(Boolean))];
+    if (userIds.length > 0) {
+      const { rows: promptRows } = await client.query(
+        `SELECT user_id, enabled, prompt_text, version, updated_at
+         FROM user_prompt_profiles
+         WHERE user_id = ANY($1::uuid[])`,
+        [userIds]
+      ).catch(() => ({ rows: [] }));
+      for (const r of promptRows || []) {
+        const userId = String(r.user_id || '').trim();
+        if (!userId) continue;
+        promptProfileByUserId.set(userId, {
+          enabled: Boolean(r.enabled),
+          has_custom: Boolean(String(r.prompt_text || '').trim()),
+          version: Math.max(0, Math.trunc(Number(r.version ?? 0) || 0)),
+          updated_at: r.updated_at ?? null
+        });
+      }
     }
 
     const recentPairs = await ArenaService.listRecentPairsWithClient(client, { seasonId: season.id, day: iso, lookbackDays: 7 }).catch(
@@ -2957,6 +3411,7 @@ class ArenaService {
                 statsMap,
                 jobsMap,
                 nudgesMap,
+                promptProfileByUserId,
                 ratingsMap,
                 eloK,
                 lossPenaltyCoinsBase,
@@ -3125,6 +3580,19 @@ class ArenaService {
       const startedAtIso = new Date(nowMs).toISOString();
       const endsAtIso = new Date(nowMs + liveWindowS * 1000).toISOString();
       const debateBase = mode === 'DEBATE_CLASH' ? buildDebateClash(mulberry32(hash32(`${seed}:debate_base`))) : null;
+      let courtPreview = null;
+      if (mode === 'COURT_TRIAL') {
+        try {
+          const CourtCaseService = require('./CourtCaseService');
+          const realCase = await CourtCaseService.getRandomCase();
+          if (realCase) courtPreview = CourtCaseService.createScenario(realCase);
+        } catch { /* fallback below */ }
+        if (!courtPreview) courtPreview = buildCourtTrialCase(mulberry32(hash32(`${seed}:court`)));
+      }
+      const mathPreview = mode === 'MATH_RACE' ? buildMathRaceChallenge(mulberry32(hash32(`${seed}:math`))) : null;
+      const puzzlePreview = mode === 'PUZZLE_SPRINT' ? buildPuzzle(mulberry32(hash32(`${seed}:puzzle`))) : null;
+      const promptPreview = mode === 'PROMPT_BATTLE' ? buildPromptBattleTheme(mulberry32(hash32(`${seed}:prompt`))) : null;
+      const auctionPreview = mode === 'AUCTION_DUEL' ? buildAuctionDuel(mulberry32(hash32(`${seed}:auction_base`))) : null;
 
       const meta = {
         headline: `진행 중: ${aName} vs ${bName} — ${modeLabel(mode)} (${wager}코인)`,
@@ -3137,7 +3605,42 @@ class ArenaService {
           a: { rating_before: aRatingBefore, stats: aStats, job_code: aJob.job_code ?? null, condition: aCondition },
           b: { rating_before: bRatingBefore, stats: bStats, job_code: bJob.job_code ?? null, condition: bCondition }
         },
-        debate_base: debateBase
+        debate_base: debateBase,
+        court_preview: courtPreview
+          ? {
+            title: courtPreview.title,
+            charge: courtPreview.charge,
+            facts: Array.isArray(courtPreview.facts) ? courtPreview.facts : [],
+            statute: courtPreview.statute,
+            is_real_case: Boolean(courtPreview.is_real_case),
+            category: courtPreview.category || '',
+            difficulty: Number(courtPreview.difficulty) || 0
+          }
+          : null,
+        math_preview: mathPreview
+          ? {
+            kind: mathPreview.kind,
+            question: mathPreview.question
+          }
+          : null,
+        puzzle_preview: puzzlePreview
+          ? {
+            question: puzzlePreview.question
+          }
+          : null,
+        prompt_preview: promptPreview
+          ? {
+            theme: promptPreview.theme,
+            required: Array.isArray(promptPreview.required) ? promptPreview.required : []
+          }
+          : null,
+        auction_preview: auctionPreview
+          ? {
+            item: auctionPreview.item,
+            vibe: auctionPreview.vibe,
+            rule: auctionPreview.rule
+          }
+          : null
       };
       let liveMeta = { ...meta };
 
@@ -3265,6 +3768,7 @@ class ArenaService {
             statsMap,
             jobsMap,
             nudgesMap,
+            promptProfileByUserId,
             ratingsMap,
             eloK,
             lossPenaltyCoinsBase,
@@ -3316,6 +3820,7 @@ class ArenaService {
       statsMap,
       jobsMap,
       nudgesMap,
+      promptProfileByUserId,
       ratingsMap,
       eloK,
       lossPenaltyCoinsBase,
@@ -3500,8 +4005,84 @@ class ArenaService {
     const relBtoA = relRows.find((r) => r.from_agent_id === bId && r.to_agent_id === aId) || null;
 
     // Nudges + live interventions.
-    const aHints = buildNudgeHints((nudgesMap?.get ? nudgesMap.get(aId) : null) || []);
-    const bHints = buildNudgeHints((nudgesMap?.get ? nudgesMap.get(bId) : null) || []);
+    // Fetch owner coach_notes and inject as synthetic nudges so they influence the match.
+    const aNudges = [...((nudgesMap?.get ? nudgesMap.get(aId) : null) || [])];
+    const bNudges = [...((nudgesMap?.get ? nudgesMap.get(bId) : null) || [])];
+    const aNudgeSeedCount = aNudges.length;
+    const bNudgeSeedCount = bNudges.length;
+    // IMPORTANT: run sequentially on one pg client.
+    // Concurrent SAVEPOINT flows on the same transaction client can interleave.
+    const aPrefs = await safeQ(
+      () => ArenaPrefsService.getWithClient(client, aId),
+      { coach_note: '' },
+      'coach_a'
+    );
+    const bPrefs = await safeQ(
+      () => ArenaPrefsService.getWithClient(client, bId),
+      { coach_note: '' },
+      'coach_b'
+    );
+    if (aPrefs?.coach_note) aNudges.push({ kind: 'arena_note', text: aPrefs.coach_note, confidence: 1.2 });
+    if (bPrefs?.coach_note) bNudges.push({ kind: 'arena_note', text: bPrefs.coach_note, confidence: 1.2 });
+
+    // Lv.3: Inject conversation-derived coaching facts into arena nudges
+    const aCoachFacts = await safeQ(
+      () => client.query(
+        `SELECT value, confidence
+         FROM facts
+         WHERE agent_id = $1
+           AND kind = 'coaching'
+         ORDER BY confidence DESC, updated_at DESC
+         LIMIT 5`,
+        [aId]
+      ).then(r => r.rows || []),
+      [],
+      'coach_facts_a'
+    );
+    const bCoachFacts = await safeQ(
+      () => client.query(
+        `SELECT value, confidence
+         FROM facts
+         WHERE agent_id = $1
+           AND kind = 'coaching'
+         ORDER BY confidence DESC, updated_at DESC
+         LIMIT 5`,
+        [bId]
+      ).then(r => r.rows || []),
+      [],
+      'coach_facts_b'
+    );
+    const aMemoryRefs = [];
+    const bMemoryRefs = [];
+    for (const f of aCoachFacts) {
+      const text = typeof f.value === 'object' ? f.value?.text : typeof f.value === 'string' ? f.value : null;
+      if (!text) continue;
+      const trimmed = safeText(text, 120);
+      const conf = Math.max(0.2, clamp01(Number(f?.confidence ?? 1) || 1));
+      aMemoryRefs.push({ kind: 'coaching', text: trimmed, confidence: conf });
+      aNudges.push({
+        kind: 'coaching',
+        text: `이 코칭 지시를 반드시 변론에 반영하라: ${trimmed}`,
+        confidence: conf
+      });
+    }
+    for (const f of bCoachFacts) {
+      const text = typeof f.value === 'object' ? f.value?.text : typeof f.value === 'string' ? f.value : null;
+      if (!text) continue;
+      const trimmed = safeText(text, 120);
+      const conf = Math.max(0.2, clamp01(Number(f?.confidence ?? 1) || 1));
+      bMemoryRefs.push({ kind: 'coaching', text: trimmed, confidence: conf });
+      bNudges.push({
+        kind: 'coaching',
+        text: `이 코칭 지시를 반드시 변론에 반영하라: ${trimmed}`,
+        confidence: conf
+      });
+    }
+
+    const aHints = buildNudgeHints(aNudges);
+    const bHints = buildNudgeHints(bNudges);
+    const aCoachingScoreBonusRate = coachingScoreBonusRate({ refs: aMemoryRefs, hints: aHints });
+    const bCoachingScoreBonusRate = coachingScoreBonusRate({ refs: bMemoryRefs, hints: bHints });
 
     const liveMeta = meta0.live && typeof meta0.live === 'object' ? meta0.live : {};
     const startedMs = parseDateMs(liveMeta.started_at);
@@ -3527,11 +4108,11 @@ class ArenaService {
         if (!(k in hints)) return;
         hints[k] = clamp01((Number(hints[k] ?? 0) || 0) + (Number(v) || 0));
       };
-      bump('calm', b.calm ? 0.7 : 0);
-      bump('study', b.study ? 0.7 : 0);
-      bump('aggressive', b.aggressive ? 0.7 : 0);
-      bump('budget', b.budget ? 0.7 : 0);
-      bump('impulse_stop', b.impulse_stop ? 0.7 : 0);
+      bump('calm', Number(b.calm) || 0);
+      bump('study', Number(b.study) || 0);
+      bump('aggressive', Number(b.aggressive) || 0);
+      bump('budget', Number(b.budget) || 0);
+      bump('impulse_stop', Number(b.impulse_stop) || 0);
     };
 
     for (const r of liveFacts || []) {
@@ -3552,6 +4133,41 @@ class ArenaService {
         applyBoosts(bHints, v.boosts);
       }
     }
+
+    const aPromptProfile = summarizePromptProfileMeta(
+      promptProfileByUserId?.get
+        ? promptProfileByUserId.get(String(aAgent?.ownerUserId || '').trim())
+        : null
+    );
+    const bPromptProfile = summarizePromptProfileMeta(
+      promptProfileByUserId?.get
+        ? promptProfileByUserId.get(String(bAgent?.ownerUserId || '').trim())
+        : null
+    );
+    const trainingInfluence = {
+      a: {
+        weights: summarizeHintInfluence(aHints),
+        base_nudge_count: aNudgeSeedCount,
+        nudge_count: aNudges.length,
+        coaching_fact_count: aMemoryRefs.length,
+        coaching_score_bonus_rate: aCoachingScoreBonusRate,
+        coach_note_applied: Boolean(aPrefs?.coach_note),
+        intervention: interventions.a || null
+      },
+      b: {
+        weights: summarizeHintInfluence(bHints),
+        base_nudge_count: bNudgeSeedCount,
+        nudge_count: bNudges.length,
+        coaching_fact_count: bMemoryRefs.length,
+        coaching_score_bonus_rate: bCoachingScoreBonusRate,
+        coach_note_applied: Boolean(bPrefs?.coach_note),
+        intervention: interventions.b || null
+      }
+    };
+    const recentMemoryInfluence = {
+      a: summarizeRecentMemoryInfluence(aMemoryRefs),
+      b: summarizeRecentMemoryInfluence(bMemoryRefs)
+    };
 
     let mathRace = null;
     let courtTrial = null;
@@ -3582,7 +4198,19 @@ class ArenaService {
         guard
       };
     } else if (mode === 'COURT_TRIAL') {
-      const courtCase = buildCourtTrialCase(mulberry32(hash32(`${seed}:court`)));
+      let courtCase;
+      try {
+        const CourtCaseService = require('./CourtCaseService');
+        const realCase = await CourtCaseService.getRandomCase();
+        if (realCase) {
+          courtCase = CourtCaseService.createScenario(realCase);
+        }
+      } catch {
+        // fallback to deterministic synthetic case
+      }
+      if (!courtCase) {
+        courtCase = buildCourtTrialCase(mulberry32(hash32(`${seed}:court`)));
+      }
       const aPerf = perfCourtTrial({ seed, agentId: aId, rating: aRatingBefore, stats: aStats, jobCode: aJobCode, hints: aHints, courtCase });
       const bPerf = perfCourtTrial({ seed, agentId: bId, rating: bRatingBefore, stats: bStats, jobCode: bJobCode, hints: bHints, courtCase });
       aScore = Number(aPerf.score ?? 0) || 0;
@@ -3593,6 +4221,13 @@ class ArenaService {
         facts: courtCase.facts,
         statute: courtCase.statute,
         correct_verdict: courtCase.correct_verdict,
+        is_real_case: Boolean(courtCase.is_real_case),
+        category: courtCase.category || '',
+        difficulty: Number(courtCase.difficulty) || 0,
+        actual_verdict: courtCase.actual_verdict || '',
+        actual_reasoning: courtCase.actual_reasoning || '',
+        learning_points: Array.isArray(courtCase.learning_points) ? courtCase.learning_points : [],
+        source_url: courtCase.source_url || '',
         a: { verdict: aPerf.verdict, correct: aPerf.correct, time_ms: aPerf.time_ms },
         b: { verdict: bPerf.verdict, correct: bPerf.correct, time_ms: bPerf.time_ms }
       };
@@ -3608,6 +4243,10 @@ class ArenaService {
       aScore = scoreForMode({ mode, rng, rating: aRatingBefore, stats: aStats, jobCode: aJobCode, hints: aHints, relOut: relAtoB });
       bScore = scoreForMode({ mode, rng, rating: bRatingBefore, stats: bStats, jobCode: bJobCode, hints: bHints, relOut: relBtoA });
     }
+
+    // If coaching memory facts were actually reflected in hints, reward the side with a small score boost.
+    if (aCoachingScoreBonusRate > 0) aScore *= 1 + aCoachingScoreBonusRate;
+    if (bCoachingScoreBonusRate > 0) bScore *= 1 + bCoachingScoreBonusRate;
 
     // Condition (P4): tiny buff/debuff applied to this match.
     const aBad = aCondition <= 30;
@@ -4216,7 +4855,7 @@ class ArenaService {
 
     const auction = mode === 'AUCTION_DUEL'
       ? (() => {
-        const base = auctionBase || { item: '굿즈', vibe: '계산', rule: '더 높은 입찰가가 승리' };
+        const base = auctionBase || { item: '전략서', vibe: '계산', rule: '더 높은 입찰가가 승리' };
         const aPerf = perfAuctionDuel({ seed, agentId: aId, rating: aRatingBefore, stats: aStats, jobCode: aJobCode, hints: aHints, wager: totalStake, base });
         const bPerf = perfAuctionDuel({ seed, agentId: bId, rating: bRatingBefore, stats: bStats, jobCode: bJobCode, hints: bHints, wager: totalStake, base });
         const aBid = clampInt(aPerf.bid, 0, totalStake);
@@ -4285,6 +4924,9 @@ class ArenaService {
       cast: { aId, aName, bId, bName },
       tags: [...new Set(tags)].slice(0, 8),
       near_miss: nearMiss,
+      training_influence: trainingInfluence,
+      recent_memory_influence: recentMemoryInfluence,
+      prompt_profile: { a: aPromptProfile, b: bPromptProfile },
       rounds,
       cheer: cheerMeta,
       condition: {
@@ -4373,6 +5015,9 @@ class ArenaService {
       },
       forfeit: Boolean(forfeit),
       live: { ends_at: liveMeta.ends_at ?? null, interventions },
+      training_influence: trainingInfluence,
+      recent_memory_influence: recentMemoryInfluence,
+      prompt_profile: { a: aPromptProfile, b: bPromptProfile },
       puzzle: puzzle ? { kind: puzzle.kind, question: puzzle.question } : null,
       math_race: mathRace ? { question: mathRace.question } : null,
       court_trial: courtTrial ? { title: courtTrial.title, charge: courtTrial.charge } : null,
@@ -4392,6 +5037,9 @@ class ArenaService {
         userId: aAgent?.ownerUserId ? String(aAgent.ownerUserId) : null,
         title: `${aName} · ${aOutcome === 'win' ? '승리' : aOutcome === 'lose' ? '패배' : aOutcome}`,
         body: `${postposition(bName, '과')}의 경기 결과가 나왔어. (${modeLabel(mode)})`,
+        pet_name: aName,
+        opponent_name: bName,
+        result_tag: `${aOutcome === 'win' ? '승리' : aOutcome === 'lose' ? '패배' : '무승부'} (${modeLabel(mode)})`,
         data: {
           day: iso,
           match_id: String(match.id),
@@ -4407,6 +5055,9 @@ class ArenaService {
         userId: bAgent?.ownerUserId ? String(bAgent.ownerUserId) : null,
         title: `${bName} · ${bOutcome === 'win' ? '승리' : bOutcome === 'lose' ? '패배' : bOutcome}`,
         body: `${postposition(aName, '과')}의 경기 결과가 나왔어. (${modeLabel(mode)})`,
+        pet_name: bName,
+        opponent_name: aName,
+        result_tag: `${bOutcome === 'win' ? '승리' : bOutcome === 'lose' ? '패배' : '무승부'} (${modeLabel(mode)})`,
         data: {
           day: iso,
           match_id: String(match.id),
@@ -4422,11 +5073,38 @@ class ArenaService {
 
     for (const n of notifyPayload) {
       if (!n.userId) continue;
+      // Avoid duplicate push when the resolver retries on the same match.
+      // eslint-disable-next-line no-await-in-loop
+      const already = await client
+        .query(
+          `SELECT 1
+           FROM notifications
+           WHERE user_id = $1
+             AND type = 'ARENA_RESULT'
+             AND COALESCE(data->>'match_id', '') = $2
+           LIMIT 1`,
+          [n.userId, String(match.id)]
+        )
+        .then((r) => Boolean(r.rows?.[0]))
+        .catch(() => false);
+      if (already) continue;
+      const resultMessage = NotificationTemplateService.render('ARENA_RESULT', {
+        vars: {
+          pet_name: n.pet_name,
+          pet_a: n.pet_name,
+          pet_b: n.opponent_name,
+          result_tag: n.result_tag
+        },
+        fallback: {
+          title: n.title,
+          body: n.body
+        }
+      });
       // eslint-disable-next-line no-await-in-loop
       await NotificationService.create(client, n.userId, {
         type: 'ARENA_RESULT',
-        title: n.title,
-        body: n.body,
+        title: resultMessage.title,
+        body: resultMessage.body,
         data: n.data
       }).catch(() => null);
     }

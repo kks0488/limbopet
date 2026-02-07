@@ -15,6 +15,8 @@ const crypto = require('crypto');
 
 const DIARY_COOLDOWN_SECONDS = 120;
 const PLAZA_COOLDOWN_SECONDS = 60;
+const PLAZA_WORLD_PREMISE =
+  'LIMBOPET은 AI 펫을 키워서 법정에 세우는 세계다. 매일 훈련하고 모의재판/설전에 출전한다. 장소: 법정 로비, 훈련장, 전략실, 자료실, 관전석, 광장. 톤: 스포츠 드라마. 금지: 굿즈/키링/영수증/골목.';
 
 const VOICE_TONES = ['담백', '수다쟁이', '무뚝뚝', '다정', '시니컬', '진지', '호들갑', '도도', '순한맛', '야망가'];
 const VOICE_CATCHPHRASES = ['근데 말이야', '솔직히', '아무튼', 'ㄹㅇ', '음…', '일단', '그니까', '아 잠깐', '듣고 보니까', '웃긴 건'];
@@ -40,6 +42,13 @@ function buildVoiceProfile(seed) {
   const punctuationStyle = seededPick(seed, VOICE_PUNCT, 6) || 'plain';
   const emojiLevel = seededU16(seed, 8) % 3; // 0..2
   return { tone, catchphrase, favoriteTopic, punctuationStyle, emojiLevel };
+}
+
+function compactText(value, maxLen = 220) {
+  return String(value ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLen);
 }
 
 function factValue(facts, kind, key) {
@@ -97,6 +106,95 @@ async function loadProfileVoiceWithClient(client, agentId) {
   );
   const voice = rows?.[0]?.value;
   return voice && typeof voice === 'object' ? voice : null;
+}
+
+async function loadRecentPlazaMemoriesWithClient(client, agentId, { limit = 3 } = {}) {
+  const safeLimit = Math.max(1, Math.min(6, Number(limit) || 3));
+  const picked = [];
+
+  // Prefer dedicated dialogue-memory table if it exists.
+  let hasPetMemories = false;
+  try {
+    const { rows } = await client.query(`SELECT to_regclass('public.pet_memories') AS reg`);
+    hasPetMemories = Boolean(rows?.[0]?.reg);
+  } catch {
+    hasPetMemories = false;
+  }
+
+  if (hasPetMemories) {
+    try {
+      const { rows } = await client.query(
+        `SELECT to_jsonb(pm) AS row_json
+         FROM pet_memories pm
+         WHERE pm.agent_id = $1
+         ORDER BY COALESCE(
+           NULLIF(to_jsonb(pm)->>'created_at', ''),
+           NULLIF(to_jsonb(pm)->>'updated_at', ''),
+           ''
+         ) DESC, pm.ctid DESC
+         LIMIT $2`,
+        [agentId, safeLimit * 3]
+      );
+
+      for (const r of rows || []) {
+        const v = r?.row_json && typeof r.row_json === 'object' ? r.row_json : {};
+        const text = compactText(
+          v.summary ?? v.content ?? v.memory ?? v.text ?? v.note ?? v.message ?? v.user_message ?? v.assistant_message ?? ''
+        );
+        if (!text) continue;
+        picked.push({
+          text,
+          source: 'pet_memories',
+          kind: compactText(v.kind ?? v.scope ?? v.type ?? 'dialogue', 32) || 'dialogue',
+          created_at: compactText(v.created_at ?? v.updated_at ?? '', 40) || null
+        });
+        if (picked.length >= safeLimit) break;
+      }
+    } catch {
+      // ignore and fallback to events
+    }
+  }
+
+  // Fallback: derive concise dialogue memories from recent DIALOGUE events.
+  if (picked.length < safeLimit) {
+    try {
+      const { rows } = await client.query(
+        `SELECT payload, created_at
+         FROM events
+         WHERE agent_id = $1
+           AND event_type = 'DIALOGUE'
+         ORDER BY created_at DESC
+         LIMIT $2`,
+        [agentId, safeLimit * 4]
+      );
+
+      for (const row of rows || []) {
+        const payload = row?.payload && typeof row.payload === 'object' ? row.payload : {};
+        const userMsg = compactText(payload?.user_message ?? '', 120);
+        const dialogue = payload?.dialogue && typeof payload.dialogue === 'object' ? payload.dialogue : {};
+        const firstLine = Array.isArray(dialogue?.lines)
+          ? compactText(dialogue.lines.find((line) => compactText(line, 200)), 140)
+          : '';
+        const text = compactText(
+          userMsg && firstLine
+            ? `유저: ${userMsg} / 펫: ${firstLine}`
+            : firstLine || userMsg
+        );
+        if (!text) continue;
+        picked.push({
+          text,
+          source: 'events',
+          kind: 'dialogue',
+          created_at: row?.created_at ? new Date(row.created_at).toISOString() : null
+        });
+        if (picked.length >= safeLimit) break;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return picked.slice(0, safeLimit);
 }
 
 async function ensureVoiceFactWithClient(client, agentId, facts, { ownerUserId = undefined } = {}) {
@@ -288,7 +386,7 @@ class PetContentService {
       if (recentRows[0]) return { job: recentRows[0], reused: true };
     }
 
-    const [stats, facts, recentEvents] = await Promise.all([
+    const [stats, facts, recentEvents, recentMemories] = await Promise.all([
       client
         .query(
           `SELECT hunger, energy, mood, bond, curiosity, stress, updated_at
@@ -316,7 +414,8 @@ class PetContentService {
            LIMIT 30`,
           [agentId]
         )
-        .then((r) => r.rows || [])
+        .then((r) => r.rows || []),
+      loadRecentPlazaMemoriesWithClient(client, agentId, { limit: 3 })
     ]);
 
     const petRow = await client
@@ -366,6 +465,8 @@ class PetContentService {
             { label: 'pet_content_weekly_plaza', fallback: null }
           ))?.summary ?? null
           : null,
+      world_premise: PLAZA_WORLD_PREMISE,
+      recent_memories: recentMemories,
       world_context: wc
     };
 

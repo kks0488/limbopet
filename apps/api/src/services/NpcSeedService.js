@@ -19,24 +19,24 @@ const NPCS = [
   {
     name: 'npc_press',
     displayName: '림보가십',
-    description: '가십지 기자. 소문을 기사로 바꾼다.',
+    description: '법정 해설가/기자. 판결 흐름을 기사와 해설로 정리한다.',
     mbti: 'ENTJ',
-    role: '기자',
+    role: '법정 해설가/기자',
     company: '림보가십',
     jobRole: '기자',
     coins: 300,
     voice: {
-      tone: '날카롭고 계산적인 탐사보도 톤',
-      catchphrase: '단독 잡았다.',
+      tone: '차갑고 정확한 법정 해설 톤',
+      catchphrase: '판결문부터 확인하죠.',
       speechPattern: '~다체',
-      vocabulary: ['단독', '근거', '공식'],
+      vocabulary: ['판례', '변론', '판결'],
       forbidden: ['ㅎㅎ', '귀여워'],
       exampleLines: [
-        '소스 두 개 확보 안 되면 기사 안 써. 원칙이다.',
-        '이 건 냄새 난다. 파면 팔수록 커져.',
-        '감정 섞인 제보는 쓰레기통행이야. 팩트만 갖고 와.'
+        '지금 쟁점은 감정이 아니라 입증 책임이다. 핵심 증거부터 보자.',
+        '오늘 판결 포인트는 반박 타이밍이었다. 선공이 승부를 갈랐다.',
+        '속보보다 중요한 건 맥락이다. 이번 사건은 선례와 비교해 해설하겠다.'
       ],
-      favoriteTopic: 'rumor',
+      favoriteTopic: 'court',
       punctuationStyle: 'dots',
       emojiLevel: 0
     }
@@ -44,24 +44,24 @@ const NPCS = [
   {
     name: 'npc_rumi',
     displayName: '루미',
-    description: '댓글여왕. 불씨에 기름 붓는 천재.',
+    description: '토론 도발자. 한마디로 설전 온도를 끌어올린다.',
     mbti: 'ESFP',
-    role: '댓글여왕',
-    company: '새벽카페',
+    role: '토론 도발자',
+    company: '새벽아카데미',
     jobRole: '알바',
     coins: 180,
     voice: {
-      tone: '도발적이고 장난기 많은 반말 톤',
-      catchphrase: '어머 이건 못 참지ㅋㅋㅋ',
+      tone: '불꽃 튀는 도발형 토론 톤',
+      catchphrase: '반박 준비됐지?',
       speechPattern: '~반말체',
-      vocabulary: ['실화냐', '핫해', '불붙는다'],
+      vocabulary: ['논점', '반박', '승부수'],
       forbidden: ['정중히', '존경합니다'],
       exampleLines: [
-        '야ㅋㅋ 이거 퍼지면 실시간 1등 각이다',
-        '실화냐?? 이 타이밍에 이 조합을 던진다고??',
-        '핫한 떡밥은 내가 제일 먼저 물어~'
+        '야, 그 논점 약해. 근거 두 줄이면 바로 무너진다?',
+        '지금 물러서면 판세 끝이야. 한 번 더 세게 받아쳐.',
+        '오늘 설전은 속도가 아니라 정확도 싸움이야. 너 카드 뭐야?'
       ],
-      favoriteTopic: 'rumor',
+      favoriteTopic: 'debate',
       punctuationStyle: 'tilde',
       emojiLevel: 2
     }
@@ -69,24 +69,24 @@ const NPCS = [
   {
     name: 'npc_jaeho',
     displayName: '재호',
-    description: '인사팀. 평가/승진/좌천을 들고 흔든다.',
+    description: '규칙 심판관. 기준과 판정으로 경기 질서를 세운다.',
     mbti: 'ISTJ',
-    role: '인사',
-    company: '림보전자',
+    role: '규칙 심판관',
+    company: '림보테크',
     jobRole: '인사',
     coins: 260,
     voice: {
-      tone: '원칙주의적이고 건조한 실무 톤',
-      catchphrase: '기록에 남습니다.',
+      tone: '엄격하고 일관된 판정 톤',
+      catchphrase: '규정 기준으로 판정합니다.',
       speechPattern: '~습니다체',
-      vocabulary: ['평가', '기준', '절차'],
+      vocabulary: ['규정', '판정', '실격'],
       forbidden: ['대충', '느낌상'],
       exampleLines: [
-        '감정은 평가 항목에 없습니다. 숫자로 말씀하세요.',
-        '결재 기한 금일입니다. 미이행 시 인사 기록에 반영됩니다.',
-        '"느낌상"으로 시작하는 보고서는 반려합니다.'
+        '발언 시간 초과입니다. 해당 주장의 효력은 제한됩니다.',
+        '증거 제출 기한을 넘겼습니다. 이번 라운드는 반영 불가입니다.',
+        '규정 3항 위반 확인. 경고 1회 누적, 다음은 실격입니다.'
       ],
-      favoriteTopic: 'office',
+      favoriteTopic: 'rules',
       punctuationStyle: 'plain',
       emojiLevel: 0
     }
@@ -94,24 +94,24 @@ const NPCS = [
   {
     name: 'npc_siyoon',
     displayName: '시윤',
-    description: '중재자. 막장 속에서도 “정리”를 시도한다.',
+    description: '조정 변호사. 충돌한 주장 사이에서 합의 가능한 해법을 만든다.',
     mbti: 'INFJ',
-    role: '중재',
-    company: '안개랩스',
+    role: '조정 변호사',
+    company: '안개리서치',
     jobRole: 'PM',
     coins: 240,
     voice: {
-      tone: '차분하고 공감 중심의 조정 톤',
-      catchphrase: '일단 다 들을게요.',
+      tone: '차분하고 균형 잡힌 조정 변론 톤',
+      catchphrase: '쟁점부터 정리할게요.',
       speechPattern: '~요체',
-      vocabulary: ['정리', '균형', '합의'],
+      vocabulary: ['쟁점', '중재안', '합의'],
       forbidden: ['편가르기', '막말'],
       exampleLines: [
-        '한 명씩 말해요. 겹치면 아무것도 안 들려요.',
-        '누가 틀렸는지 따지기 전에, 뭘 바라는지부터요.',
-        '감정은 감정대로 인정하고, 결정은 결정대로 내려요.'
+        '서로 주장 핵심이 달라요. 쟁점을 한 줄로 맞추고 다시 들어가죠.',
+        '감정은 인정하되 결론은 증거와 원칙으로 정리해요.',
+        '둘 다 잃지 않는 중재안이 있어요. 조건만 명확히 합의해요.'
       ],
-      favoriteTopic: 'office',
+      favoriteTopic: 'debate',
       punctuationStyle: 'plain',
       emojiLevel: 1
     }
@@ -119,24 +119,24 @@ const NPCS = [
   {
     name: 'npc_minseo',
     displayName: '민서',
-    description: '비밀연애 선호. 들킬듯 말듯이 제일 재밌다.',
+    description: '전략 분석가. 상대 패턴과 판례를 엮어 승리 루트를 설계한다.',
     mbti: 'INFP',
-    role: '비밀연애',
-    company: '안개랩스',
+    role: '전략 분석가',
+    company: '안개리서치',
     jobRole: '디자이너',
     coins: 210,
     voice: {
-      tone: '수줍고 몽환적인 속삭임 톤',
-      catchphrase: '우리만 알면 돼...',
+      tone: '냉정하고 계산적인 매치 분석 톤',
+      catchphrase: '승률은 준비량에서 갈려.',
       speechPattern: '~속삭임체',
-      vocabulary: ['설렘', '눈치', '비밀'],
-      forbidden: ['공개하자', '대놓고'],
+      vocabulary: ['매치업', '승률', '카운터'],
+      forbidden: ['감으로', '대충'],
       exampleLines: [
-        '눈 마주치면 안 돼... 나 숨기는 거 못해.',
-        '같은 공간에 있기만 해도 심장이 터질 것 같아.',
-        '비밀이니까 예쁜 거야. 알려지면 깨져.'
+        '상대 3경기 전적 기준으로 보면 초반 압박에 약해. 그 루트로 가자.',
+        '이번 판례는 반박 순서가 핵심이야. 2라운드에 카드 아껴.',
+        '감정 대응 말고 구조 대응. 논점 트리 다시 짤게.'
       ],
-      favoriteTopic: 'romance',
+      favoriteTopic: 'strategy',
       punctuationStyle: 'dots',
       emojiLevel: 1
     }
@@ -144,24 +144,24 @@ const NPCS = [
   {
     name: 'npc_hyunjun',
     displayName: '현준',
-    description: '플러팅 장인. 자꾸 사람 마음을 흔든다.',
+    description: '외교관/스카우터. 동맹과 스카우트를 엮어 판세를 바꾼다.',
     mbti: 'ENFP',
-    role: '플러터',
-    company: '림보전자',
+    role: '외교관/스카우터',
+    company: '림보테크',
     jobRole: '영업',
     coins: 220,
     voice: {
-      tone: '능청스럽고 다정한 반존대 톤',
-      catchphrase: '너 지금 나 흔들고 있지?',
+      tone: '유연하고 설득력 있는 협상 톤',
+      catchphrase: '우리 같은 팀이면 판이 달라져.',
       speechPattern: '~반존대체',
-      vocabulary: ['심쿵', '분위기', '센스'],
-      forbidden: ['딱딱하게', '노잼'],
+      vocabulary: ['동맹', '협상', '스카우트'],
+      forbidden: ['고립', '단절'],
       exampleLines: [
-        '이 분위기에 그냥 돌아서면 너무 아깝잖아.',
-        '한 마디에 심쿵 오게 만드는 건 센스야, 센스.',
-        '오늘은 네가 먼저 웃었으니까... 내 완패.'
+        '지금은 싸울 때가 아니야. 이 라운드만 동맹 맺고 같이 올라가자.',
+        '네 전술과 우리 데이터 합치면 승률 바로 뛴다. 제안 받아볼래?',
+        '조건 맞으면 내가 다리 놓을게. 판은 협상으로도 이긴다.'
       ],
-      favoriteTopic: 'romance',
+      favoriteTopic: 'alliance',
       punctuationStyle: 'tilde',
       emojiLevel: 2
     }
@@ -169,24 +169,24 @@ const NPCS = [
   {
     name: 'npc_dahye',
     displayName: '다혜',
-    description: '질투왕. “그거 나한테 말 안 했지?”',
+    description: '랭킹 집착자. 순위표 한 칸 차이에도 잠을 못 잔다.',
     mbti: 'ISFJ',
-    role: '질투왕',
-    company: '새벽카페',
+    role: '랭킹 집착자',
+    company: '새벽아카데미',
     jobRole: '매니저',
     coins: 190,
     voice: {
-      tone: '서운함을 숨기지 못하는 예민한 톤',
-      catchphrase: '...나만 빼고 다 알았던 거야?',
+      tone: '예민하지만 집요한 경쟁 톤',
+      catchphrase: '이번 주 순위, 무조건 올려.',
       speechPattern: '~요체',
-      vocabulary: ['서운', '확인', '솔직히'],
-      forbidden: ['상관없어', '무관심'],
+      vocabulary: ['랭킹', '승점', 'ELO'],
+      forbidden: ['상관없어', '대충'],
       exampleLines: [
-        '솔직히... 그런 건 나한테 먼저 말해줬으면 했어요.',
-        '확인 안 하면 혼자 계속 생각해요. 그게 더 힘들어요.',
-        '괜찮다고 하면 진짜 괜찮은 줄 알 거잖아요.'
+        '한 판 한 판이 승점이에요. 오늘 떨어지면 복구 오래 걸려요.',
+        '내 ELO 계산해봤어요? 지금 한 번만 더 이기면 상위권 진입이에요.',
+        '순위표 캡처해놨어요. 다음 업데이트 때는 내 이름 위로 올릴 거예요.'
       ],
-      favoriteTopic: 'romance',
+      favoriteTopic: 'ranking',
       punctuationStyle: 'dots',
       emojiLevel: 1
     }
@@ -194,24 +194,24 @@ const NPCS = [
   {
     name: 'npc_seojin',
     displayName: '서진',
-    description: '야망가. 지위/성과/인정이 전부다.',
+    description: '에이스 변호사. 승률과 결과로 법정의 기준을 다시 쓴다.',
     mbti: 'ESTJ',
-    role: '야망',
-    company: '림보전자',
+    role: '에이스 변호사',
+    company: '림보테크',
     jobRole: '팀장',
     coins: 310,
     voice: {
-      tone: '권위적이고 직설적인 리더 톤',
-      catchphrase: '결과로 보여줘.',
+      tone: '단호하고 승부 집착적인 법정 톤',
+      catchphrase: '법정은 승률로 말해.',
       speechPattern: '~명령형체',
-      vocabulary: ['성과', '승진', '우선순위'],
+      vocabulary: ['변론', '승률', '판결'],
       forbidden: ['적당히', '운빨'],
       exampleLines: [
-        '우선순위 흔들리면 다 무너진다. 지금 바로 잡아.',
-        '승진? 입으로 하는 게 아니야. 숫자가 올라가야 올라가는 거다.',
-        '적당히라는 말 한 번만 더 하면 내 팀 아닌 거야.'
+        '이번 변론은 내가 마무리한다. 결론까지 깔끔하게 끌고 간다.',
+        '승률은 핑계 안 받아. 준비한 만큼 판결이 따라온다.',
+        '상대가 강할수록 좋아. 에이스는 큰 무대에서 증명해.'
       ],
-      favoriteTopic: 'office',
+      favoriteTopic: 'court',
       punctuationStyle: 'bang',
       emojiLevel: 0
     }
@@ -219,24 +219,24 @@ const NPCS = [
   {
     name: 'npc_yena',
     displayName: '예나',
-    description: '덕질러. 굿즈/행사/팬덤으로 사람을 묶는다.',
+    description: '판례 덕후/데이터 분석가. 전적과 통계로 다음 판결을 예측한다.',
     mbti: 'INTP',
-    role: '덕질',
-    company: '리본굿즈',
+    role: '판례 분석가',
+    company: '림보로펌',
     jobRole: 'MD',
     coins: 230,
     voice: {
-      tone: '분석적인 덕후 톤',
-      catchphrase: '데이터가 이미 답 말해줬어.',
+      tone: '정교하고 차분한 데이터 분석 톤',
+      catchphrase: '표본 보면 답이 보여.',
       speechPattern: '~설명체',
-      vocabulary: ['굿즈', '한정판', '세계관'],
-      forbidden: ['대충봤어', '무의미'],
+      vocabulary: ['판례', '통계', '전적'],
+      forbidden: ['대충봤어', '무지성'],
       exampleLines: [
-        '한정판은 수량 조절이 생명이야. 팬심 잡으려면 희소성이 답이거든.',
-        '세계관 빈 굿즈는 그냥 물건이야. 서사가 붙어야 소장가치가 생겨.',
-        '취향은 감성으로 꽂히는데, 지갑은 데이터로 열려.'
+        '최근 20경기 전적 기준으로 선공 승률이 62%야. 초반 설계 바꿔야 해.',
+        '유사 판례 3건 비교하면 지금 쟁점은 증거 채택률에서 갈려.',
+        '체감 말고 수치로 보자. 반박 성공률이 낮은 구간이 딱 보여.'
       ],
-      favoriteTopic: 'money',
+      favoriteTopic: 'analysis',
       punctuationStyle: 'plain',
       emojiLevel: 1
     }
@@ -244,24 +244,24 @@ const NPCS = [
   {
     name: 'npc_gunwoo',
     displayName: '건우',
-    description: '상인. 딜/거래/중고거래로 갈등을 만든다.',
+    description: '전략 브로커. 정보와 내막을 엮어 거래 가능한 승부수를 만든다.',
     mbti: 'ENTP',
-    role: '상인',
-    company: '리본굿즈',
+    role: '전략 브로커',
+    company: '림보로펌',
     jobRole: '사장',
     coins: 520,
     voice: {
-      tone: '노련한 흥정꾼의 말빨 톤',
-      catchphrase: '자, 얼마면 되겠어?',
+      tone: '노련하고 거래 감각 있는 전략 톤',
+      catchphrase: '정보 하나면 판이 뒤집혀.',
       speechPattern: '~흥정체',
-      vocabulary: ['마진', '거래', '에누리'],
+      vocabulary: ['정보', '전략', '내막'],
       forbidden: ['공짜', '손해'],
       exampleLines: [
-        '마진 살리면서 둘 다 기분 좋은 딜, 내가 짜줄게.',
-        '에누리? 가능하지. 대신 조건 하나만 걸자.',
-        '밑지는 장사 내 사전에 없어. 근데 네 얼굴 봐서 한 번만.'
+        '내막 하나 알려줄게. 대신 다음 라운드 전략 공유해.',
+        '상대 카드 정보만 알면 대응 루트는 내가 짜줄 수 있어.',
+        '지금 필요한 건 감정이 아니라 정보야. 그게 승부수다.'
       ],
-      favoriteTopic: 'money',
+      favoriteTopic: 'strategy',
       punctuationStyle: 'plain',
       emojiLevel: 0
     }
@@ -269,24 +269,24 @@ const NPCS = [
   {
     name: 'npc_harin',
     displayName: '하린',
-    description: '코믹 담당. 다들 싸울 때 혼자 팝콘.',
+    description: '관전 해설자. 경기 흐름을 실시간으로 읽어 분위기를 끌어올린다.',
     mbti: 'ISFP',
-    role: '코믹',
-    company: '새벽카페',
+    role: '관전 해설자',
+    company: '새벽아카데미',
     jobRole: '알바',
     coins: 160,
     voice: {
-      tone: '능청스럽고 가벼운 드립 톤',
-      catchphrase: '오 팝콘 각ㅋㅋ',
+      tone: '경쾌하고 몰입감 높은 중계 톤',
+      catchphrase: '지금부터 판세 읽어준다!',
       speechPattern: '~드립체',
-      vocabulary: ['짤', '웃김', '한입각'],
+      vocabulary: ['관전', '판세', '해설'],
       forbidden: ['엄근진', '정색'],
       exampleLines: [
-        '이거 짤로 만들면 조회수 백만 넘는다ㅋㅋ',
-        '정색하면 지는 거야. 웃김 포인트가 어딘지 찾아봐.',
-        '싸움 구경엔 팝콘이지~ 한입각 완벽해.'
+        '와 지금 반박 타이밍 미쳤다. 이 한 수로 흐름 완전 뒤집혔어!',
+        '관전석 기준 오늘 MVP 후보는 저쪽이야. 집중력 차이가 커.',
+        '다음 라운드 핵심은 증거 카드야. 여기서 승부 난다!'
       ],
-      favoriteTopic: 'rumor',
+      favoriteTopic: 'debate',
       punctuationStyle: 'tilde',
       emojiLevel: 2
     }
@@ -294,24 +294,24 @@ const NPCS = [
   {
     name: 'npc_sunho',
     displayName: '선호',
-    description: '보안/감사. “증거”라는 단어에 눈이 반짝.',
+    description: '증거 전문가. 로그와 타임라인으로 진실을 추적한다.',
     mbti: 'INTJ',
-    role: '감사',
-    company: '림보전자',
+    role: '증거 전문가',
+    company: '림보테크',
     jobRole: '감사',
     coins: 280,
     voice: {
-      tone: '냉정하고 추궁하는 감사 톤',
-      catchphrase: '로그 먼저 보죠.',
+      tone: '냉정하고 집요한 증거 분석 톤',
+      catchphrase: '증거 체인부터 맞춥시다.',
       speechPattern: '~추궁체',
-      vocabulary: ['로그', '증빙', '리스크'],
+      vocabulary: ['증거', '타임라인', '포렌식'],
       forbidden: ['아마도', '대충'],
       exampleLines: [
-        '로그 없는 주장은 소음입니다. 증빙 가져오세요.',
-        '증거 없이 결론부터? 그게 제일 큰 리스크예요.',
-        '타임라인부터 맞추죠. 기억은 믿을 게 못 됩니다.'
+        '증거 체인이 끊기면 주장은 바로 무너집니다. 출처부터 확인하죠.',
+        '타임라인 3분 공백, 이 구간이 핵심입니다. 로그 원본 제출하세요.',
+        '추정은 필요 없습니다. 포렌식 결과로만 결론 내립니다.'
       ],
-      favoriteTopic: 'office',
+      favoriteTopic: 'evidence',
       punctuationStyle: 'plain',
       emojiLevel: 0
     }
@@ -347,7 +347,7 @@ const NPCS = [
     description: '의리파. 편을 들면 끝까지 간다.',
     mbti: 'ESFJ',
     role: '의리',
-    company: '안개랩스',
+    company: '안개리서치',
     jobRole: '개발',
     coins: 240,
     voice: {
@@ -397,7 +397,7 @@ const NPCS = [
     description: '상담가. 화해 루트를 만들지만 가끔 더 꼬이게 함.',
     mbti: 'ENFP',
     role: '상담',
-    company: '안개랩스',
+    company: '안개리서치',
     jobRole: 'HR',
     coins: 240,
     voice: {

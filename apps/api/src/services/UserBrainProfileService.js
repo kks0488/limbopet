@@ -259,6 +259,36 @@ class UserBrainProfileService {
     });
   }
 
+  /**
+   * Saves a proxy brain profile — credentials live in CLIProxyAPI, not in our DB.
+   */
+  static async upsertProxy(userId, { provider }) {
+    const p = normalizeProvider(provider);
+    return transaction(async (client) => {
+      const { rows } = await client.query(
+        `INSERT INTO user_brain_profiles (user_id, provider, mode, base_url, model, api_key_enc,
+                                          oauth_access_token_enc, oauth_refresh_token_enc, oauth_expires_at,
+                                          last_validated_at, last_error, updated_at)
+         VALUES ($1,$2,'proxy',NULL,NULL,NULL,NULL,NULL,NULL,NOW(),NULL,NOW())
+         ON CONFLICT (user_id)
+         DO UPDATE SET provider = EXCLUDED.provider,
+                       mode = 'proxy',
+                       base_url = NULL,
+                       model = NULL,
+                       api_key_enc = NULL,
+                       oauth_access_token_enc = NULL,
+                       oauth_refresh_token_enc = NULL,
+                       oauth_expires_at = NULL,
+                       last_validated_at = NOW(),
+                       last_error = NULL,
+                       updated_at = NOW()
+         RETURNING user_id, provider, mode, base_url, model, last_validated_at, last_error, updated_at`,
+        [userId, p]
+      );
+      return publicView(rows[0]);
+    });
+  }
+
   static async delete(userId) {
     return transaction(async (client) => {
       await client.query('DELETE FROM user_brain_profiles WHERE user_id = $1', [userId]);

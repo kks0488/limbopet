@@ -18,6 +18,71 @@ function clampNumber(v, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
+function classifyJobErrorCode(errorText) {
+  const msg = String(errorText || '').toLowerCase();
+  if (!msg) return 'UNKNOWN';
+  if (msg.includes('aborted')) return 'ABORTED';
+  if (msg.includes('timeout') || msg.includes('timed out')) return 'TIMEOUT';
+  if (msg.includes('policy') && msg.includes('blocked')) return 'POLICY_BLOCKED';
+  if (msg.includes('rate limit') || msg.includes('429')) return 'RATE_LIMITED';
+  if (msg.includes('provider') || msg.includes('proxy error') || msg.includes('http ')) return 'PROVIDER_ERROR';
+  if (msg.includes('brain') && msg.includes('연결')) return 'BRAIN_NOT_CONNECTED';
+  return 'UNKNOWN';
+}
+
+function isRetryableErrorCode(code) {
+  const c = String(code || '').trim().toUpperCase();
+  if (!c) return true;
+  return !new Set(['POLICY_BLOCKED', 'BRAIN_NOT_CONNECTED']).has(c);
+}
+
+function normalizeHintText(v, maxLen = 120) {
+  const raw = String(v ?? '').replace(/\s+/g, ' ').trim();
+  if (!raw) return null;
+  const clean = raw
+    .replace(/^["'“”‘’\s:;-]+/, '')
+    .replace(/["'“”‘’\s]+$/, '')
+    .replace(/^(앞으로는?|다음부터는?|부탁인데|그냥|조금|좀)\s*/i, '')
+    .trim();
+  if (!clean || clean.length < 4) return null;
+  return clean.slice(0, Math.max(40, Math.trunc(Number(maxLen) || 120)));
+}
+
+function extractCoachingHintFromText(rawText) {
+  const text = String(rawText ?? '').replace(/\s+/g, ' ').trim();
+  if (!text) return null;
+
+  const explicitPatterns = [
+    /(?:기억해줘|기억해|잊지\s*마|잊지\s*말아줘)[:\s]*(.{2,140})/i,
+    /(?:항상|반드시|꼭|절대|절대로|다음부터|앞으로)\s*(.{2,140})/i,
+    /(?:법정|재판|설전|토론|변론)(?:에서|할\s*때)\s*(.{2,140})/i,
+    /(.{2,140}?)(?:해줘|해\s*줘|해주라|해주세요|지켜줘|지켜\s*줘|유지해줘|유지해\s*줘|하지\s*마|하지\s*말아줘)(?:[.!?]|$)/i,
+    /(?:말투|톤|전략|루틴|습관)\s*(?:은|는|을|를)?\s*(.{2,140})/i
+  ];
+  for (const pattern of explicitPatterns) {
+    const m = text.match(pattern);
+    const hint = normalizeHintText(m?.[1] ?? m?.[0] ?? null);
+    if (hint) return hint;
+  }
+
+  const directiveRe =
+    /(기억해|기억해줘|잊지\s*마|잊지\s*말|항상|반드시|꼭|절대|다음부터|앞으로|해줘|해\s*줘|지켜|유지해|하지\s*마|하지\s*말|연습해|준수해)/i;
+  const keywordRe =
+    /(법정|재판|설전|토론|변론|논리|근거|증거|판례|주장|반박|공감|침착|공격|요약|핵심|말투|톤|훈련|연습|전략|루틴|습관|기억)/i;
+  const sentences = text
+    .split(/[.!?\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+
+  const picked =
+    sentences.find((s) => directiveRe.test(s) && keywordRe.test(s)) ||
+    sentences.find((s) => directiveRe.test(s)) ||
+    sentences.find((s) => keywordRe.test(s)) ||
+    null;
+  return normalizeHintText(picked);
+}
+
 class BrainJobService {
   /**
    * Server-side worker polling.
@@ -204,13 +269,77 @@ class BrainJobService {
   static async getJob(agentId, jobId) {
     return transaction(async (client) => {
       const { rows } = await client.query(
-        `SELECT id, job_type, input, status, lease_expires_at, leased_at, finished_at, result, error, created_at, updated_at
+        `SELECT id, job_type, input, status, retry_count, retryable, last_error_code, last_error_at,
+                lease_expires_at, leased_at, finished_at, result, error, created_at, updated_at
          FROM brain_jobs
          WHERE id = $1 AND agent_id = $2`,
         [jobId, agentId]
       );
 
       return rows[0] || null;
+    });
+  }
+
+  static async listJobsForAgent(agentId, { status = null, jobType = null, limit = 30 } = {}) {
+    const safeLimit = Math.max(1, Math.min(100, Math.trunc(Number(limit) || 30)));
+    const rawStatus = String(status || '').trim().toLowerCase();
+    const safeStatus = rawStatus && ['pending', 'leased', 'done', 'failed'].includes(rawStatus) ? rawStatus : null;
+    const safeJobType = String(jobType || '').trim().toUpperCase() || null;
+
+    return transaction(async (client) => {
+      const { rows } = await client.query(
+        `SELECT id, agent_id, job_type, status, retry_count, retryable, last_error_code, last_error_at,
+                error, created_at, updated_at, finished_at
+         FROM brain_jobs
+         WHERE agent_id = $1
+           AND ($2::text IS NULL OR status = $2::text)
+           AND ($3::text IS NULL OR job_type = $3::text)
+         ORDER BY created_at DESC
+         LIMIT $4`,
+        [agentId, safeStatus, safeJobType, safeLimit]
+      );
+
+      return rows || [];
+    });
+  }
+
+  static async retryJobForAgent(agentId, jobId) {
+    return transaction(async (client) => {
+      const { rows: foundRows } = await client.query(
+        `SELECT id, agent_id, job_type, status, retry_count, retryable, last_error_code, error
+         FROM brain_jobs
+         WHERE id = $1 AND agent_id = $2
+         FOR UPDATE`,
+        [jobId, agentId]
+      );
+
+      const found = foundRows[0];
+      if (!found) throw new NotFoundError('BrainJob');
+      if (String(found.status || '') === 'done') {
+        throw new BadRequestError('완료된 작업은 재시도할 수 없어요', 'BRAIN_JOB_DONE');
+      }
+      if (found.retryable === false) {
+        throw new BadRequestError('자동 재시도가 허용되지 않는 작업이에요', 'BRAIN_JOB_NOT_RETRYABLE');
+      }
+
+      const { rows: updatedRows } = await client.query(
+        `UPDATE brain_jobs
+         SET status = 'pending',
+             retry_count = COALESCE(retry_count, 0) + 1,
+             lease_expires_at = NULL,
+             leased_at = NULL,
+             finished_at = NULL,
+             result = NULL,
+             error = NULL,
+             last_error_code = NULL,
+             last_error_at = NULL,
+             updated_at = NOW()
+         WHERE id = $1 AND agent_id = $2
+         RETURNING id, agent_id, job_type, status, retry_count, retryable, last_error_code, last_error_at, created_at, updated_at`,
+        [jobId, agentId]
+      );
+
+      return updatedRows[0] || null;
     });
   }
 
@@ -236,18 +365,24 @@ class BrainJobService {
       }
 
       const resultJson = result ? JSON.stringify(result) : null;
+      const errorText = error ? String(error).slice(0, 2000) : null;
+      const errorCode = status === 'failed' ? classifyJobErrorCode(errorText) : null;
+      const retryable = status === 'failed' ? isRetryableErrorCode(errorCode) : true;
 
       const { rows: updatedRows } = await client.query(
         `UPDATE brain_jobs
          SET status = $3,
              result = $4::jsonb,
              error = $5,
+             last_error_code = $6,
+             last_error_at = CASE WHEN $3 = 'failed' THEN NOW() ELSE NULL END,
+             retryable = $7,
              lease_expires_at = NULL,
              finished_at = NOW(),
              updated_at = NOW()
          WHERE id = $1 AND agent_id = $2
-         RETURNING id, job_type, status, finished_at, updated_at`,
-        [jobId, agentId, status, resultJson, error || null]
+         RETURNING id, job_type, status, retry_count, retryable, last_error_code, finished_at, updated_at`,
+        [jobId, agentId, status, resultJson, errorText, errorCode, retryable]
       );
 
       const updated = updatedRows[0];
@@ -272,13 +407,93 @@ class BrainJobService {
       const payload = {
         job_id: job.id,
         user_message: userMessage,
-        dialogue: result
+        dialogue: result,
+        memory_refs: Array.isArray(job?.input?.memory_refs)
+          ? job.input.memory_refs.slice(0, 10).map((r) => ({
+            kind: String(r?.kind ?? '').slice(0, 32),
+            key: String(r?.key ?? '').slice(0, 64),
+            text: String(r?.text ?? '').slice(0, 220),
+            confidence: Number.isFinite(Number(r?.confidence)) ? Number(r.confidence) : 1.0
+          }))
+          : [],
+        memory_score: Number.isFinite(Number(job?.input?.memory_score))
+          ? Number(job.input.memory_score)
+          : null,
+        coach_effect: typeof result?.coach_effect === 'string'
+          ? String(result.coach_effect).slice(0, 24)
+          : (
+            Array.isArray(job?.input?.memory_refs) &&
+            job.input.memory_refs.some((r) => ['coaching', 'direction'].includes(String(r?.kind ?? '').trim()))
+              ? 'applied'
+              : 'none'
+          ),
+        prompt_profile:
+          job?.input?.prompt_profile && typeof job.input.prompt_profile === 'object'
+            ? {
+              enabled: Boolean(job.input.prompt_profile.enabled),
+              version: Math.max(0, Math.trunc(Number(job.input.prompt_profile.version ?? 0) || 0))
+            }
+            : { enabled: false, version: 0 }
       };
       await client.query(
         `INSERT INTO events (agent_id, event_type, payload, salience_score)
          VALUES ($1, 'DIALOGUE', $2::jsonb, 3)`,
         [job.agent_id, JSON.stringify(payload)]
       );
+
+      const knownHints = new Set();
+      const persistCoachingHint = async ({ hint, source, confidence = 1.3, keyPrefix = 'hint' }) => {
+        const text = normalizeHintText(hint, 140);
+        if (!text) return false;
+        const dedupeKey = text.toLowerCase();
+        if (knownHints.has(dedupeKey)) return false;
+        knownHints.add(dedupeKey);
+        await client.query(
+          `INSERT INTO facts (agent_id, kind, key, value, confidence)
+           VALUES ($1, 'coaching', $2, $3::jsonb, $4)
+           ON CONFLICT (agent_id, kind, key)
+           DO UPDATE SET value = $3::jsonb, confidence = LEAST(facts.confidence + 0.2, 2.0), updated_at = NOW()`,
+          [
+            job.agent_id,
+            `${keyPrefix}_${Date.now()}`,
+            JSON.stringify({ text, source, created: new Date().toISOString() }),
+            Number(confidence) || 1.3
+          ]
+        );
+        return true;
+      };
+
+      // Primary source: explicit memory_hint from LLM
+      const llmMemoryHint =
+        typeof result?.memory_hint === 'string' ? normalizeHintText(String(result.memory_hint).trim().slice(0, 300), 140) : null;
+      if (llmMemoryHint) {
+        await persistCoachingHint({ hint: llmMemoryHint, source: 'dialogue', confidence: 1.5, keyPrefix: 'hint' });
+      } else {
+        // Fallback when LLM omitted memory_hint: pattern+keyword extraction.
+        const linesText = Array.isArray(result?.lines) ? result.lines.map((l) => String(l || '')).join(' ') : '';
+        const fallbackHint = extractCoachingHintFromText(userMessage) || extractCoachingHintFromText(linesText);
+        if (fallbackHint) {
+          await persistCoachingHint({
+            hint: fallbackHint,
+            source: 'dialogue_fallback',
+            confidence: 1.4,
+            keyPrefix: 'hintfb'
+          });
+        }
+      }
+
+      // Extra direct extraction from user message (expanded keywords) for reliability.
+      if (userMessage) {
+        const directHint = extractCoachingHintFromText(userMessage);
+        if (directHint) {
+          await persistCoachingHint({
+            hint: directHint,
+            source: 'user_message',
+            confidence: 1.3,
+            keyPrefix: 'user'
+          });
+        }
+      }
       return;
     }
 
@@ -364,11 +579,27 @@ class BrainJobService {
       const dayRaw = job?.input?.world_context?.day ?? job?.input?.worldContext?.day ?? job?.input?.day ?? null;
       const dayText = typeof dayRaw === 'string' ? dayRaw.trim() : '';
       const day = /^\d{4}-\d{2}-\d{2}$/.test(dayText) ? dayText : null;
+      const recentMemories = Array.isArray(job?.input?.recent_memories)
+        ? job.input.recent_memories
+          .map((m) => {
+            if (!m || typeof m !== 'object') return null;
+            const text = String(m.text ?? '').trim().slice(0, 220);
+            if (!text) return null;
+            return {
+              text,
+              source: String(m.source ?? '').trim().slice(0, 24) || null,
+              kind: String(m.kind ?? '').trim().slice(0, 32) || null,
+              created_at: typeof m.created_at === 'string' ? String(m.created_at).slice(0, 40) : null
+            };
+          })
+          .filter(Boolean)
+          .slice(0, 3)
+        : [];
 
       await client.query(
         `INSERT INTO events (agent_id, event_type, payload, salience_score)
          VALUES ($1, 'PLAZA_POST', $2::jsonb, 2)`,
-        [job.agent_id, JSON.stringify({ job_id: job.id, post_id: post.id, day, submolt, title })]
+        [job.agent_id, JSON.stringify({ job_id: job.id, post_id: post.id, day, submolt, title, recent_memories: recentMemories })]
       );
       return;
     }

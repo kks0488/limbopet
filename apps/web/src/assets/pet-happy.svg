@@ -1,87 +1,73 @@
 <svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <radialGradient id="bodyGrad-happy" cx="0.3" cy="0.3" r="0.8">
-      <stop offset="0%" style="stop-color:#E6D5FF;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#C8B0E8;stop-opacity:1" />
+    <linearGradient id="body-h" x1="0.3" y1="0" x2="0.7" y2="1">
+      <stop offset="0%" stop-color="#d8b4fe"/>
+      <stop offset="100%" stop-color="#BF5AF2"/>
+    </linearGradient>
+    <radialGradient id="shine-h" cx="0.35" cy="0.3" r="0.5">
+      <stop offset="0%" stop-color="#f3e8ff" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#d8b4fe" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="bellyGrad-happy" cx="0.5" cy="0.5" r="0.6">
-      <stop offset="0%" style="stop-color:#FFF5FB;stop-opacity:0.9" />
-      <stop offset="100%" style="stop-color:#FFE8F5;stop-opacity:0.3" />
+    <!-- Belly highlight (warm tint) -->
+    <radialGradient id="belly-h" cx="0.5" cy="0.55" r="0.35">
+      <stop offset="0%" stop-color="#fce7f3" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#d8b4fe" stop-opacity="0"/>
     </radialGradient>
-    <filter id="shadow-happy">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
-      <feOffset dx="0" dy="2" result="offsetblur"/>
-      <feComponentTransfer>
-        <feFuncA type="linear" slope="0.2"/>
-      </feComponentTransfer>
-      <feMerge>
-        <feMergeNode/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
+    <!-- Eye iris gradient -->
+    <radialGradient id="iris-h" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#2d1b4e"/>
+      <stop offset="60%" stop-color="#1c1c1e"/>
+      <stop offset="85%" stop-color="#8b5cf6" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#1c1c1e"/>
+    </radialGradient>
+    <!-- Cheek blush gradient -->
+    <radialGradient id="cheek-h" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#f9a8d4" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#f9a8d4" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="sh-h"><feGaussianBlur in="SourceAlpha" stdDeviation="3"/><feOffset dy="3"/><feComponentTransfer><feFuncA type="linear" slope="0.18"/></feComponentTransfer><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
   </defs>
-
+  <!-- Ambient purple glow -->
+  <ellipse cx="80" cy="148" rx="42" ry="10" fill="#a78bfa" opacity="0.12" filter="url(#sh-h)"/>
   <!-- Shadow -->
-  <ellipse cx="80" cy="145" rx="35" ry="8" fill="#C8B0E8" opacity="0.25"/>
-
-  <!-- Tail -->
-  <path d="M 105 95 Q 125 85, 130 75 Q 128 95, 115 100 Z" fill="url(#bodyGrad-happy)" filter="url(#shadow-happy)"/>
-  <path d="M 110 80 Q 120 77, 125 75 Q 123 85, 115 87 Z" fill="#FFF5FB" opacity="0.5"/>
-
+  <ellipse cx="80" cy="146" rx="32" ry="7" fill="#a78bfa" opacity="0.18"/>
   <!-- Body -->
-  <circle cx="80" cy="95" r="42" fill="url(#bodyGrad-happy)" filter="url(#shadow-happy)"/>
-
-  <!-- Belly -->
-  <ellipse cx="80" cy="105" rx="28" ry="25" fill="url(#bellyGrad-happy)"/>
-
-  <!-- Arms -->
-  <ellipse cx="52" cy="100" rx="10" ry="14" fill="#C8B0E8" filter="url(#shadow-happy)"/>
-  <ellipse cx="108" cy="100" rx="10" ry="14" fill="#C8B0E8" filter="url(#shadow-happy)"/>
-  <ellipse cx="52" cy="102" rx="7" ry="9" fill="#FFE8F5"/>
-  <ellipse cx="108" cy="102" rx="7" ry="9" fill="#FFE8F5"/>
-
-  <!-- Feet -->
-  <ellipse cx="68" cy="132" rx="11" ry="8" fill="#C8B0E8" filter="url(#shadow-happy)"/>
-  <ellipse cx="92" cy="132" rx="11" ry="8" fill="#C8B0E8" filter="url(#shadow-happy)"/>
-  <ellipse cx="68" cy="132" rx="8" ry="5" fill="#FFE8F5"/>
-  <ellipse cx="92" cy="132" rx="8" ry="5" fill="#FFE8F5"/>
-
-  <!-- Head -->
-  <circle cx="80" cy="60" r="35" fill="url(#bodyGrad-happy)" filter="url(#shadow-happy)"/>
-
+  <ellipse cx="80" cy="88" rx="46" ry="50" fill="url(#body-h)" filter="url(#sh-h)"/>
+  <ellipse cx="80" cy="88" rx="46" ry="50" fill="url(#shine-h)"/>
+  <ellipse cx="80" cy="88" rx="46" ry="50" fill="url(#belly-h)"/>
+  <!-- Body rim light (upper-left edge) -->
+  <ellipse cx="80" cy="88" rx="46" ry="50" fill="none" stroke="#f3e8ff" stroke-width="1.5" opacity="0.25" style="transform: translate(-2px, -2px)"/>
   <!-- Ears -->
-  <ellipse cx="60" cy="35" rx="12" ry="18" fill="#C8B0E8" filter="url(#shadow-happy)"/>
-  <ellipse cx="100" cy="35" rx="12" ry="18" fill="#C8B0E8" filter="url(#shadow-happy)"/>
-  <ellipse cx="60" cy="37" rx="7" ry="11" fill="#FFB8E6"/>
-  <ellipse cx="100" cy="37" rx="7" ry="11" fill="#FFB8E6"/>
-
-  <!-- Eyes (big sparkly) -->
-  <circle cx="68" cy="57" r="9" fill="#3D2956"/>
-  <circle cx="92" cy="57" r="9" fill="#3D2956"/>
-  <circle cx="70" cy="55" r="4" fill="#FFFFFF"/>
-  <circle cx="94" cy="55" r="4" fill="#FFFFFF"/>
-  <circle cx="66" cy="60" r="2" fill="#FFFFFF" opacity="0.7"/>
-  <circle cx="90" cy="60" r="2" fill="#FFFFFF" opacity="0.7"/>
-
-  <!-- Star highlights in eyes -->
-  <path d="M 71 53 L 71.5 54.5 L 73 55 L 71.5 55.5 L 71 57 L 70.5 55.5 L 69 55 L 70.5 54.5 Z" fill="#FFE8A3"/>
-  <path d="M 95 53 L 95.5 54.5 L 97 55 L 95.5 55.5 L 95 57 L 94.5 55.5 L 93 55 L 94.5 54.5 Z" fill="#FFE8A3"/>
-
+  <ellipse cx="50" cy="42" rx="11" ry="16" fill="#c084fc" filter="url(#sh-h)"/>
+  <ellipse cx="110" cy="42" rx="11" ry="16" fill="#c084fc" filter="url(#sh-h)"/>
+  <ellipse cx="50" cy="43" rx="6" ry="9" fill="#f0abfc" opacity="0.5"/>
+  <ellipse cx="110" cy="43" rx="6" ry="9" fill="#f0abfc" opacity="0.5"/>
+  <!-- Arms -->
+  <ellipse cx="38" cy="95" rx="9" ry="12" fill="#c084fc" filter="url(#sh-h)"/>
+  <ellipse cx="122" cy="95" rx="9" ry="12" fill="#c084fc" filter="url(#sh-h)"/>
+  <!-- Feet -->
+  <ellipse cx="64" cy="132" rx="12" ry="8" fill="#c084fc" filter="url(#sh-h)"/>
+  <ellipse cx="96" cy="132" rx="12" ry="8" fill="#c084fc" filter="url(#sh-h)"/>
+  <!-- Eyes with iris detail -->
+  <ellipse cx="64" cy="78" rx="10" ry="11" fill="url(#iris-h)"/>
+  <ellipse cx="96" cy="78" rx="10" ry="11" fill="url(#iris-h)"/>
+  <circle cx="67" cy="75" r="4.5" fill="#fff"/>
+  <circle cx="99" cy="75" r="4.5" fill="#fff"/>
+  <circle cx="62" cy="80" r="2" fill="#fff" opacity="0.6"/>
+  <circle cx="94" cy="80" r="2" fill="#fff" opacity="0.6"/>
   <!-- Nose -->
-  <ellipse cx="80" cy="67" rx="4" ry="3" fill="#FFB8D9"/>
-
-  <!-- Rosy cheeks -->
-  <ellipse cx="58" cy="65" rx="8" ry="6" fill="#FFB8D9" opacity="0.5"/>
-  <ellipse cx="102" cy="65" rx="8" ry="6" fill="#FFB8D9" opacity="0.5"/>
-
+  <ellipse cx="80" cy="90" rx="3.5" ry="2.5" fill="#f9a8d4"/>
+  <!-- Nose specular highlight -->
+  <circle cx="79" cy="89" r="1.5" fill="#fff" opacity="0.5"/>
+  <!-- Cheeks with gradient -->
+  <ellipse cx="52" cy="88" rx="8" ry="5" fill="url(#cheek-h)"/>
+  <ellipse cx="108" cy="88" rx="8" ry="5" fill="url(#cheek-h)"/>
   <!-- Big smile -->
-  <path d="M 68 72 Q 80 80, 92 72" stroke="#3D2956" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-  <path d="M 72 74 Q 80 78, 88 74" fill="#FFB8D9" opacity="0.3"/>
-
-  <!-- Sparkle effects -->
-  <path d="M 25 45 L 26 48 L 29 49 L 26 50 L 25 53 L 24 50 L 21 49 L 24 48 Z" fill="#FFE8A3" opacity="0.9"/>
-  <path d="M 135 60 L 136 63 L 139 64 L 136 65 L 135 68 L 134 65 L 131 64 L 134 63 Z" fill="#FFE8A3" opacity="0.9"/>
-  <path d="M 120 30 L 120.5 31.5 L 122 32 L 120.5 32.5 L 120 34 L 119.5 32.5 L 118 32 L 119.5 31.5 Z" fill="#D4A5FF" opacity="0.7"/>
-  <circle cx="40" cy="70" r="2.5" fill="#FFFFFF" opacity="0.8"/>
-  <circle cx="125" cy="95" r="2" fill="#FFFFFF" opacity="0.8"/>
+  <path d="M66 96 Q80 108 94 96" stroke="#1c1c1e" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <!-- Sparkles -->
+  <path d="M28 40 L29.5 44 L33.5 45.5 L29.5 47 L28 51 L26.5 47 L22.5 45.5 L26.5 44Z" fill="#fde68a" opacity="0.9"/>
+  <path d="M132 52 L133 55 L136 56 L133 57 L132 60 L131 57 L128 56 L131 55Z" fill="#fde68a" opacity="0.8"/>
+  <circle cx="140" cy="38" r="2" fill="#fff" opacity="0.7"/>
+  <!-- Additional small star -->
+  <path d="M24 72 L24.5 73.5 L26 74 L24.5 74.5 L24 76 L23.5 74.5 L22 74 L23.5 73.5Z" fill="#fde68a" opacity="0.7"/>
 </svg>

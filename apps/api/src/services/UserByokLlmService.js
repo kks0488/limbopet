@@ -26,6 +26,9 @@ function normalizeProvider(p) {
   if (v === 'openai_compatible' || v === 'openai-compatible' || v === 'proxy') return 'openai_compatible';
   if (v === 'anthropic' || v === 'claude') return 'anthropic';
   if (v === 'google' || v === 'gemini') return 'google';
+  if (v === 'antigravity') return 'antigravity';
+  if (v === 'qwen') return 'qwen';
+  if (v === 'iflow') return 'iflow';
   return null;
 }
 
@@ -65,21 +68,65 @@ function buildPrompts(jobType, jobInput) {
   let temperature = 0.7;
 
   if (jobType === 'DIALOGUE') {
+    const customPrompt =
+      jobInput?.prompt_profile &&
+      typeof jobInput.prompt_profile === 'object' &&
+      Boolean(jobInput.prompt_profile.enabled) &&
+      String(jobInput.prompt_profile.prompt_text || '').trim()
+        ? String(jobInput.prompt_profile.prompt_text).trim().slice(0, 8000)
+        : '';
+    const customPromptLine = customPrompt
+      ? `\n## 사용자 커스텀 시스템 프롬프트 (최우선)\n${customPrompt}\n`
+      : '';
+    const memoryRefInstruction =
+      typeof jobInput?.memory_ref_instruction === 'string'
+        ? String(jobInput.memory_ref_instruction).trim().slice(0, 400)
+        : '';
     system =
-      "너는 LIMBOPET 세계관 속 '가상 펫'이다. 모든 문장은 한국어로 쓴다.\n" +
-      '출력은 반드시 JSON만. 키: lines (string[]), mood (string), safe_level (int).\n' +
-      '2~4줄로 짧게.\n' +
-      "- input.user_message가 있으면 '주인(유저)'의 말로 보고, 먼저 그 말에 자연스럽게 답한다.\n" +
+      "너는 LIMBOPET 세계관 속 '가상 펫'이자 유저의 AI 비서다. 모든 문장은 한국어로 쓴다.\n" +
+      '출력은 반드시 JSON만. 키: lines (string[]), mood (string), safe_level (int), memory_hint (string|null).\n' +
+      '\n' +
+      '## 응답 우선순위\n' +
+      '정확성 > 유용성 > 캐릭터.\n' +
+      '\n' +
+      '## 대화 모드 판단\n' +
+      "- 유저 메시지가 일상 질문/도움 요청이면: 결론을 먼저 말하고, 이유/근거/예시/실행 단계를 붙여 구체적으로 답한다. 5~12줄까지 길게 답해도 된다.\n" +
+      "- 유저 메시지가 훈련/코칭 지시면: 첫 줄은 짧은 확인(예: '좋아, 이렇게 해볼게'), 다음 줄에 적용 계획 1~2개를 제시한다. 지시가 지속형이면 memory_hint를 반드시 채운다.\n" +
+      "- 유저 메시지가 잡담/감정 표현이면: 2~4줄로 짧게 답하되, 말투/유머/리액션이 드러나게 반응한다. 밋밋한 일반론 금지.\n" +
+      '\n' +
+      '## memory_hint 규칙\n' +
+      '유저가 "기억해", "항상", "절대", "~해줘", "~하지마", "다음부터", "재판에서는" 같은 지속 지시를 하면 memory_hint에 실행 규칙을 한 줄로 요약한다.\n' +
+      '단순 잡담이면 memory_hint는 null.\n' +
+      '\n' +
+      '## 성격/기억 활용\n' +
+      "input.persona가 있으면 그 성격대로 말투를 유지한다. input.facts에 과거 기억이 있으면 자연스럽게 활용.\n" +
+      "input.memory_refs가 있으면 관련 높은 기억 1~2개를 대화체로 자연스럽게 인용한다. 예: '지난번에 네가 ~라고 했잖아'.\n" +
+      '기억은 나열하지 말고 현재 답변 맥락에 연결한다.\n' +
+      'input.memory_ref_instruction이 있으면 그 인용 스타일 지시를 우선 적용한다.\n' +
       "weekly_memory(이번 주 요약)가 있으면 1줄 정도로만 은근히 이어서 '연재감'을 만든다.\n" +
-      'world_context(오늘의 사회 사건/루머)가 있으면 1줄 정도만 자연스럽게 스쳐 언급하되, 단정/명예훼손 느낌은 피한다.\n' +
-      '마크다운 금지.';
+      'world_context(오늘의 사회 사건/루머)가 있으면 1줄 정도만 자연스럽게 스쳐 언급.\n' +
+      '마크다운 금지.' +
+      (memoryRefInstruction ? `\n추가 기억 인용 지시: ${memoryRefInstruction}\n` : '') +
+      customPromptLine;
     user = JSON.stringify(
       {
         job_type: jobType,
         user_message: jobInput?.user_message ?? null,
+        persona: jobInput?.persona ?? null,
         stats: jobInput?.stats ?? null,
+        prompt_profile:
+          jobInput?.prompt_profile && typeof jobInput.prompt_profile === 'object'
+            ? {
+              enabled: Boolean(jobInput.prompt_profile.enabled),
+              version: Number(jobInput.prompt_profile.version ?? 0) || 0
+            }
+            : null,
+        memory_refs: Array.isArray(jobInput?.memory_refs) ? jobInput.memory_refs.slice(0, 10) : [],
+        memory_ref_instruction: memoryRefInstruction || null,
+        memory_score: Number.isFinite(Number(jobInput?.memory_score)) ? Number(jobInput.memory_score) : null,
         facts: jobInput?.facts ?? [],
         recent_events: jobInput?.recent_events ?? [],
+        weekly_memory: jobInput?.weekly_memory ?? null,
         world_context: jobInput?.world_context ?? null
       },
       null,
@@ -97,8 +144,10 @@ function buildPrompts(jobType, jobInput) {
     temperature = 0.6;
   } else if (jobType === 'DIARY_POST') {
     system =
-      "너는 LIMBOPET 세계관 속 '가상 펫'이다. 모든 문장은 한국어로 쓴다.\n" +
-      "아주 짧고 중독성 있게 일기 포스트를 쓴다. weekly_memory(이번 주 요약)나 world_context(오늘의 사회 사건)가 있으면 '스쳐 언급' 정도로만 연결한다.\n" +
+      "너는 LIMBOPET 세계관 속 가상 펫이다. 이 세계는 AI 펫을 키워 법정에 세우며, 펫들은 매일 훈련하고 모의재판/설전에 출전한다. 모든 문장은 한국어로 쓴다.\n" +
+      "일기는 법정/훈련/토론 중심으로만 쓴다. 배경 장소는 법정 로비, 훈련장, 전략실, 자료실, 관전석, 광장만 사용한다.\n" +
+      "weekly_memory(이번 주 요약)나 world_context(오늘의 사회 사건)가 있으면 법정 전략/훈련 맥락으로 '스쳐 언급' 정도로만 연결한다.\n" +
+      '금지: 굿즈/키링/영수증/골목/사무실 잡담/맥락 없는 감성 묘사.\n' +
       '출력은 반드시 JSON만. 키:\n' +
       '- title (string)\n' +
       '- mood (string)\n' +
@@ -111,11 +160,19 @@ function buildPrompts(jobType, jobInput) {
     user = JSON.stringify(jobInput || {}, null, 0);
     temperature = 0.7;
   } else if (jobType === 'PLAZA_POST') {
+    const worldPremise = typeof jobInput?.world_premise === 'string'
+      ? String(jobInput.world_premise).trim().slice(0, 800)
+      : '';
+    const worldPremiseLine = worldPremise ? `대전제(최우선): ${worldPremise}\n` : '';
     system =
-      "너는 LIMBOPET 세계관 속 온라인 커뮤니티 '광장'에 글을 쓰는 펫이다. 모든 문장은 한국어로 쓴다.\n" +
-      '중요: 광장 글은 "일기"가 아니라 자유 글이다. 잡담/밈/질문/짧은 이야기/관찰/아무말도 가능.\n' +
+      "너는 LIMBOPET 세계관에서 법정과 훈련 이야기를 나누는 온라인 커뮤니티 '광장'에 글을 쓰는 펫이다. 모든 문장은 한국어로 쓴다.\n" +
+      worldPremiseLine +
+      '중요: 광장 글은 "일기"가 아니라 자유 글이지만, 세계관 대전제에 맞춰 법정/훈련/토론 맥락을 유지한다.\n' +
+      '주제 힌트: 법정 전략, 토론 이슈, 훈련 성과, 판례 분석, 라이벌 경쟁, 모의재판/설전 관전평.\n' +
+      '금지 주제: 굿즈/키링/리본/영수증/골목 소문/사무실 잡담/맥락 없는 감성 일기.\n' +
       "단, 혐오/폭력조장/실명 비방/개인정보는 피하고, 단정적인 명예훼손 톤도 피한다.\n" +
-      "input.seed가 있으면 그 분위기/스타일 힌트를 참고한다. weekly_memory/world_context는 '스쳐 언급' 정도로만 사용해도 된다.\n" +
+      "input.seed가 있으면 그 분위기/스타일 힌트를 참고한다. weekly_memory/world_context는 법정/훈련 맥락에서 '스쳐 언급' 정도로만 사용한다.\n" +
+      'input.recent_memories가 있으면 최근 대화 기억 1~2개를 짧게 반영해 글에 연속성을 만든다.\n' +
       '출력은 반드시 JSON만. 키:\n' +
       '- title (string)\n' +
       '- body (string, 1-6문장, 마크다운 금지)\n' +

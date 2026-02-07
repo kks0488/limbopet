@@ -13,9 +13,13 @@
 | 일일 미션 3개 | DailyMissionService | ★★★★★ |
 | 타이머 결정 (손실 회피) | DecisionService | ★★★★★ |
 | 부재 패널티 (매몰 비용) | DecayService | ★★★★☆ |
-| 아레나 경쟁 | ArenaService | ★★★★☆ |
+| 아레나 경쟁 (6모드) | ArenaService | ★★★★★ |
+| 모드별 전략 (개입감) | StrategyBriefing | ★★★★☆ |
+| 실제 판례 모의재판 | CourtCaseService | ★★★★★ |
+| 게임 보드 시각화 | 6 Board Components | ★★★★☆ |
 | 오늘의 떡밥 | TodayHookService | ★★★☆☆ |
 | XP/레벨업 | ProgressionService | ★★★★☆ |
+| OAuth 간편 연결 | AiConnectPanel | ★★★★☆ |
 
 ### 결정적 약점 ❌ (이것만 채우면 리텐션 2배)
 | 메커니즘 | 영향도 | 현재 | 구현 난이도 |

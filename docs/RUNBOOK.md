@@ -75,6 +75,14 @@ TRIGGER_MEMORIES=true MEMORY_AGENT_LIMIT=30 \
 REPORT_JSON_PATH=./tmp/society_report.json ./scripts/simulate_society.sh
 ```
 
+리포트 게이트 자동 판정(실패 시 exit 1):
+
+```bash
+REPORT_JSON_PATH=./tmp/society_report.json \
+REPORT_ENFORCE_GATES=true \
+./scripts/simulate_society.sh
+```
+
 참고:
 - 시뮬 종료 시 world_core의 `world:current_day`(SSOT)가 마지막 day로 이동한다. UI의 “오늘” 기본값도 이 day를 따른다.
 
@@ -85,6 +93,11 @@ REPORT_JSON_PATH=./tmp/society_report.json ./scripts/simulate_society.sh
 - `WAIT_BRAIN_JOBS`: brain job 대기 여부
 - `TRIGGER_MEMORIES`: daily/weekly memory 트리거
 - `EXTRAS`: 엑스트라(관계/캐스팅 다양성 보강)
+- `REPORT_ENFORCE_GATES`: 리포트 기준 자동 합격/불합격 판정
+- `GATE_MIN_CAST_UNIQUE_RATIO` (기본 `0.7`)
+- `GATE_MIN_DIRECTION_APPLIED_RATE` (기본 `0.7`, `latest_count>0`일 때 적용)
+- `GATE_MAX_BROADCAST_DUPLICATES` (기본 `0`)
+- `GATE_MAX_BRAIN_FAILED_DELTA` (기본 `-1`, 음수면 비활성)
 
 ---
 
@@ -93,7 +106,7 @@ REPORT_JSON_PATH=./tmp/society_report.json ./scripts/simulate_society.sh
 ### 4.1 리포트 저장 시뮬 1회 실행
 
 ```bash
-REPORT_JSON_PATH=./tmp/society_report.json ./scripts/simulate_society.sh
+REPORT_JSON_PATH=./tmp/society_report.json REPORT_ENFORCE_GATES=true ./scripts/simulate_society.sh
 ```
 
 ### 4.2 리포트로 합격/불합격 1차 판정
@@ -164,7 +177,7 @@ DAYS=2 REPORT_JSON_PATH=./tmp/society_report.json ./scripts/simulate_society.sh
 
 ## 6) 실패하면 어디를 고치나(가이드)
 
-- 지표/체감이 실패하면: `docs/BACKLOG.md`의 P1/P2를 우선으로 본다.
+- 지표/체감이 실패하면: `docs/START_HERE.md`의 "다음 할 일" 섹션을 우선으로 본다.
 - 레거시(상세 분석/SQL/원인): `docs/archive/legacy_2026-02-05/SIMULATION_ISSUES.md`
 
 ---
@@ -175,3 +188,4 @@ DAYS=2 REPORT_JSON_PATH=./tmp/society_report.json ./scripts/simulate_society.sh
 - `failed to read .../.env: key cannot contain a space` → 프로젝트 루트의 `.env`가 `KEY=VALUE` 형식이 아닌 줄(표/설명 텍스트 등)을 포함할 때 발생. 해당 줄을 삭제하고 실제 설정은 `apps/api/.env`에 넣기
 - API not reachable → `./scripts/dev.sh` 로그에서 api 포트 확인
 - brain_jobs backlog 누적 → `WAIT_BRAIN_TIMEOUT_S` 늘리거나, proxy worker 확인
+- 특정 job이 failed로 남아있음 → `GET /api/v1/users/me/brain/jobs?status=failed`로 확인 후 `POST /api/v1/users/me/brain/jobs/:id/retry` 재시도

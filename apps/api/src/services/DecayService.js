@@ -18,6 +18,8 @@
 
 const ArenaService = require('./ArenaService');
 const WorldDayService = require('./WorldDayService');
+const NotificationService = require('./NotificationService');
+const NotificationTemplateService = require('./NotificationTemplateService');
 
 function safeIsoDay(v) {
   const s = String(v ?? '').trim();
@@ -115,7 +117,7 @@ class DecayService {
     const seasonId = season?.id ?? null;
 
     const { rows } = await client.query(
-      `SELECT a.id AS agent_id, a.karma::int AS karma, a.owner_user_id AS user_id, u.last_active_at
+      `SELECT a.id AS agent_id, a.name AS pet_name, a.display_name AS pet_display_name, a.karma::int AS karma, a.owner_user_id AS user_id, u.last_active_at
        FROM agents a
        JOIN users u ON u.id = a.owner_user_id
        WHERE a.owner_user_id IS NOT NULL
@@ -196,6 +198,8 @@ class DecayService {
         ? { last_active_at: lastActiveKey, since_day: iso, updated_day: iso, lost: {} }
         : { ...loss, last_active_at: loss.last_active_at ?? lastActiveKey, updated_day: iso };
       const lost = safeJsonObject(lossBase.lost);
+      let applied7Now = false;
+      let applied14Now = false;
 
       // 2) 7-day inactivity penalty (once per absence period).
       if (!currentFlags.applied7) {
@@ -276,6 +280,7 @@ class DecayService {
 
         currentFlags.applied7 = true;
         currentFlags.applied7_day = iso;
+        applied7Now = true;
       }
 
       // 3) 14-day inactivity penalty (once per absence period).
@@ -290,6 +295,7 @@ class DecayService {
         }
         currentFlags.applied14 = true;
         currentFlags.applied14_day = iso;
+        applied14Now = true;
       }
 
       lossBase.lost = lost;
@@ -298,6 +304,37 @@ class DecayService {
 
       await upsertDecayFact(client, agentId, 'inactive_flags', currentFlags);
       await upsertDecayFact(client, agentId, 'absence_loss', lossBase);
+
+      const stage = applied14Now ? '14d' : applied7Now ? '7d' : null;
+      if (stage && userId) {
+        const petName = String(r.pet_display_name || r.pet_name || '펫').trim() || '펫';
+        const warning = NotificationTemplateService.render('DECAY_WARNING', {
+          vars: {
+            pet_name: petName,
+            days: inactivityDays,
+            stage
+          },
+          fallback: {
+            title: stage === '14d' ? '오랜 부재로 관계 손실이 발생했어' : '오랜 부재로 페널티가 적용됐어',
+            body: stage === '14d'
+              ? `${petName}가 ${inactivityDays}일째 비활성 상태라 관계 일부가 정리됐어.`
+              : `${petName}가 ${inactivityDays}일째 비활성 상태라 레이팅/평판 페널티가 적용됐어.`
+          }
+        });
+        // eslint-disable-next-line no-await-in-loop
+        await NotificationService.create(client, userId, {
+          type: 'DECAY_WARNING',
+          title: warning.title,
+          body: warning.body,
+          data: {
+            day: iso,
+            stage,
+            inactivity_days: inactivityDays,
+            agent_id: agentId,
+            lost
+          }
+        }).catch(() => null);
+      }
 
       processed += 1;
     }

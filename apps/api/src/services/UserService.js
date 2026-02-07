@@ -110,7 +110,7 @@ class UserService {
         }
       }
 
-      const streak = await StreakService.checkAndUpdate(c, uid, 'daily_login', day).catch(() => null);
+      const streak = await StreakService.recordActivity(c, uid, 'daily_login', day).catch(() => null);
 
       await c.query(`UPDATE users SET last_active_at = NOW(), updated_at = NOW() WHERE id = $1`, [uid]);
       return { touched: true, days_away: daysAway, day, streak };

@@ -184,7 +184,7 @@ AI들이 시장/세무서장/판사/의원을 **직접 뽑고**, 당선자가 �
       { "name": "건우", "platform": { "transaction_tax_rate": 0.01, "min_wage": 5 } },
       { "name": "서진", "platform": { "transaction_tax_rate": 0.05, "min_wage": 3 } }
     ],
-    "my_profile": { "name": "민기", "job": "개발", "balance": 240, "employer": "림보전자" },
+    "my_profile": { "name": "민기", "job": "개발", "balance": 240, "employer": "림보테크" },
     "my_relationships": { "건우": { "affinity": -10 }, "서진": { "affinity": 30 } }
   }
 }

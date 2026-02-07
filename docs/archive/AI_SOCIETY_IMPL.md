@@ -89,7 +89,7 @@
 -- 회사 엔티티
 CREATE TABLE companies (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name VARCHAR(64) UNIQUE NOT NULL,           -- '림보전자', '안개랩스', ...
+  name VARCHAR(64) UNIQUE NOT NULL,           -- '림보테크', '안개리서치', ...
   display_name VARCHAR(128),
   description TEXT,
   ceo_agent_id UUID REFERENCES agents(id) ON DELETE SET NULL,
@@ -362,9 +362,9 @@ CREATE INDEX idx_market_listings_item ON market_listings(item_code, status);
 -- 구역 시드
 INSERT INTO zones (code, display_name, description) VALUES
   ('plaza', '광장', '모두가 모이는 중심 광장'),
-  ('cafe', '카페', '새벽카페. 커피와 수다의 중심지'),
-  ('goods_shop', '굿즈샵', '리본굿즈. 온갖 굿즈가 가득'),
-  ('office', '회사', '림보전자/안개랩스 오피스 구역'),
+  ('cafe', '카페', '새벽아카데미. 커피와 수다의 중심지'),
+  ('goods_shop', '굿즈샵', '림보로펌. 온갖 굿즈가 가득'),
+  ('office', '회사', '림보테크/안개리서치 오피스 구역'),
   ('alley', '골목', '어두운 골목. 정보가 오간다'),
   ('hallway', '복도', '사무실 복도. 비밀 대화가 잦다');
 
@@ -628,7 +628,7 @@ CREATE INDEX idx_freelance_gigs_freelancer ON freelance_gigs(freelancer_agent_id
   "input": {
     "context": "채용 제안",
     "contract": {
-      "company": "림보전자",
+      "company": "림보테크",
       "employer": { "name": "서진", "role": "팀장" },
       "daily_wage": 5,
       "commission_rate": 0.1,
@@ -644,7 +644,7 @@ CREATE INDEX idx_freelance_gigs_freelancer ON freelance_gigs(freelancer_agent_id
 ```json
 {
   "decision": "accept",
-  "dialogue": "좋습니다. 림보전자에서 열심히 해볼게요.",
+  "dialogue": "좋습니다. 림보테크에서 열심히 해볼게요.",
   "reasoning": "일급이 괜찮고, 서진 팀장과 관계도 나쁘지 않다"
 }
 ```
@@ -657,7 +657,7 @@ CREATE INDEX idx_freelance_gigs_freelancer ON freelance_gigs(freelancer_agent_id
   "input": {
     "context": "지원자 평가",
     "applicant": { "name": "루미", "job": "알바", "personality": "ESFP" },
-    "position": { "company": "림보전자", "role": "마케팅", "daily_wage": 4 },
+    "position": { "company": "림보테크", "role": "마케팅", "daily_wage": 4 },
     "company_status": { "balance": 500, "employee_count": 5 }
   }
 }
@@ -1213,7 +1213,7 @@ SCANDAL: 고소 → 판결 → 항소 체인
     "context": "오늘의 에피소드 내러티브 생성",
     "day": "2026-02-03",
     "events": [
-      { "type": "EMPLOYMENT_DECISION", "agents": ["민기", "서진"], "summary": "민기가 림보전자 입사 수락" },
+      { "type": "EMPLOYMENT_DECISION", "agents": ["민기", "서진"], "summary": "민기가 림보테크 입사 수락" },
       { "type": "SALARY_PAID", "agents": ["서진", "민기"], "amount": 5 },
       { "type": "DISPUTE_FILED", "agents": ["루미", "건우"], "type": "FRAUD", "title": "가격 사기 의혹" },
       { "type": "JUDGE_RULING", "agents": ["시윤"], "summary": "건우에게 배상 판결" }
@@ -1227,8 +1227,8 @@ SCANDAL: 고소 → 판결 → 항소 체인
 기대 응답:
 ```json
 {
-  "title": "[2/3] 림보전자의 새 식구, 그리고 굿즈샵의 위기",
-  "highlight": "민기가 림보전자에 합류한 날, 건우는 사기 판결을 받았다.",
+  "title": "[2/3] 림보테크의 새 식구, 그리고 굿즈샵의 위기",
+  "highlight": "민기가 림보테크에 합류한 날, 건우는 사기 판결을 받았다.",
   "body": "오늘 림보에서는 두 가지 큰 사건이 있었다...",
   "cliffhanger": "건우가 항소를 준비 중이라는 소문이...",
   "tags": ["입사", "판결", "기업경쟁"]
@@ -1331,12 +1331,12 @@ DROP TABLE IF EXISTS jobs CASCADE;
 │ [잔고] [거래] [회사] [사법]  │ ← 서브탭
 ├─────────────────────────────┤
 │ 최근 거래                    │
-│  +5  급여 (림보전자)  2/3    │
+│  +5  급여 (림보테크)  2/3    │
 │  -3  거래세          2/3    │
 │  -10 마켓 구매       2/2    │
 │  ...                        │
 ├─────────────────────────────┤
-│ 💼 내 회사: 림보전자         │
+│ 💼 내 회사: 림보테크         │
 │  직원 5명 | 잔고 400 LBC    │
 ├─────────────────────────────┤
 │ ⚖️ 진행 중 분쟁: 1건        │
@@ -1369,17 +1369,17 @@ DROP TABLE IF EXISTS jobs CASCADE;
 ```
 ┌─────────────────────────────┐
 │ 📺 오늘의 에피소드           │
-│ [2/3] 림보전자의 새 식구,    │
+│ [2/3] 림보테크의 새 식구,    │
 │       그리고 굿즈샵의 위기   │
-│ 민기가 림보전자에 합류한 날, │
+│ 민기가 림보테크에 합류한 날, │
 │ 건우는 사기 판결을 받았다.   │
 │                              │
 │ 🔮 예고: 건우가 항소를       │
 │ 준비 중이라는 소문이...      │
 ├─────────────────────────────┤
 │ 🔥 진행 중인 갈등            │
-│ ├ 기업 경쟁 (림보전자 vs     │
-│ │  리본굿즈) - 3일째         │
+│ ├ 기업 경쟁 (림보테크 vs     │
+│ │  림보로펌) - 3일째         │
 │ └ 건우 사기 재판 - 항소 중   │
 ├─────────────────────────────┤
 │ 📋 실시간 이벤트 피드        │

@@ -3,14 +3,57 @@ const WorldDayService = require('./WorldDayService');
 const { ProgressionService } = require('./ProgressionService');
 const TransactionService = require('./TransactionService');
 const NotificationService = require('./NotificationService');
+const NotificationTemplateService = require('./NotificationTemplateService');
+const streakCopy = require('../data/streak_copy.json');
 
 const MILESTONE_REWARDS = Object.freeze({
-  3: { xp: 50, coin: 3, shield: 0 },
-  7: { xp: 200, coin: 10, shield: 0 },
-  14: { xp: 500, coin: 25, shield: 1 },
-  30: { xp: 1500, coin: 100, shield: 0 },
-  100: { xp: 5000, coin: 300, shield: 0 }
+  3: Object.freeze({ xp: 50, coins: 3, shield: 0, badge: null }),
+  7: Object.freeze({ xp: 200, coins: 10, shield: 0, badge: 'streak_fire' }),
+  14: Object.freeze({ xp: 500, coins: 25, shield: 1, badge: null }),
+  30: Object.freeze({ xp: 1500, coins: 100, shield: 0, badge: 'immortal_owner' }),
+  100: Object.freeze({ xp: 5000, coins: 500, shield: 0, badge: 'legend' })
 });
+
+function safeObject(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  return v;
+}
+
+function pickRandom(list) {
+  const arr = Array.isArray(list) ? list : [];
+  if (arr.length === 0) return null;
+  return arr[Math.floor(Math.random() * arr.length)] ?? null;
+}
+
+function safeText(v, maxLen = 1000) {
+  const s = String(v ?? '').trim();
+  if (!s) return '';
+  return s.slice(0, Math.max(1, Math.trunc(Number(maxLen) || 1000)));
+}
+
+function milestoneCopyFor(streak) {
+  const key = String(clampInt(streak, 0));
+  const root = safeObject(streakCopy);
+  const milestones = safeObject(root.milestones);
+  const milestoneRow = safeObject(milestones[key]);
+  const milestoneNotifications = safeObject(root.milestone_notifications);
+  const notifRow = safeObject(milestoneNotifications[key]);
+  const notifTitle = safeText(pickRandom(notifRow.titles), 180);
+  const notifBody = safeText(pickRandom(notifRow.bodies), 1000);
+
+  const fallbackTitle = safeText(milestoneRow.title, 180) || `${key}일 연속 달성!`;
+  const fallbackBody = safeText(milestoneRow.celebration, 1000) || `${key}일 스트릭 보상을 확인해봐!`;
+
+  return {
+    title: safeText(milestoneRow.title, 120) || null,
+    description: safeText(milestoneRow.description, 280) || null,
+    celebration: safeText(milestoneRow.celebration, 1000) || null,
+    notification: {
+      title: notifTitle || fallbackTitle,
+      body: notifBody || fallbackBody
+    }
+  };
+}
 
 function safeIsoDay(v) {
   const s = String(v ?? '').trim();
@@ -62,6 +105,16 @@ function normalizeRow(row) {
   };
 }
 
+function normalizeMilestoneReward(reward) {
+  if (!reward || typeof reward !== 'object') return null;
+  const xp = clampInt(reward.xp, 0);
+  const coins = clampInt(reward.coins ?? reward.coin, 0);
+  const shield = clampInt(reward.shield, 0);
+  const badgeRaw = reward.badge;
+  const badge = badgeRaw == null ? null : String(badgeRaw).trim() || null;
+  return { xp, coins, coin: coins, shield, badge };
+}
+
 async function getPrimaryPetAgentIdForUser(client, userId) {
   if (!client || !userId) return null;
   const { rows } = await client.query(
@@ -79,6 +132,16 @@ async function getPrimaryPetAgentIdForUser(client, userId) {
 class StreakService {
   static milestoneRewards() {
     return MILESTONE_REWARDS;
+  }
+
+  static checkMilestone(currentStreak) {
+    const streak = clampInt(currentStreak, 0);
+    const reward = normalizeMilestoneReward(MILESTONE_REWARDS[streak]);
+    if (!reward) return null;
+    return {
+      ...reward,
+      copy: milestoneCopyFor(streak)
+    };
   }
 
   static async getOrCreateWithClient(client, userId, streakType) {
@@ -109,6 +172,25 @@ class StreakService {
   }
 
   static async getStreaks(client, userId) {
+    return StreakService.getAllStreaks(client, userId);
+  }
+
+  static async getStreak(client, userId, streakType = 'daily_login') {
+    const uid = String(userId || '').trim();
+    if (!uid) throw new BadRequestError('user_id is required');
+    const type = normalizeStreakType(streakType);
+
+    const { rows } = await client.query(
+      `SELECT id, user_id, streak_type, current_streak, longest_streak, last_completed_at, streak_shield_count, created_at, updated_at
+       FROM user_streaks
+       WHERE user_id = $1 AND streak_type = $2
+       LIMIT 1`,
+      [uid, type]
+    );
+    return rows?.[0] ? normalizeRow(rows[0]) : null;
+  }
+
+  static async getAllStreaks(client, userId) {
     const uid = String(userId || '').trim();
     if (!uid) throw new BadRequestError('user_id is required');
 
@@ -133,7 +215,7 @@ class StreakService {
     if (!uid) throw new BadRequestError('user_id is required');
 
     const milestone = clampInt(streak, 0);
-    const reward = MILESTONE_REWARDS[milestone];
+    const reward = StreakService.checkMilestone(milestone);
     if (!reward) return { granted: false, reason: 'not_milestone', streak: milestone };
 
     const aid = String(agentId || '').trim();
@@ -159,6 +241,23 @@ class StreakService {
       .catch(() => false);
     if (already) return { granted: false, reason: 'already_granted', streak: milestone, day: iso };
 
+    const copy = safeObject(reward.copy);
+    const copyNotification = safeObject(copy.notification);
+    const milestoneNotification = NotificationTemplateService.render('STREAK_MILESTONE', {
+      vars: {
+        days: milestone,
+        streak_type: type,
+        copy_title: safeText(copyNotification.title, 180),
+        copy_body: safeText(copyNotification.body, 1000)
+      },
+      // Priority: streak_copy.json (task 1), template fallback (task 2)
+      fallback: {
+        title: safeText(copyNotification.title, 180) || `${milestone}일 연속 달성!`,
+        body: safeText(copyNotification.body, 1000) || `${milestone}일 스트릭 보상을 받았어!`
+      },
+      preferTemplate: false
+    });
+
     let xp = null;
     let tx = null;
 
@@ -171,12 +270,12 @@ class StreakService {
       }).catch(() => null);
     }
 
-    if (reward.coin > 0) {
+    if (reward.coins > 0) {
       tx = await TransactionService.transfer(
         {
           fromAgentId: null,
           toAgentId: aid,
-          amount: reward.coin,
+          amount: reward.coins,
           txType: 'REWARD',
           memo: `streak:${type}:${milestone} day:${iso}`
         },
@@ -205,8 +304,19 @@ class StreakService {
           streak: milestone,
           reward: {
             xp: reward.xp,
-            coin: reward.coin,
-            shield: reward.shield
+            coins: reward.coins,
+            coin: reward.coins,
+            shield: reward.shield,
+            badge: reward.badge,
+            copy: {
+              title: copy.title ?? null,
+              description: copy.description ?? null,
+              celebration: copy.celebration ?? null
+            }
+          },
+          message: {
+            title: milestoneNotification.title,
+            body: milestoneNotification.body
           }
         })
       ]
@@ -214,13 +324,24 @@ class StreakService {
 
     await NotificationService.create(client, uid, {
       type: 'STREAK_MILESTONE',
-      title: `와 ${milestone}일 연속이잖아! 대단한데?`,
-      body: `${type} 보상 챙겨왔어! 꾸준한 너, 진짜 멋져~`,
+      title: milestoneNotification.title,
+      body: milestoneNotification.body,
       data: {
         day: iso,
         streak_type: type,
         streak: milestone,
-        reward: { xp: reward.xp, coin: reward.coin, shield: reward.shield }
+        reward: {
+          xp: reward.xp,
+          coins: reward.coins,
+          coin: reward.coins,
+          shield: reward.shield,
+          badge: reward.badge,
+          copy: {
+            title: copy.title ?? null,
+            description: copy.description ?? null,
+            celebration: copy.celebration ?? null
+          }
+        }
       }
     }).catch(() => null);
 
@@ -231,15 +352,17 @@ class StreakService {
       streak: milestone,
       reward: {
         xp: reward.xp,
-        coin: reward.coin,
-        shield: reward.shield
+        coins: reward.coins,
+        coin: reward.coins,
+        shield: reward.shield,
+        badge: reward.badge
       },
       xp,
       tx
     };
   }
 
-  static async checkAndUpdate(client, userId, streakType = 'daily_login', day = null) {
+  static async recordActivity(client, userId, streakType = 'daily_login', day = null) {
     const uid = String(userId || '').trim();
     if (!uid) throw new BadRequestError('user_id is required');
     const type = normalizeStreakType(streakType);
@@ -307,8 +430,9 @@ class StreakService {
     );
     const updated = normalizeRow(rows?.[0] ?? null);
 
+    const milestoneReward = StreakService.checkMilestone(nextCurrent);
     let reward = null;
-    if (MILESTONE_REWARDS[nextCurrent]) {
+    if (milestoneReward) {
       const agentId = await getPrimaryPetAgentIdForUser(client, uid).catch(() => null);
       reward = await StreakService.grantMilestoneReward(client, uid, agentId, nextCurrent, { streakType: type, day: iso }).catch(() => null);
     }
@@ -318,13 +442,44 @@ class StreakService {
       day: iso,
       used_shield: usedShield,
       reset,
-      milestone: MILESTONE_REWARDS[nextCurrent] ? nextCurrent : null,
+      milestone: milestoneReward ? nextCurrent : null,
       reward,
       streak: updated
     };
   }
 
-  static async useShield(client, userId, streakType = 'daily_login', day = null) {
+  static async checkAndUpdate(client, userId, streakType = 'daily_login', day = null) {
+    return StreakService.recordActivity(client, userId, streakType, day);
+  }
+
+  static async useShield(client, userId, streakType = 'daily_login') {
+    const uid = String(userId || '').trim();
+    if (!uid) throw new BadRequestError('user_id is required');
+    const type = normalizeStreakType(streakType);
+
+    const row = await StreakService.getOrCreateWithClient(client, uid, type);
+    const shields = clampInt(row.streak_shield_count, 0);
+    if (shields <= 0) throw new BadRequestError('No streak shields available', 'NO_STREAK_SHIELD');
+
+    const { rows } = await client.query(
+      `UPDATE user_streaks
+       SET streak_shield_count = GREATEST(0, streak_shield_count - 1),
+           updated_at = NOW()
+       WHERE user_id = $1 AND streak_type = $2
+         AND streak_shield_count > 0
+       RETURNING id, user_id, streak_type, current_streak, longest_streak, last_completed_at, streak_shield_count, created_at, updated_at`,
+      [uid, type]
+    );
+    const updated = normalizeRow(rows?.[0] ?? null);
+    if (!updated?.id) throw new BadRequestError('No streak shields available', 'NO_STREAK_SHIELD');
+
+    return {
+      used_shield: true,
+      streak: updated
+    };
+  }
+
+  static async recoverWithShield(client, userId, streakType = 'daily_login', day = null) {
     const uid = String(userId || '').trim();
     if (!uid) throw new BadRequestError('user_id is required');
     const type = normalizeStreakType(streakType);
@@ -359,8 +514,9 @@ class StreakService {
     );
     const updated = normalizeRow(rows?.[0] ?? null);
 
+    const milestoneReward = StreakService.checkMilestone(nextCurrent);
     let reward = null;
-    if (MILESTONE_REWARDS[nextCurrent]) {
+    if (milestoneReward) {
       const agentId = await getPrimaryPetAgentIdForUser(client, uid).catch(() => null);
       reward = await StreakService.grantMilestoneReward(client, uid, agentId, nextCurrent, { streakType: type, day: iso }).catch(() => null);
     }
@@ -368,9 +524,109 @@ class StreakService {
     return {
       used_shield: true,
       day: iso,
-      milestone: MILESTONE_REWARDS[nextCurrent] ? nextCurrent : null,
+      milestone: milestoneReward ? nextCurrent : null,
       reward,
       streak: updated
+    };
+  }
+
+  static async notifyDailyWarnings(client, { day = null, streakType = 'daily_login', now = new Date() } = {}) {
+    const type = normalizeStreakType(streakType);
+    const iso = safeIsoDay(day) || (await WorldDayService.getCurrentDayWithClient(client).catch(() => null)) || WorldDayService.todayISODate();
+    const nowDate = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
+
+    const endOfDay = new Date(nowDate.getTime());
+    endOfDay.setHours(23, 59, 59, 999);
+    const rawHoursLeft = Math.ceil((endOfDay.getTime() - nowDate.getTime()) / (60 * 60 * 1000));
+    const hoursLeft = clampInt(rawHoursLeft, 1, 24);
+
+    const sentToday = await client
+      .query(
+        `SELECT 1
+         FROM notifications
+         WHERE type = 'STREAK_WARNING'
+           AND COALESCE(data->>'day', '') = $1
+           AND COALESCE(data->>'streak_type', '') = $2
+         LIMIT 1`,
+        [iso, type]
+      )
+      .then((r) => Boolean(r.rows?.[0]))
+      .catch(() => false);
+    if (sentToday) {
+      return {
+        sent: 0,
+        skipped: true,
+        day: iso,
+        streak_type: type,
+        hours_left: hoursLeft
+      };
+    }
+
+    const { rows: targets } = await client.query(
+      `SELECT u.id AS user_id,
+              COALESCE(s.current_streak, 0)::int AS current_streak,
+              COALESCE(a.display_name, a.name, '펫') AS pet_name
+       FROM users u
+       LEFT JOIN user_streaks s
+         ON s.user_id = u.id
+        AND s.streak_type = $1
+       LEFT JOIN LATERAL (
+         SELECT display_name, name
+         FROM agents
+         WHERE owner_user_id = u.id
+           AND is_active = true
+         ORDER BY updated_at DESC NULLS LAST, created_at ASC
+         LIMIT 1
+       ) a ON TRUE
+       WHERE COALESCE(s.current_streak, 0) > 0
+         AND (s.last_completed_at IS NULL OR s.last_completed_at <> $2::date)
+         AND NOT EXISTS (
+           SELECT 1
+           FROM notifications n
+           WHERE n.user_id = u.id
+             AND n.type = 'STREAK_WARNING'
+             AND COALESCE(n.data->>'day', '') = $2
+             AND COALESCE(n.data->>'streak_type', '') = $1
+         )`,
+      [type, iso]
+    );
+
+    let sent = 0;
+    for (const t of targets || []) {
+      const userId = String(t?.user_id || '').trim();
+      if (!userId) continue;
+      const currentStreak = clampInt(t?.current_streak, 0);
+      const petName = safeText(t?.pet_name, 120) || '펫';
+      const warningNotification = NotificationTemplateService.render('STREAK_WARNING', {
+        vars: {
+          days: currentStreak,
+          pet_name: petName,
+          hours_left: hoursLeft
+        },
+        fallback: {
+          title: '오늘 스트릭 체크했어?',
+          body: `스트릭 유지까지 ${hoursLeft}시간!`
+        }
+      });
+      const created = await NotificationService.create(client, userId, {
+        type: 'STREAK_WARNING',
+        title: warningNotification.title,
+        body: warningNotification.body,
+        data: {
+          day: iso,
+          streak_type: type,
+          hours_left: hoursLeft,
+          streak: currentStreak
+        }
+      }).catch(() => null);
+      if (created) sent += 1;
+    }
+
+    return {
+      sent: clampInt(sent, 0, 1_000_000),
+      day: iso,
+      streak_type: type,
+      hours_left: hoursLeft
     };
   }
 }

@@ -32,6 +32,8 @@ const WorldDayService = require('./WorldDayService');
 const CrossSystemEventService = require('./CrossSystemEventService');
 const TodayHookService = require('./TodayHookService');
 const NotificationService = require('./NotificationService');
+const NotificationTemplateService = require('./NotificationTemplateService');
+const StreakService = require('./StreakService');
 
 const WORLD_WORKER_LOCK = { namespace: 41001, key: `limbopet:world_worker:${config.limbopet?.baseUrl || ''}` };
 
@@ -125,11 +127,22 @@ async function notifyTodayHookStageWithClient(client, { worldId, day, stage, now
 
   let sent = 0;
   for (const u of users || []) {
+    const rendered = NotificationTemplateService.render(hookNotificationType(st), {
+      vars: {
+        hook_headline: body,
+        stage: st,
+        day: iso,
+      },
+      fallback: {
+        title: hookNotificationTitle(st),
+        body
+      }
+    });
     // eslint-disable-next-line no-await-in-loop
     const created = await NotificationService.create(client, u.id, {
       type: hookNotificationType(st),
-      title: hookNotificationTitle(st),
-      body,
+      title: rendered.title,
+      body: rendered.body,
       data: {
         day: iso,
         stage: st,
@@ -244,6 +257,12 @@ class WorldTickWorker {
           client,
           async () => DecayService.tickWithClient(client, { day }),
           { label: 'world_worker_decay' }
+        );
+
+        await bestEffortInTransaction(
+          client,
+          async () => StreakService.notifyDailyWarnings(client, { day, streakType: 'daily_login', now }),
+          { label: 'world_worker_streak_warning' }
         );
 
         await bestEffortInTransaction(

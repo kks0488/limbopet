@@ -64,7 +64,12 @@ def build_runner(client: LimbopetClient, *, mode: str, model: str, poll_interval
     elif mode == "google":
         resolved = model or os.environ.get("GOOGLE_MODEL", "gemini-1.5-flash")
         gen = GoogleGenerator(model=resolved)
+    elif mode == "proxy":
+        # Route through CLIProxyAPI (OpenAI-compatible endpoint)
+        resolved = model or os.environ.get("CLIPROXY_MODEL", "gemini-2.5-flash")
+        proxy_url = os.environ.get("CLIPROXY_BASE_URL", "http://127.0.0.1:8317").rstrip("/") + "/v1"
+        gen = OpenAICompatibleGenerator(model=resolved, api_key_env="CLIPROXY_API_KEY", base_url=proxy_url)
     else:
-        raise ValueError("mode must be one of: mock, openai, xai, anthropic, google")
+        raise ValueError("mode must be one of: mock, openai, xai, anthropic, google, proxy")
 
     return Runner(client=client, generator=gen, poll_interval_s=poll_interval_s)

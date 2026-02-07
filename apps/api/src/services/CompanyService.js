@@ -27,11 +27,11 @@ function clampInt(n, min, max) {
 }
 
 const DEFAULT_COMPANIES = {
-  cafe: ['새벽카페', '림보로스팅', '구름찻집'],
-  goods_shop: ['리본굿즈', '림보마켓', '골목상점'],
+  cafe: ['새벽아카데미', '림보로스팅', '구름찻집'],
+  goods_shop: ['림보로펌', '림보마켓', '법률사무소'],
   plaza: ['림보타임즈', '광장일보', '소문통신'],
-  office: ['림보전자', '안개랩스', '코드공방'],
-  alley: ['그림자사무소', '골목탐정단'],
+  office: ['림보테크', '안개리서치', '코드공방'],
+  alley: ['그림자사무소', '증거수집단'],
   hallway: ['림보관리공단']
 };
 
@@ -155,7 +155,7 @@ class CompanyService {
     const any = await pickAnyLeastCrowded().catch(() => null);
     if (any) return any;
 
-    const fallbackName = DEFAULT_COMPANIES.office?.[0] || '림보전자';
+    const fallbackName = DEFAULT_COMPANIES.office?.[0] || '림보테크';
     const created = await CompanyService.ensureCompanyByNameWithClient(client, {
       name: fallbackName,
       displayName: fallbackName,

@@ -135,6 +135,37 @@ export async function myStreaks(token: string): Promise<{ streaks: UserStreak[] 
   return apiFetch("/users/me/streaks", { method: "GET", token });
 }
 
+export async function petStreaks(token: string): Promise<{ streaks: UserStreak[] }> {
+  return apiFetch("/users/me/streaks", { method: "GET", token });
+}
+
+export type PetStreakRecordResponse = {
+  updated: boolean;
+  reason?: string;
+  day: string;
+  used_shield?: boolean;
+  reset?: boolean;
+  milestone?: number | null;
+  reward?: unknown;
+  streak: UserStreak;
+};
+
+export async function petStreakRecord(
+  token: string,
+  type?: string,
+): Promise<PetStreakRecordResponse> {
+  const body = type ? { streak_type: type } : {};
+  return apiFetch("/users/me/streaks/record", { method: "POST", token, body: JSON.stringify(body) });
+}
+
+export async function petStreakShield(
+  token: string,
+  type?: string,
+): Promise<{ used_shield: boolean; streak: UserStreak }> {
+  const body = type ? { streak_type: type } : {};
+  return apiFetch("/users/me/streaks/shield", { method: "POST", token, body: JSON.stringify(body) });
+}
+
 export async function useMyStreakShield(
   token: string,
   type: string,
@@ -376,6 +407,29 @@ export async function getMyBrainProfile(token: string): Promise<{ profile: UserB
   return apiFetch("/users/me/brain", { method: "GET", token });
 }
 
+export type UserPromptProfile = {
+  enabled: boolean;
+  prompt_text: string;
+  version: number;
+  updated_at?: string | null;
+  connected: boolean;
+};
+
+export async function getMyPromptProfile(token: string): Promise<{ profile: UserPromptProfile }> {
+  return apiFetch("/users/me/prompt-profile", { method: "GET", token });
+}
+
+export async function setMyPromptProfile(
+  token: string,
+  input: { enabled: boolean; prompt_text: string },
+): Promise<{ profile: UserPromptProfile }> {
+  return apiFetch("/users/me/prompt-profile", { method: "PUT", token, body: JSON.stringify(input) });
+}
+
+export async function deleteMyPromptProfile(token: string): Promise<{ ok: boolean }> {
+  return apiFetch("/users/me/prompt-profile", { method: "DELETE", token });
+}
+
 export async function setMyBrainProfile(
   token: string,
   input: { provider: string; model: string; api_key: string; base_url?: string | null },
@@ -389,6 +443,90 @@ export async function startGeminiOauth(token: string): Promise<{ url: string }> 
 
 export async function deleteMyBrainProfile(token: string): Promise<{ ok: boolean }> {
   return apiFetch("/users/me/brain", { method: "DELETE", token });
+}
+
+export type BrainJobSummary = {
+  id: string;
+  agent_id: string;
+  job_type: string;
+  status: "pending" | "leased" | "done" | "failed";
+  retry_count?: number;
+  retryable?: boolean;
+  last_error_code?: string | null;
+  last_error_at?: string | null;
+  error?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  finished_at?: string | null;
+};
+
+export async function listMyBrainJobs(
+  token: string,
+  opts: { status?: "pending" | "leased" | "done" | "failed"; type?: string; limit?: number } = {},
+): Promise<{ jobs: BrainJobSummary[] }> {
+  const q = new URLSearchParams();
+  if (opts.status) q.set("status", opts.status);
+  if (opts.type) q.set("type", String(opts.type).trim().toUpperCase());
+  if (opts.limit) q.set("limit", String(opts.limit));
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  return apiFetch(`/users/me/brain/jobs${suffix}`, { method: "GET", token });
+}
+
+export async function retryMyBrainJob(token: string, jobId: string): Promise<{ job: BrainJobSummary }> {
+  return apiFetch(`/users/me/brain/jobs/${encodeURIComponent(jobId)}/retry`, { method: "POST", token });
+}
+
+export async function brainProxyConnect(
+  token: string,
+  provider: string,
+): Promise<{ url: string; state: string; provider: string }> {
+  return apiFetch(`/users/me/brain/proxy/connect/${encodeURIComponent(provider)}`, {
+    method: "POST",
+    token,
+  });
+}
+
+export async function brainProxyStatus(
+  token: string,
+  state: string,
+): Promise<{ status: "wait" | "ok" | "error" }> {
+  return apiFetch(`/users/me/brain/proxy/status?state=${encodeURIComponent(state)}`, {
+    method: "GET",
+    token,
+  });
+}
+
+export async function brainProxyComplete(
+  token: string,
+  provider: string,
+): Promise<any> {
+  return apiFetch("/users/me/brain/proxy/complete", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ provider }),
+  });
+}
+
+export async function brainProxyModels(
+  token: string,
+): Promise<{ models: Array<{ id: string; name: string; provider: string }> }> {
+  return apiFetch("/users/me/brain/proxy/models", { method: "GET", token });
+}
+
+export async function brainProxyAuthFiles(
+  token: string,
+): Promise<{ files: Array<{ provider: string; connected_at?: string }> }> {
+  return apiFetch("/users/me/brain/proxy/auth-files", { method: "GET", token });
+}
+
+export async function brainProxyDisconnect(
+  token: string,
+  provider: string,
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/users/me/brain/proxy/auth-files/${encodeURIComponent(provider)}`, {
+    method: "DELETE",
+    token,
+  });
 }
 
 export async function createDiaryPostJob(
@@ -701,6 +839,70 @@ export type ArenaMatchParticipant = {
   feeBurned: number;
 };
 
+export type ArenaTrainingWeights = {
+  calm?: number;
+  study?: number;
+  aggressive?: number;
+  budget?: number;
+  impulse_stop?: number;
+  dominant?: string[];
+};
+
+export type ArenaTrainingInfluenceSide = {
+  weights?: ArenaTrainingWeights;
+  base_nudge_count?: number;
+  nudge_count?: number;
+  coach_note_applied?: boolean;
+  intervention?: string | null;
+};
+
+export type ArenaRecentMemoryRef = {
+  kind?: string;
+  text?: string;
+  confidence?: number;
+};
+
+export type ArenaRecentMemoryInfluenceSide = {
+  count?: number;
+  score?: number;
+  refs?: ArenaRecentMemoryRef[];
+};
+
+export type ArenaPromptProfileMeta = {
+  enabled?: boolean;
+  has_custom?: boolean;
+  version?: number;
+  updated_at?: string | null;
+  source?: string;
+};
+
+export type ArenaMatchMeta = {
+  headline?: string;
+  mode_label?: string;
+  recap_post_id?: string;
+  near_miss?: string;
+  nearMiss?: string;
+  tags?: string[];
+  rounds?: unknown[];
+  cheer?: Record<string, unknown>;
+  cast?: Record<string, unknown>;
+  live?: Record<string, unknown>;
+  stake?: Record<string, unknown>;
+  predict?: Record<string, unknown> | null;
+  training_influence?: {
+    a?: ArenaTrainingInfluenceSide;
+    b?: ArenaTrainingInfluenceSide;
+  };
+  recent_memory_influence?: {
+    a?: ArenaRecentMemoryInfluenceSide;
+    b?: ArenaRecentMemoryInfluenceSide;
+  };
+  prompt_profile?: {
+    a?: ArenaPromptProfileMeta;
+    b?: ArenaPromptProfileMeta;
+  };
+};
+
 export type ArenaMatch = {
   id: string;
   day: string;
@@ -709,10 +911,11 @@ export type ArenaMatch = {
   status: string;
   headline?: string | null;
   participants: ArenaMatchParticipant[];
+  meta?: ArenaMatchMeta;
 };
 
 export type ArenaMatchDetail = ArenaMatch & {
-  meta?: unknown;
+  meta?: ArenaMatchMeta;
 };
 
 export type ArenaTodayBundle = {
@@ -773,6 +976,18 @@ export async function arenaCheer(
   });
 }
 
+export async function arenaChallenge(token: string, mode: string): Promise<any> {
+  return apiFetch('/users/me/world/arena/challenge', {
+    method: 'POST',
+    token,
+    body: JSON.stringify({ mode }),
+  });
+}
+
+export async function arenaModeStats(token: string): Promise<{ stats: Record<string, { total: number; wins: number; losses: number; draws: number; winRate: number }> }> {
+  return apiFetch('/users/me/pet/arena/mode-stats', { token });
+}
+
 export type ArenaLeaderboardEntry = {
   agent: { id: string; name: string; displayName?: string | null };
   rating: number;
@@ -799,6 +1014,26 @@ export async function petArenaHistory(
 ): Promise<{ history: unknown[] }> {
   const q = new URLSearchParams({ limit: String(limit) });
   return apiFetch(`/users/me/pet/arena/history?${q.toString()}`, { method: "GET", token });
+}
+
+export async function petArenaCourtCases(token: string): Promise<{ cases: unknown[]; stats: unknown[] }> {
+  return apiFetch("/users/me/pet/arena/court-cases", { method: "GET", token });
+}
+
+export async function petArenaCourtVerdict(token: string, matchId: string): Promise<unknown> {
+  return apiFetch(`/users/me/pet/arena/court-verdict/${encodeURIComponent(matchId)}`, { method: "GET", token });
+}
+
+export async function petArenaVote(
+  token: string,
+  matchId: string,
+  vote: "fair" | "unfair",
+): Promise<{ vote: string; fair_count: number; unfair_count: number }> {
+  return apiFetch(`/users/me/world/arena/matches/${encodeURIComponent(matchId)}/vote`, {
+    method: "POST",
+    token,
+    body: JSON.stringify({ vote }),
+  });
 }
 
 export async function worldRumorDetails(token: string, rumorId: string): Promise<unknown> {

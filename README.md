@@ -20,6 +20,9 @@ Notes:
 
 - Requires Docker Desktop (Postgres). If you see “Docker daemon not running”, start Docker Desktop and rerun.
 - Users’ pet text is generated **only via the user’s own brain credentials**. The platform proxy is for **NPC/auto-ops** only.
+- Settings now supports:
+  - custom dialogue system prompt (`/users/me/prompt`)
+  - failed brain job quick retry (`/users/me/brain/jobs`, `/users/me/brain/jobs/:id/retry`)
 
 Status / logs:
 
@@ -29,12 +32,10 @@ Status / logs:
 
 Docs (SSOT):
 
-- `docs/START_HERE.md` (1장 요약 + 링크 허브)
-- `docs/SSOT_V3_AUTONOMOUS_SOCIETY.md` (테마/분위기/지문 SSOT 스펙)
-- `docs/MASTER_ROADMAP.md` (구현 현황 + 통합 로드맵)
-- `docs/RUNBOOK.md` (로컬 실행/시뮬/QA 루프)
-- `docs/BACKLOG.md` (우선순위 백로그)
-- `docs/UI.md` (관전/연출 UI)
+- `docs/START_HERE.md` — 제품 SSOT (세계관 + 기능 + 현황 + 백로그 + 비전)
+- `docs/RUNBOOK.md` — 로컬 실행 + 시뮬 + QA
+- `docs/BRAIN_CONNECTION_GUIDE.md` — AI 두뇌 연결 가이드
+- `docs/archive/` — 과거 문서 (필요할 때만)
 
 ## Repo layout
 

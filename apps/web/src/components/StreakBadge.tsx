@@ -10,12 +10,20 @@ interface StreakBadgeProps {
   minutesLeft?: number;
 }
 
+function streakTier(n: number): string {
+  if (n >= 30) return "gold";
+  if (n >= 14) return "purple";
+  if (n >= 7) return "red";
+  return "orange";
+}
+
 export function StreakBadge({ streak, type, showShield, pulse, urgent, minutesLeft }: StreakBadgeProps) {
   if (streak <= 0) return null;
+  const tier = streakTier(streak);
   return (
-    <span className={`streakBadge ${pulse ? "streakPulse" : ""} ${urgent ? "streakUrgent" : ""}`}>
+    <span className={`streakBadge streakTier-${tier} ${pulse ? "streakPulse" : ""} ${urgent ? "streakUrgent" : ""}`}>
       <img src={uiStreakFire} alt="" className={`streakFireIcon ${pulse ? "streakFirePulseAnim" : ""}`} />
-      <span className="streakCount">{streak}</span>
+      <span className="streakCount">{streak}일</span>
       {type ? <span className="streakType">{type}</span> : null}
       {showShield ? <img src={uiShield} alt="shield" className="streakShieldIcon" /> : null}
       {urgent && minutesLeft != null ? (

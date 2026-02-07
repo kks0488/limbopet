@@ -1,14 +1,16 @@
 import React from "react";
-import { logo } from "../assets/index";
 import { StreakBadge } from "./StreakBadge";
 
 interface TopBarProps {
+  /** "모코 Lv.5" style compact title */
   title: string;
-  subtitle: string;
+  /** kept for onboarding screens that still use subtitle */
+  subtitle?: string;
   streak?: number | null;
   streakPulse?: boolean;
   streakUrgent?: boolean;
   streakMinutesLeft?: number;
+  /** @deprecated ticker removed from main game UI */
   ticker?: React.ReactNode;
   right: React.ReactNode;
 }
@@ -19,16 +21,17 @@ export function TopBar({ title, subtitle, streak, streakPulse, streakUrgent, str
       {ticker ?? null}
       <div className="topbarMain">
         <div className="brand">
-          <img src={logo} alt="" className="logo" style={{ width: 28, height: 28 }} />
           <div>
             <h1>{title}</h1>
-            <div className="topbarSubline">
-              <div className="muted" style={{ fontSize: 12 }}>{subtitle}</div>
-              {Number(streak ?? 0) > 0 ? (
-                <StreakBadge streak={Number(streak ?? 0)} pulse={streakPulse} urgent={streakUrgent} minutesLeft={streakMinutesLeft} />
-              ) : null}
-            </div>
+            {subtitle ? (
+              <div className="topbarSubline">
+                <div className="muted" style={{ fontSize: 12 }}>{subtitle}</div>
+              </div>
+            ) : null}
           </div>
+          {Number(streak ?? 0) > 0 ? (
+            <StreakBadge streak={Number(streak ?? 0)} pulse={streakPulse} urgent={streakUrgent} minutesLeft={streakMinutesLeft} />
+          ) : null}
         </div>
         <div className="row">{right}</div>
       </div>

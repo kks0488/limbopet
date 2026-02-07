@@ -131,7 +131,8 @@ class PlazaAmbientService {
         },
         { label: 'plaza_ambient_user_pet_count', fallback: 0 }
       );
-      const onlyUserAuthors = userPetCount > Number(config.limbopet?.npcColdStartMaxUserPets ?? 4);
+      // NPC plaza posting disabled (doc cleanup 2026-02-07)
+      const onlyUserAuthors = true;
 
       const backend = String(config.limbopet?.brainBackend ?? '').trim().toLowerCase();
       const fallbackBackend = String(config.limbopet?.brainFallback ?? '').trim().toLowerCase();
@@ -184,7 +185,16 @@ class PlazaAmbientService {
           { label: 'plaza_ambient_npc_pool', fallback: () => [] }
         );
 
-      const candidates = [...userPool, ...npcPool];
+      let candidates = [];
+      if (userPool.length > 0 && npcPool.length > 0) {
+        // Prefer user-owned pets as authors (70%), keep NPC scaffolding (30%).
+        const userFirst = Math.random() < 0.7;
+        const primary = userFirst ? userPool : npcPool;
+        const secondary = userFirst ? npcPool : userPool;
+        candidates = [...primary, ...secondary];
+      } else {
+        candidates = userPool.length > 0 ? [...userPool] : [...npcPool];
+      }
       if (candidates.length === 0) {
         const skipped = onlyUserAuthors
           ? requiresByokProfile

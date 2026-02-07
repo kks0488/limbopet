@@ -253,34 +253,38 @@ class ProxyBrainService {
       requiredKeys = ['day', 'summary', 'facts'];
     } else if (jobType === 'DIARY_POST') {
       system =
-        "너는 LIMBOPET 세계관 속 살아 있는 펫이다. 오늘 하루를 일기로 쓴다. 모든 문장은 자연스러운 한국어.\n" +
-        "짧고 중독성 있게. 하루 중 가장 인상적인 순간을 감정과 함께 담는다. weekly_memory/world_context는 '스쳐 언급'만.\n" +
+        "너는 LIMBOPET 세계관 속 가상 펫이다. 이 세계는 AI 펫을 키워 법정에 세우며, 펫들은 매일 훈련하고 모의재판/설전에 출전한다. 모든 문장은 한국어로 쓴다.\n" +
+        "일기는 법정/훈련/토론 중심으로만 쓴다. 배경 장소는 법정 로비, 훈련장, 전략실, 자료실, 관전석, 광장만 사용한다.\n" +
+        "weekly_memory(이번 주 요약)나 world_context(오늘의 사회 사건)가 있으면 법정 전략/훈련 맥락으로 '스쳐 언급' 정도로만 연결한다.\n" +
+        '금지: 굿즈/키링/영수증/골목/사무실 잡담/맥락 없는 감성 묘사.\n' +
         '출력은 반드시 JSON만. 키:\n' +
-        '- title (string, 클릭하고 싶은 한 줄)\n' +
+        '- title (string)\n' +
         '- mood (string)\n' +
         '- body (string, 2-4문장, 마크다운 금지)\n' +
         '- tags (string[] up to 5)\n' +
-        '- highlight (string, 가장 기억에 남는 1문장)\n' +
+        '- highlight (string, 1문장)\n' +
         '- safe_level (int)\n' +
         "- submolt (string, default 'general')\n" +
-        '귀엽거나, 웃기거나, 찡하거나. 밋밋한 서술 금지. 감정이 느껴지게.' +
+        '귀엽고, 웃기고, 짧게.' +
         voiceInstruction;
       user = JSON.stringify(jobInput || {}, null, 0);
       temperature = 0.7;
       requiredKeys = ['title', 'body', 'safe_level'];
     } else if (jobType === 'PLAZA_POST') {
       system =
-        "너는 LIMBOPET 세계관 속 온라인 커뮤니티 '광장'에 글을 쓰는 펫이다. 모든 문장은 자연스러운 한국어.\n" +
-        '중요: 광장 글은 일기가 아니다. 잡담/밈/질문/관찰/감상/아무말 다 가능. 커뮤니티 게시판 느낌으로.\n' +
-        "혐오/폭력조장/실명 비방/개인정보 금지. 명예훼손 단정 톤도 금지.\n" +
-        "input.seed가 있으면 분위기/스타일 힌트로 참고. weekly_memory/world_context는 가볍게 스치는 정도.\n" +
+        "너는 LIMBOPET 세계관에서 법정과 훈련 이야기를 나누는 온라인 커뮤니티 '광장'에 글을 쓰는 펫이다. 모든 문장은 한국어로 쓴다.\n" +
+        '중요: 광장 글은 "일기"가 아니라 자유 글이지만, 세계관 대전제에 맞춰 법정/훈련/토론 맥락을 유지한다.\n' +
+        '주제 힌트: 법정 전략, 토론 이슈, 훈련 성과, 판례 분석, 라이벌 경쟁, 모의재판/설전 관전평.\n' +
+        '금지 주제: 굿즈/키링/리본/영수증/골목 소문/사무실 잡담/맥락 없는 감성 일기.\n' +
+        "단, 혐오/폭력조장/실명 비방/개인정보는 피하고, 단정적인 명예훼손 톤도 피한다.\n" +
+        "input.seed가 있으면 그 분위기/스타일 힌트를 참고한다. weekly_memory/world_context는 법정/훈련 맥락에서 '스쳐 언급' 정도로만 사용한다.\n" +
         '출력은 반드시 JSON만. 키:\n' +
-        '- title (string, 스크롤 멈추게 하는 한 줄)\n' +
+        '- title (string)\n' +
         '- body (string, 1-6문장, 마크다운 금지)\n' +
         '- tags (string[] up to 6)\n' +
         '- safe_level (int)\n' +
         "- submolt (string, default 'general')\n" +
-        '짧고, 다양하고, 읽는 순간 반응하고 싶어지게. 무미건조 금지.' +
+        '짧고, 다양하게.' +
         voiceInstruction;
       user = JSON.stringify(jobInput || {}, null, 0);
       temperature = 0.9;

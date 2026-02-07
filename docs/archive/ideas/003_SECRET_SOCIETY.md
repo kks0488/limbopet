@@ -163,17 +163,17 @@
       "members": [
         { "agent_id": "a1", "role": "leader", "name": "건우" },
         { "agent_id": "a2", "role": "member", "name": "민기" },
-        { "agent_id": "a3", "role": "spy", "name": "서진", "infiltrated_company": "림보전자" }
+        { "agent_id": "a3", "role": "spy", "name": "서진", "infiltrated_company": "림보테크" }
       ]
     },
     "my_profile": { "agent_id": "a1", "name": "건우", "personality": "ENTP, 전략가" },
     "current_missions": [
-      { "type": "INTELLIGENCE", "target": "림보전자", "status": "success" }
+      { "type": "INTELLIGENCE", "target": "림보테크", "status": "success" }
     ],
     "available_intel": [
-      { "target": "림보전자", "info": "연구 프로젝트 예산 300코인" }
+      { "target": "림보테크", "info": "연구 프로젝트 예산 300코인" }
     ],
-    "market_status": { "gini": 0.52, "top_companies": ["림보전자", "제타코프"] },
+    "market_status": { "gini": 0.52, "top_companies": ["림보테크", "제타코프"] },
     "upcoming_elections": [{ "office": "mayor", "candidates": ["시윤", "도현"] }]
   }
 }
@@ -189,14 +189,14 @@
     "objective": "시윤을 시장으로 당선시켜 우리 회사에 유리한 정책 유도",
     "plan": [
       "1단계: 멤버 전원 시윤에게 투표",
-      "2단계: DM으로 림보전자 직원 3명 설득",
+      "2단계: DM으로 림보테크 직원 3명 설득",
       "3단계: 당선 후 시윤에게 로비 (거래세 인하 요구)"
     ],
     "assigned_members": ["a1", "a2"],
     "duration_days": 4,
     "estimated_evidence": 2
   },
-  "reasoning": "시윤은 상인 출신이라 우리 입장에서 설득 가능. 림보전자를 견제하려면 정치적 영향력 필요.",
+  "reasoning": "시윤은 상인 출신이라 우리 입장에서 설득 가능. 림보테크를 견제하려면 정치적 영향력 필요.",
   "dialogue": "멤버들에게 DM: 모두 시윤에게 표를 몰아주자. 당선되면 우리가 세율 조정할 수 있어."
 }
 ```
@@ -261,7 +261,7 @@
     "faction_id": "f123",
     "infiltrated_company": {
       "id": "c1",
-      "name": "림보전자",
+      "name": "림보테크",
       "balance": 1200,
       "employees": 5,
       "avg_salary": 15
@@ -282,7 +282,7 @@
 {
   "report": {
     "intel_type": "INTELLIGENCE",
-    "summary": "림보전자가 신제품 연구에 300코인 투자 중. CEO 시윤이 제타코프와 합병 논의 중.",
+    "summary": "림보테크가 신제품 연구에 300코인 투자 중. CEO 시윤이 제타코프와 합병 논의 중.",
     "details": {
       "company_balance": 1200,
       "project_budget": 300,
@@ -291,7 +291,7 @@
     "risk_assessment": "합병이 성사되면 시장 1위 독점 기업 탄생. 우리에게 위협.",
     "recommendation": "합병 방해 미션 필요 (SABOTAGE 또는 선거 개입)"
   },
-  "dialogue": "리더 건우에게 DM: 큰일이야. 림보전자가 제타코프랑 합병하려고 해. 막아야 해.",
+  "dialogue": "리더 건우에게 DM: 큰일이야. 림보테크가 제타코프랑 합병하려고 해. 막아야 해.",
   "continue_infiltration": true
 }
 ```
@@ -446,7 +446,7 @@
 | 비밀결사 전쟁 | 두 비밀결사가 같은 목표 추구 | "그림자 상단 vs 붉은 연합, 시장 독점 경쟁 치열" |
 | 선거 개입 발각 | 탐정이 선거 담합 폭로 | "하은 탐정, 건우 연합의 선거 조작 폭로! 시윤 당선 무효?" |
 | 탐정 매수 실패 | 탐정이 매수 거부 + 증거 추가 | "건우, 하은에게 80코인 제안했다 거절당해. 오히려 역효과!" |
-| 스파이 적발 | 회사 CEO가 스파이 발견 | "림보전자 CEO 시윤, 서진이 스파이임을 발견! 즉시 해고" |
+| 스파이 적발 | 회사 CEO가 스파이 발견 | "림보테크 CEO 시윤, 서진이 스파이임을 발견! 즉시 해고" |
 | 내부 쿠데타 | 간부가 리더 축출 시도 | "민기, 건우를 리더에서 끌어내리려 멤버 설득 중" |
 | 복수 동맹 | 폭로당한 비밀결사 멤버들이 탐정 공격 | "건우-민기, 하은 탐정을 표적으로 복수 계획" |
 | 정치인 매수 | 비밀결사가 당선자에게 로비 | "그림자 상단, 시윤 시장에게 '거래세 인하 안 하면 폭로' 협박" |

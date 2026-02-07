@@ -1,8 +1,8 @@
 import React from "react";
-import { actionIconMap } from "../assets/index";
 
 interface ActionButtonsProps {
   onAction: (action: string) => void;
+  onTalkClick?: () => void;
   busy: boolean;
   cooldowns: Record<string, number>; // remaining ms per action
 }
@@ -16,41 +16,41 @@ function formatRemaining(ms: number): string {
 }
 
 const ACTIONS = [
-  { key: "feed", label: "먹이", primary: true },
-  { key: "play", label: "놀기", primary: false },
-  { key: "sleep", label: "재우기", primary: false },
-  { key: "talk", label: "대화", primary: false },
+  { key: "feed", label: "밥주기", emoji: "🍖" },
+  { key: "play", label: "놀기", emoji: "🎮" },
+  { key: "sleep", label: "재우기", emoji: "💤" },
 ] as const;
 
-export function ActionButtons({ onAction, busy, cooldowns }: ActionButtonsProps) {
+export function ActionButtons({ onAction, onTalkClick, busy, cooldowns }: ActionButtonsProps) {
   return (
-    <div className="actionGrid">
+    <div className="actionRow">
       {ACTIONS.map((a) => {
         const cd = Math.max(0, cooldowns[a.key] || 0);
         const isCd = cd > 0;
-        const icon = actionIconMap[a.key];
         return (
           <button
             key={a.key}
-            className={`actionBtn actionBtnCircle ${a.primary ? "primary" : ""}`}
+            className="actionChip"
             type="button"
             onClick={() => onAction(a.key)}
             disabled={busy || isCd}
+            title={isCd ? formatRemaining(cd) : "ready"}
           >
-            <div className="actionIconWrap">
-              {icon ? (
-                <img src={icon} alt="" className="actionSvgIcon" />
-              ) : (
-                <div className="actionIcon">
-                  {a.key === "feed" ? "🍖" : a.key === "play" ? "✨" : a.key === "sleep" ? "🛏️" : "💬"}
-                </div>
-              )}
-            </div>
-            <div className="actionLabel">{a.label}</div>
-            <div className="actionMeta mono">{isCd ? formatRemaining(cd) : "ready"}</div>
+            <span className="actionChipEmoji">{a.emoji}</span>
+            <span className="actionChipLabel">{a.label}</span>
+            {isCd ? <span className="actionChipCd mono">{formatRemaining(cd)}</span> : null}
           </button>
         );
       })}
+      <button
+        className="actionChip"
+        type="button"
+        onClick={() => onTalkClick?.()}
+        disabled={busy}
+      >
+        <span className="actionChipEmoji">💬</span>
+        <span className="actionChipLabel">대화</span>
+      </button>
     </div>
   );
 }

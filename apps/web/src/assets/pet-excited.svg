@@ -1,106 +1,143 @@
 <svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <radialGradient id="bodyGrad-excited" cx="0.3" cy="0.3" r="0.8">
-      <stop offset="0%" style="stop-color:#F0DFFF;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#D8B8F8;stop-opacity:1" />
+    <!-- Body gradient -->
+    <linearGradient id="body-e" x1="0.3" y1="0" x2="0.7" y2="1">
+      <stop offset="0%" stop-color="#e0b4fe"/>
+      <stop offset="100%" stop-color="#BF5AF2"/>
+    </linearGradient>
+
+    <!-- Enhanced body highlight with warmer tint -->
+    <radialGradient id="shine-e" cx="0.35" cy="0.25" r="0.5">
+      <stop offset="0%" stop-color="#fff5ff" stop-opacity="0.8"/>
+      <stop offset="50%" stop-color="#ffeaff" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#e0b4fe" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="bellyGrad-excited" cx="0.5" cy="0.5" r="0.6">
-      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#FFF0FB;stop-opacity:0.4" />
+
+    <!-- Rim light gradient for energetic edge -->
+    <linearGradient id="rim-e" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffd6ff" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#e0b4fe" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Star eye gradient -->
+    <linearGradient id="star-eye-e" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+
+    <!-- Heart gradient -->
+    <linearGradient id="heart-e" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fda4af"/>
+      <stop offset="100%" stop-color="#fb7185"/>
+    </linearGradient>
+
+    <!-- Enhanced ambient glow -->
+    <radialGradient id="glow-e" cx="0.5" cy="0.5" r="0.7">
+      <stop offset="0%" stop-color="#d8b4fe" stop-opacity="0.4"/>
+      <stop offset="50%" stop-color="#c084fc" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="0"/>
     </radialGradient>
-    <filter id="shadow-excited">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
-      <feOffset dx="0" dy="2" result="offsetblur"/>
+
+    <!-- Filters -->
+    <filter id="sh-e">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dy="3"/>
       <feComponentTransfer>
-        <feFuncA type="linear" slope="0.2"/>
+        <feFuncA type="linear" slope="0.18"/>
       </feComponentTransfer>
       <feMerge>
         <feMergeNode/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
-    <linearGradient id="heartGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#FFB8D9;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#FF88B8;stop-opacity:0.8" />
-    </linearGradient>
+
+    <!-- Heart glow filter -->
+    <filter id="heart-glow-e">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+      <feOffset dx="0" dy="0"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.5"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
 
-  <!-- Shadow (elongated for jumping) -->
-  <ellipse cx="80" cy="150" rx="28" ry="5" fill="#D8B8F8" opacity="0.3"/>
+  <!-- Ambient glow background -->
+  <ellipse cx="80" cy="82" rx="65" ry="65" fill="url(#glow-e)"/>
 
-  <!-- Motion lines (below, showing jump) -->
-  <path d="M 60 145 Q 62 140, 64 135" stroke="#D8B8F8" stroke-width="2" opacity="0.4" fill="none" stroke-linecap="round"/>
-  <path d="M 100 145 Q 98 140, 96 135" stroke="#D8B8F8" stroke-width="2" opacity="0.4" fill="none" stroke-linecap="round"/>
-  <path d="M 75 148 Q 76 142, 77 136" stroke="#D8B8F8" stroke-width="1.5" opacity="0.3" fill="none" stroke-linecap="round"/>
+  <!-- Shadow -->
+  <ellipse cx="80" cy="148" rx="28" ry="6" fill="#a78bfa" opacity="0.15"/>
 
-  <!-- Tail (energetic, up high) -->
-  <path d="M 105 85 Q 130 70, 138 62 Q 132 80, 115 90 Z" fill="url(#bodyGrad-excited)" filter="url(#shadow-excited)"/>
-  <path d="M 115 72 Q 125 66, 130 63 Q 127 73, 119 78 Z" fill="#FFFFFF" opacity="0.6"/>
+  <!-- Body (elevated - jumping) -->
+  <ellipse cx="80" cy="82" rx="46" ry="50" fill="url(#body-e)" filter="url(#sh-e)"/>
 
-  <!-- Body (lifted higher, jumping) -->
-  <circle cx="80" cy="88" r="42" fill="url(#bodyGrad-excited)" filter="url(#shadow-excited)"/>
+  <!-- Body rim light (right edge) -->
+  <ellipse cx="95" cy="82" rx="30" ry="48" fill="url(#rim-e)" opacity="0.6"/>
 
-  <!-- Belly -->
-  <ellipse cx="80" cy="98" rx="28" ry="26" fill="url(#bellyGrad-excited)"/>
-
-  <!-- Arms (raised up in excitement) -->
-  <ellipse cx="50" cy="82" rx="10" ry="14" fill="#D8B8F8" filter="url(#shadow-excited)" transform="rotate(-20 50 82)"/>
-  <ellipse cx="110" cy="82" rx="10" ry="14" fill="#D8B8F8" filter="url(#shadow-excited)" transform="rotate(20 110 82)"/>
-  <ellipse cx="50" cy="84" rx="7" ry="9" fill="#FFF0FB" transform="rotate(-20 50 84)"/>
-  <ellipse cx="110" cy="84" rx="7" ry="9" fill="#FFF0FB" transform="rotate(20 110 84)"/>
-
-  <!-- Feet (off ground slightly) -->
-  <ellipse cx="68" cy="125" rx="11" ry="8" fill="#D8B8F8" filter="url(#shadow-excited)"/>
-  <ellipse cx="92" cy="125" rx="11" ry="8" fill="#D8B8F8" filter="url(#shadow-excited)"/>
-  <ellipse cx="68" cy="125" rx="8" ry="5" fill="#FFF0FB"/>
-  <ellipse cx="92" cy="125" rx="8" ry="5" fill="#FFF0FB"/>
-
-  <!-- Head -->
-  <circle cx="80" cy="53" r="35" fill="url(#bodyGrad-excited)" filter="url(#shadow-excited)"/>
+  <!-- Enhanced body highlight -->
+  <ellipse cx="80" cy="82" rx="46" ry="50" fill="url(#shine-e)"/>
 
   <!-- Ears (perked up) -->
-  <ellipse cx="58" cy="28" rx="12" ry="19" fill="#D8B8F8" filter="url(#shadow-excited)" transform="rotate(-5 58 28)"/>
-  <ellipse cx="102" cy="28" rx="12" ry="19" fill="#D8B8F8" filter="url(#shadow-excited)" transform="rotate(5 102 28)"/>
-  <ellipse cx="58" cy="30" rx="7" ry="12" fill="#FFB8E6"/>
-  <ellipse cx="102" cy="30" rx="7" ry="12" fill="#FFB8E6"/>
+  <ellipse cx="48" cy="34" rx="11" ry="18" fill="#c084fc" filter="url(#sh-e)"/>
+  <ellipse cx="112" cy="34" rx="11" ry="18" fill="#c084fc" filter="url(#sh-e)"/>
+  <ellipse cx="48" cy="35" rx="6" ry="10" fill="#f0abfc" opacity="0.5"/>
+  <ellipse cx="112" cy="35" rx="6" ry="10" fill="#f0abfc" opacity="0.5"/>
 
-  <!-- Star eyes -->
-  <g fill="#3D2956">
-    <path d="M 68 50 L 70 55 L 75 56 L 70 58 L 69 63 L 67 58 L 62 57 L 67 55 Z"/>
-    <path d="M 92 50 L 94 55 L 99 56 L 94 58 L 93 63 L 91 58 L 86 57 L 91 55 Z"/>
-  </g>
-  <g fill="#FFFFFF" opacity="0.7">
-    <path d="M 68 52 L 69 54 L 71 54.5 L 69 55.5 L 68.5 57.5 L 68 55.5 L 66 55 L 68 54 Z"/>
-    <path d="M 92 52 L 93 54 L 95 54.5 L 93 55.5 L 92.5 57.5 L 92 55.5 L 90 55 L 92 54 Z"/>
-  </g>
+  <!-- Arms raised -->
+  <ellipse cx="34" cy="72" rx="9" ry="12" fill="#c084fc" filter="url(#sh-e)" transform="rotate(-20 34 72)"/>
+  <ellipse cx="126" cy="72" rx="9" ry="12" fill="#c084fc" filter="url(#sh-e)" transform="rotate(20 126 72)"/>
 
-  <!-- Nose -->
-  <ellipse cx="80" cy="62" rx="4" ry="3" fill="#FFB8D9"/>
+  <!-- Feet (apart) -->
+  <ellipse cx="60" cy="128" rx="12" ry="8" fill="#c084fc" filter="url(#sh-e)"/>
+  <ellipse cx="100" cy="128" rx="12" ry="8" fill="#c084fc" filter="url(#sh-e)"/>
 
-  <!-- Wide open happy mouth -->
-  <ellipse cx="80" cy="72" rx="10" ry="8" fill="#3D2956" opacity="0.8"/>
-  <ellipse cx="80" cy="70" rx="9" ry="6" fill="#FFB8D9" opacity="0.4"/>
-  <path d="M 72 70 Q 80 76, 88 70" stroke="#3D2956" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <!-- Motion lines (showing jumping) -->
+  <line x1="52" y1="132" x2="46" y2="136" stroke="#c084fc" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+  <line x1="56" y1="134" x2="52" y2="140" stroke="#c084fc" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+  <line x1="108" y1="132" x2="114" y2="136" stroke="#c084fc" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
 
-  <!-- Rosy excited cheeks -->
-  <ellipse cx="56" cy="60" rx="9" ry="7" fill="#FFB8D9" opacity="0.6"/>
-  <ellipse cx="104" cy="60" rx="9" ry="7" fill="#FFB8D9" opacity="0.6"/>
+  <!-- Star eyes with gradient -->
+  <path d="M64 74 L66 78.5 L71 79.5 L67.5 82.5 L68.5 87 L64 84.5 L59.5 87 L60.5 82.5 L57 79.5 L62 78.5Z" fill="url(#star-eye-e)"/>
+  <path d="M96 74 L98 78.5 L103 79.5 L99.5 82.5 L100.5 87 L96 84.5 L91.5 87 L92.5 82.5 L89 79.5 L94 78.5Z" fill="url(#star-eye-e)"/>
 
-  <!-- Hearts floating around -->
-  <g fill="url(#heartGrad)" opacity="0.8">
-    <path d="M 25 60 Q 25 55, 28 55 Q 31 55, 31 58 Q 31 62, 25 68 Q 19 62, 19 58 Q 19 55, 22 55 Q 25 55, 25 60 Z"/>
-    <path d="M 135 75 Q 135 71, 137.5 71 Q 140 71, 140 73.5 Q 140 77, 135 82 Q 130 77, 130 73.5 Q 130 71, 132.5 71 Q 135 71, 135 75 Z"/>
-    <path d="M 118 42 Q 118 39, 120 39 Q 122 39, 122 41 Q 122 44, 118 48 Q 114 44, 114 41 Q 114 39, 116 39 Q 118 39, 118 42 Z"/>
-  </g>
+  <!-- Star eye sparkles -->
+  <circle cx="64" cy="80" r="1.5" fill="#fff" opacity="0.9"/>
+  <circle cx="96" cy="80" r="1.5" fill="#fff" opacity="0.9"/>
 
-  <!-- Extra sparkles (more than happy) -->
-  <g opacity="0.9">
-    <path d="M 30 40 L 31 43 L 34 44 L 31 45 L 30 48 L 29 45 L 26 44 L 29 43 Z" fill="#FFE8A3"/>
-    <path d="M 130 50 L 131 53 L 134 54 L 131 55 L 130 58 L 129 55 L 126 54 L 129 53 Z" fill="#FFE8A3"/>
-    <path d="M 145 90 L 145.5 91.5 L 147 92 L 145.5 92.5 L 145 94 L 144.5 92.5 L 143 92 L 144.5 91.5 Z" fill="#D8B8FF"/>
-    <path d="M 15 85 L 15.5 86.5 L 17 87 L 15.5 87.5 L 15 89 L 14.5 87.5 L 13 87 L 14.5 86.5 Z" fill="#D8B8FF"/>
-    <circle cx="40" cy="100" r="2.5" fill="#FFFFFF" opacity="0.9"/>
-    <circle cx="125" cy="110" r="2" fill="#FFFFFF" opacity="0.9"/>
-    <circle cx="35" cy="70" r="3" fill="#FFE8A3" opacity="0.7"/>
-  </g>
+  <!-- Nose with specular highlight -->
+  <ellipse cx="80" cy="90" rx="3.5" ry="2.5" fill="#f9a8d4"/>
+  <circle cx="79" cy="89.5" r="1" fill="#fff" opacity="0.7"/>
+
+  <!-- Big cheeks -->
+  <ellipse cx="50" cy="88" rx="9" ry="6" fill="#f9a8d4" opacity="0.5"/>
+  <ellipse cx="110" cy="88" rx="9" ry="6" fill="#f9a8d4" opacity="0.5"/>
+
+  <!-- Wide open smile -->
+  <path d="M64 96 Q80 112 96 96" stroke="#1c1c1e" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M68 98 Q80 108 92 98" fill="#f9a8d4" opacity="0.3"/>
+
+  <!-- Hearts with gradient and glow -->
+  <path d="M24 52 C24 48 28 46 30 49 C32 46 36 48 36 52 C36 57 30 61 30 61 C30 61 24 57 24 52Z" fill="url(#heart-e)" filter="url(#heart-glow-e)" opacity="0.85"/>
+  <path d="M126 42 C126 39 129 38 130 40 C131 38 134 39 134 42 C134 45 130 48 130 48 C130 48 126 45 126 42Z" fill="url(#heart-e)" filter="url(#heart-glow-e)" opacity="0.75"/>
+
+  <!-- Sparkles - variety of shapes -->
+  <!-- 4-point star sparkles -->
+  <path d="M20 36 L21 39 L24 40 L21 41 L20 44 L19 41 L16 40 L19 39Z" fill="#fde68a" opacity="0.9"/>
+  <path d="M140 60 L141 63 L144 64 L141 65 L140 68 L139 65 L136 64 L139 63Z" fill="#fde68a" opacity="0.9"/>
+
+  <!-- Circular sparkles -->
+  <circle cx="30" cy="30" r="2.5" fill="#fff" opacity="0.8"/>
+  <circle cx="134" cy="30" r="2" fill="#fff" opacity="0.8"/>
+  <circle cx="145" cy="50" r="1.5" fill="#fde68a" opacity="0.7"/>
+
+  <!-- Diamond sparkles -->
+  <path d="M18 68 L20 70 L18 72 L16 70Z" fill="#fde68a" opacity="0.8"/>
+  <path d="M138 75 L140 77 L138 79 L136 77Z" fill="#fff" opacity="0.7"/>
+
+  <!-- Small accent sparkles -->
+  <circle cx="25" cy="62" r="1" fill="#fff" opacity="0.6"/>
+  <circle cx="130" cy="56" r="1" fill="#fde68a" opacity="0.6"/>
 </svg>

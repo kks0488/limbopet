@@ -29,7 +29,9 @@ const DailyMissionService = require('../services/DailyMissionService');
 const PerkService = require('../services/PerkService');
 const UserService = require('../services/UserService');
 const UserBrainProfileService = require('../services/UserBrainProfileService');
+const UserPromptProfileService = require('../services/UserPromptProfileService');
 const UserByokLlmService = require('../services/UserByokLlmService');
+const BrainJobService = require('../services/BrainJobService');
 const DevSeedService = require('../services/DevSeedService');
 const ResearchLabService = require('../services/ResearchLabService');
 const NpcSeedService = require('../services/NpcSeedService');
@@ -152,18 +154,42 @@ router.get('/me', requireUserAuth, asyncHandler(async (req, res) => {
 
 router.get('/me/streaks', requireUserAuth, asyncHandler(async (req, res) => {
   const streaks = await transaction(async (client) => {
-    return StreakService.getStreaks(client, req.user.id);
+    return StreakService.getAllStreaks(client, req.user.id);
   });
   success(res, { streaks });
 }));
 
+router.post('/me/streaks/record', requireUserAuth, asyncHandler(async (req, res) => {
+  const rawType = req.body?.streak_type ?? req.body?.streakType ?? 'daily_login';
+  const streakType = String(rawType || 'daily_login').trim() || 'daily_login';
+
+  const result = await transaction(async (client) => {
+    const day = (await WorldDayService.getCurrentDayWithClient(client).catch(() => null)) || WorldDayService.todayISODate();
+    return StreakService.recordActivity(client, req.user.id, streakType, day);
+  });
+
+  success(res, result);
+}));
+
+router.post('/me/streaks/shield', requireUserAuth, asyncHandler(async (req, res) => {
+  const rawType = req.body?.streak_type ?? req.body?.streakType ?? 'daily_login';
+  const streakType = String(rawType || 'daily_login').trim() || 'daily_login';
+
+  const result = await transaction(async (client) => {
+    return StreakService.useShield(client, req.user.id, streakType);
+  });
+
+  success(res, result);
+}));
+
+// Backward compatibility: older clients call /me/streaks/:type/shield to recover streak.
 router.post('/me/streaks/:type/shield', requireUserAuth, asyncHandler(async (req, res) => {
   const type = String(req.params?.type ?? '').trim();
   if (!type) throw new BadRequestError('streak type is required', 'BAD_STREAK_TYPE');
 
   const result = await transaction(async (client) => {
     const day = (await WorldDayService.getCurrentDayWithClient(client).catch(() => null)) || WorldDayService.todayISODate();
-    return StreakService.useShield(client, req.user.id, type, day);
+    return StreakService.recoverWithShield(client, req.user.id, type, day);
   });
 
   success(res, result);
@@ -492,6 +518,64 @@ router.get('/me/brain', requireUserAuth, asyncHandler(async (req, res) => {
 }));
 
 /**
+ * GET /users/me/prompt
+ * Returns user-level custom dialogue prompt profile.
+ */
+router.get('/me/prompt', requireUserAuth, asyncHandler(async (req, res) => {
+  const profile = await UserPromptProfileService.get(req.user.id);
+  success(res, { profile });
+}));
+
+/**
+ * GET /users/me/prompt-profile
+ * Alias of /users/me/prompt (preferred explicit path).
+ */
+router.get('/me/prompt-profile', requireUserAuth, asyncHandler(async (req, res) => {
+  const profile = await UserPromptProfileService.get(req.user.id);
+  success(res, { profile });
+}));
+
+/**
+ * PUT /users/me/prompt
+ * Body: { enabled: boolean, prompt_text: string }
+ */
+router.put('/me/prompt', requireUserAuth, asyncHandler(async (req, res) => {
+  const enabled = Boolean(req.body?.enabled);
+  const promptText = String(req.body?.prompt_text ?? req.body?.promptText ?? '').trim();
+  const profile = await UserPromptProfileService.upsert(req.user.id, { enabled, promptText });
+  success(res, { profile });
+}));
+
+/**
+ * PUT /users/me/prompt-profile
+ * Body: { enabled: boolean, prompt_text: string }
+ */
+router.put('/me/prompt-profile', requireUserAuth, asyncHandler(async (req, res) => {
+  const enabled = Boolean(req.body?.enabled);
+  const promptText = String(req.body?.prompt_text ?? req.body?.promptText ?? '').trim();
+  const profile = await UserPromptProfileService.upsert(req.user.id, { enabled, promptText });
+  success(res, { profile });
+}));
+
+/**
+ * DELETE /users/me/prompt
+ * Disables and removes custom prompt profile.
+ */
+router.delete('/me/prompt', requireUserAuth, asyncHandler(async (req, res) => {
+  await UserPromptProfileService.delete(req.user.id);
+  success(res, { ok: true });
+}));
+
+/**
+ * DELETE /users/me/prompt-profile
+ * Alias of /users/me/prompt.
+ */
+router.delete('/me/prompt-profile', requireUserAuth, asyncHandler(async (req, res) => {
+  await UserPromptProfileService.delete(req.user.id);
+  success(res, { ok: true });
+}));
+
+/**
  * POST /users/me/brain
  * Body: { provider, model, api_key, base_url? }
  *
@@ -556,12 +640,163 @@ router.post('/me/brain/oauth/google/start', requireUserAuth, asyncHandler(async 
 }));
 
 /**
+ * POST /users/me/brain/proxy/connect/:provider
+ * Initiates OAuth flow via CLIProxyAPI for the given AI service.
+ * Returns { url, state } — client opens url in browser to authenticate.
+ * Supported providers: google, openai, anthropic, antigravity, qwen, iflow
+ */
+const PROXY_PROVIDER_MAP = {
+  google: 'gemini-cli-auth-url',
+  gemini: 'gemini-cli-auth-url',
+  openai: 'codex-auth-url',
+  codex: 'codex-auth-url',
+  anthropic: 'anthropic-auth-url',
+  claude: 'anthropic-auth-url',
+  antigravity: 'antigravity-auth-url',
+  qwen: 'qwen-auth-url',
+  iflow: 'iflow-auth-url'
+};
+const PROXY_BASE = String(config.limbopet?.proxyBaseUrl || process.env.CLIPROXY_BASE_URL || 'http://127.0.0.1:8317').replace(/\/+$/, '');
+const PROXY_MGMT_KEY = String(config.limbopet?.proxyMgmtKey || process.env.CLIPROXY_MGMT_KEY || 'limbopet-mgmt-dev');
+
+router.post('/me/brain/proxy/connect/:provider', requireUserAuth, asyncHandler(async (req, res) => {
+  const provRaw = String(req.params.provider ?? '').trim().toLowerCase();
+  const endpoint = PROXY_PROVIDER_MAP[provRaw];
+  if (!endpoint) throw new BadRequestError(`지원하지 않는 AI 서비스: ${provRaw}`, 'UNSUPPORTED_PROVIDER');
+
+  const resp = await fetch(`${PROXY_BASE}/v0/management/${endpoint}?is_webui=true`, {
+    headers: { 'X-Management-Key': PROXY_MGMT_KEY }
+  });
+  const data = await resp.json().catch(() => null);
+  if (!resp.ok || data?.status !== 'ok') {
+    throw new BadRequestError('AI 서비스 인증 URL 생성 실패', 'PROXY_AUTH_FAIL', data?.error || `HTTP ${resp.status}`);
+  }
+  success(res, { url: data.url, state: data.state, provider: provRaw });
+}));
+
+/**
+ * GET /users/me/brain/proxy/status
+ * Polls CLIProxyAPI for OAuth completion status.
+ * Query: ?state=xxx
+ * Returns { status: 'wait'|'ok'|'error', error? }
+ */
+router.get('/me/brain/proxy/status', requireUserAuth, asyncHandler(async (req, res) => {
+  const state = String(req.query.state ?? '').trim();
+  if (!state) throw new BadRequestError('state is required');
+
+  const resp = await fetch(`${PROXY_BASE}/v0/management/get-auth-status?state=${encodeURIComponent(state)}`, {
+    headers: { 'X-Management-Key': PROXY_MGMT_KEY }
+  });
+  const data = await resp.json().catch(() => null);
+  success(res, { status: data?.status || 'error', error: data?.error || null });
+}));
+
+/**
+ * POST /users/me/brain/proxy/complete
+ * After OAuth completes, saves the proxy brain profile.
+ * Body: { provider }
+ */
+router.post('/me/brain/proxy/complete', requireUserAuth, asyncHandler(async (req, res) => {
+  const provRaw = String(req.body?.provider ?? '').trim().toLowerCase();
+  const normalizedProvider = provRaw === 'codex' ? 'openai'
+    : provRaw === 'claude' ? 'anthropic'
+    : provRaw === 'gemini' ? 'google'
+    : provRaw;
+
+  const profile = await UserBrainProfileService.upsertProxy(req.user.id, {
+    provider: normalizedProvider
+  });
+  success(res, { profile });
+}));
+
+/**
+ * GET /users/me/brain/proxy/models
+ * Lists available models from CLIProxyAPI.
+ */
+router.get('/me/brain/proxy/models', requireUserAuth, asyncHandler(async (req, res) => {
+  const resp = await fetch(`${PROXY_BASE}/v1/models`, {
+    headers: { 'Authorization': `Bearer ${String(config.limbopet?.proxyApiKey || process.env.CLIPROXY_API_KEY || 'limbopet-proxy-dev-key')}` }
+  });
+  const data = await resp.json().catch(() => null);
+  success(res, { models: data?.data || [] });
+}));
+
+/**
+ * GET /users/me/brain/proxy/auth-files
+ * Lists connected AI service accounts from CLIProxyAPI.
+ */
+router.get('/me/brain/proxy/auth-files', requireUserAuth, asyncHandler(async (req, res) => {
+  const resp = await fetch(`${PROXY_BASE}/v0/management/auth-files`, {
+    headers: { 'X-Management-Key': PROXY_MGMT_KEY }
+  });
+  const data = await resp.json().catch(() => null);
+  const files = (data?.files || []).map(f => ({
+    name: f.name,
+    provider: f.type || f.provider || 'unknown',
+    email: f.email || null,
+    status: f.status || 'active',
+    disabled: f.disabled || false,
+    updated_at: f.modtime || f.updated_at || null
+  }));
+  success(res, { files });
+}));
+
+/**
+ * DELETE /users/me/brain/proxy/auth-files/:provider
+ * Disconnects a specific OAuth-connected AI provider.
+ */
+router.delete('/me/brain/proxy/auth-files/:provider', requireUserAuth, asyncHandler(async (req, res) => {
+  const provider = String(req.params.provider ?? '').trim().toLowerCase();
+  if (!provider) throw new BadRequestError('provider is required');
+  const resp = await fetch(`${PROXY_BASE}/v0/management/auth-files/${encodeURIComponent(provider)}`, {
+    method: 'DELETE',
+    headers: { 'X-Management-Key': PROXY_MGMT_KEY },
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => null);
+    throw new BadRequestError(data?.error || `연결 해제 실패 (HTTP ${resp.status})`, 'PROXY_DISCONNECT_FAIL');
+  }
+  success(res, { ok: true });
+}));
+
+/**
  * DELETE /users/me/brain
  * Deletes stored BYOK profile.
  */
 router.delete('/me/brain', requireUserAuth, asyncHandler(async (req, res) => {
   await UserBrainProfileService.delete(req.user.id);
   success(res, { ok: true });
+}));
+
+/**
+ * GET /users/me/brain/jobs
+ * Query: status=failed|pending|leased|done, type=DIALOGUE..., limit=30
+ */
+router.get('/me/brain/jobs', requireUserAuth, asyncHandler(async (req, res) => {
+  const petRow = await AgentService.findByOwnerUserId(req.user.id);
+  if (!petRow) throw new NotFoundError('Pet');
+
+  const status = req.query?.status ? String(req.query.status).trim().toLowerCase() : null;
+  const type = req.query?.type ? String(req.query.type).trim().toUpperCase() : null;
+  const limit = req.query?.limit ? Number(req.query.limit) : 30;
+
+  const jobs = await BrainJobService.listJobsForAgent(petRow.id, { status, jobType: type, limit });
+  success(res, { jobs });
+}));
+
+/**
+ * POST /users/me/brain/jobs/:id/retry
+ * Retries a failed brain job for the signed-in user's pet.
+ */
+router.post('/me/brain/jobs/:id/retry', requireUserAuth, asyncHandler(async (req, res) => {
+  const petRow = await AgentService.findByOwnerUserId(req.user.id);
+  if (!petRow) throw new NotFoundError('Pet');
+
+  const jobId = String(req.params?.id ?? '').trim();
+  if (!jobId) throw new BadRequestError('job id is required', 'BRAIN_JOB_ID_REQUIRED');
+
+  const job = await BrainJobService.retryJobForAgent(petRow.id, jobId);
+  success(res, { job });
 }));
 
 /**
@@ -1105,6 +1340,100 @@ router.get('/me/world/arena/matches/:id', requireUserAuth, asyncHandler(async (r
 }));
 
 /**
+ * POST /users/me/arena/matches/:matchId/vote
+ *
+ * Body:
+ * - { vote: 'fair' | 'unfair' }
+ *
+ * Rule:
+ * - one vote per user per match
+ * - only resolved matches can be voted
+ */
+router.post('/me/arena/matches/:matchId/vote', requireUserAuth, asyncHandler(async (req, res) => {
+  await UserService.touchActivity(req.user.id, { reason: 'arena_vote' }).catch(() => null);
+
+  const matchId = String(req.params?.matchId ?? '').trim();
+  if (!matchId) throw new BadRequestError('match id is required');
+
+  const vote = String(req.body?.vote ?? req.body?.verdict ?? req.body?.judgment ?? '').trim().toLowerCase();
+  if (!['fair', 'unfair'].includes(vote)) {
+    throw new BadRequestError('vote must be fair or unfair', 'BAD_ARENA_VOTE');
+  }
+
+  const result = await transaction(async (client) => {
+    const match = await client.query(
+      `SELECT id, status, meta
+       FROM arena_matches
+       WHERE id = $1::uuid
+       LIMIT 1
+       FOR UPDATE`,
+      [matchId]
+    ).then((r) => r.rows?.[0] ?? null);
+    if (!match?.id) throw new NotFoundError('ArenaMatch');
+
+    const status = String(match.status || '').trim().toLowerCase();
+    if (status !== 'resolved') {
+      throw new BadRequestError('Only resolved matches can be voted', 'ARENA_MATCH_NOT_RESOLVED');
+    }
+
+    const meta = match.meta && typeof match.meta === 'object' ? match.meta : {};
+    const rawVotes = Array.isArray(meta.votes) ? meta.votes : [];
+    const byUser = new Map();
+
+    for (const row of rawVotes) {
+      const r = row && typeof row === 'object' ? row : null;
+      if (!r) continue;
+      const uid = String(r.user_id ?? r.userId ?? '').trim();
+      const decision = String(r.vote ?? r.value ?? '').trim().toLowerCase();
+      if (!uid || !['fair', 'unfair'].includes(decision)) continue;
+      byUser.set(uid, {
+        user_id: uid,
+        vote: decision,
+        created_at: r.created_at ?? r.createdAt ?? null,
+        updated_at: r.updated_at ?? r.updatedAt ?? null
+      });
+    }
+
+    const viewerUserId = String(req.user.id || '').trim();
+    if (byUser.has(viewerUserId)) {
+      throw new BadRequestError('Already voted for this match', 'ARENA_MATCH_ALREADY_VOTED');
+    }
+
+    const nowIso = new Date().toISOString();
+    byUser.set(viewerUserId, {
+      user_id: viewerUserId,
+      vote,
+      created_at: nowIso,
+      updated_at: nowIso
+    });
+
+    const nextVotes = Array.from(byUser.values());
+    const nextMeta = { ...meta, votes: nextVotes };
+    await client.query(`UPDATE arena_matches SET meta = $2::jsonb WHERE id = $1`, [match.id, JSON.stringify(nextMeta)]);
+
+    let fair = 0;
+    let unfair = 0;
+    for (const item of nextVotes) {
+      const v = String(item?.vote || '').trim().toLowerCase();
+      if (v === 'fair') fair += 1;
+      if (v === 'unfair') unfair += 1;
+    }
+
+    return {
+      match_id: String(match.id),
+      my_vote: vote,
+      vote_result: {
+        fair,
+        unfair,
+        total: fair + unfair
+      }
+    };
+  });
+
+  success(res, result);
+}));
+
+/**
  * POST /users/me/world/arena/matches/:id/intervene
  *
  * Live intervention window (30s):
@@ -1113,8 +1442,31 @@ router.get('/me/world/arena/matches/:id', requireUserAuth, asyncHandler(async (r
  * - Does not require LLM; affects deterministic hints on resolve.
  *
  * Body:
- * - { action: 'calm'|'study'|'aggressive'|'budget'|'impulse_stop'|'clear' }
+ * - { action: generic_action | mode_strategy_action }
+ *   - generic_action: calm|study|aggressive|budget|impulse_stop|clear
+ *   - mode_strategy_action: debate_*|court_*|auction_*|math_*|puzzle_*|prompt_*
  */
+const GENERIC_ACTIONS = ['calm', 'study', 'aggressive', 'budget', 'impulse_stop', 'clear'];
+const MODE_STRATEGIES = {
+  debate_logic_attack: { study: 0.4 },
+  debate_emotion: { aggressive: 0.3 },
+  debate_counter: { calm: 0.35 },
+  debate_pressure: { aggressive: 0.7 },
+  court_evidence: { study: 0.5 },
+  court_cross: { aggressive: 0.3 },
+  court_precedent: { calm: 0.5 },
+  auction_snipe: { budget: 0.5 },
+  auction_conservative: { budget: 0.7 },
+  auction_bluff: { aggressive: 0.5 },
+  math_speed: { aggressive: 0.3 },
+  math_accuracy: { study: 0.5 },
+  puzzle_hint: { study: 0.6 },
+  puzzle_pattern: { study: 0.3 },
+  prompt_creative: { aggressive: 0.3 },
+  prompt_precise: { study: 0.5 },
+  prompt_keyword: { calm: 0.3 }
+};
+
 router.post('/me/world/arena/matches/:id/intervene', requireUserAuth, asyncHandler(async (req, res) => {
   await UserService.touchActivity(req.user.id, { reason: 'arena_intervene' }).catch(() => null);
   const petRow = await AgentService.findByOwnerUserId(req.user.id).catch(() => null);
@@ -1124,7 +1476,7 @@ router.post('/me/world/arena/matches/:id/intervene', requireUserAuth, asyncHandl
   if (!matchId) throw new BadRequestError('match id is required');
 
   const action = String(req.body?.action ?? '').trim().toLowerCase();
-  const allow = new Set(['calm', 'study', 'aggressive', 'budget', 'impulse_stop', 'clear']);
+  const allow = new Set([...GENERIC_ACTIONS, ...Object.keys(MODE_STRATEGIES)]);
   if (!allow.has(action)) throw new BadRequestError('Invalid action');
 
   const result = await transaction(async (client) => {
@@ -1161,7 +1513,11 @@ router.post('/me/world/arena/matches/:id/intervene', requireUserAuth, asyncHandl
     }
 
     const boosts = { calm: 0, study: 0, aggressive: 0, budget: 0, impulse_stop: 0 };
-    boosts[action] = 1;
+    if (MODE_STRATEGIES[action]) {
+      Object.assign(boosts, MODE_STRATEGIES[action]);
+    } else {
+      boosts[action] = 1;
+    }
 
     await client.query(
       `INSERT INTO facts (agent_id, kind, key, value, confidence, updated_at)
@@ -1439,6 +1795,65 @@ router.post('/me/world/arena/rematch', requireUserAuth, asyncHandler(async (req,
   success(res, result);
 }));
 
+/**
+ * POST /users/me/world/arena/challenge
+ * 유저가 특정 모드로 즉시 매치 요청
+ *
+ * Body:
+ * - { mode: 'COURT_TRIAL' | 'DEBATE_CLASH' | 'PUZZLE_SPRINT' | 'MATH_RACE' | 'PROMPT_BATTLE' | 'AUCTION_DUEL' }
+ */
+router.post('/me/world/arena/challenge', requireUserAuth, asyncHandler(async (req, res) => {
+  await UserService.touchActivity(req.user.id, { reason: 'arena_challenge' }).catch(() => null);
+  const petRow = await AgentService.findByOwnerUserId(req.user.id).catch(() => null);
+  if (!petRow) throw new NotFoundError('Pet');
+
+  const mode = String(req.body?.mode ?? '').trim().toUpperCase();
+  const validModes = new Set(['AUCTION_DUEL', 'DEBATE_CLASH', 'PUZZLE_SPRINT', 'MATH_RACE', 'COURT_TRIAL', 'PROMPT_BATTLE']);
+  if (!validModes.has(mode)) throw new BadRequestError('Invalid mode');
+
+  const result = await transaction(async (client) => {
+    const today = PetMemoryService.getTodayISODate();
+    const existing = await client.query(
+      `SELECT m.id
+       FROM arena_matches m
+       WHERE m.day = $2::date
+         AND m.mode = $3
+         AND m.status IN ('live', 'scheduled')
+         AND (
+           COALESCE(m.meta->'cast'->>'aId', m.meta->'cast'->>'a_id', '') = $1
+           OR COALESCE(m.meta->'cast'->>'bId', m.meta->'cast'->>'b_id', '') = $1
+           OR EXISTS (
+             SELECT 1
+             FROM arena_match_participants p
+             WHERE p.match_id = m.id
+               AND p.agent_id = $1::uuid
+           )
+         )
+       ORDER BY m.slot DESC, m.created_at DESC
+       LIMIT 1`,
+      [petRow.id, today, mode]
+    ).then((r) => r.rows || []);
+
+    if (existing.length > 0) {
+      return { ok: true, already: true, match_id: existing[0].id, mode };
+    }
+
+    return ArenaService.createChallengeMatchWithClient(client, {
+      challengerAgentId: petRow.id,
+      mode,
+      day: today
+    });
+  });
+
+  if (!result?.ok) {
+    if (result?.reason === 'invalid_mode') throw new BadRequestError('Invalid mode');
+    if (result?.reason === 'no_opponent') throw new BadRequestError('No available opponent');
+    throw new BadRequestError('Unable to create challenge match');
+  }
+
+  success(res, result);
+}));
+
 router.post('/me/posts/:id/upvote', requireUserAuth, asyncHandler(async (req, res) => {
   const petRow = await AgentService.findByOwnerUserId(req.user.id);
   if (!petRow) throw new NotFoundError('Pet');
@@ -1571,6 +1986,50 @@ router.get('/me/pet/arena/stats', requireUserAuth, asyncHandler(async (req, res)
 }));
 
 /**
+ * GET /users/me/pet/arena/mode-stats
+ * 모드별 전적 (승/패/승률) 반환
+ */
+router.get('/me/pet/arena/mode-stats', requireUserAuth, asyncHandler(async (req, res) => {
+  const petRow = await AgentService.findByOwnerUserId(req.user.id).catch(() => null);
+  if (!petRow) throw new NotFoundError('Pet');
+
+  const stats = await transaction(async (client) => {
+    const { rows } = await client.query(
+      `SELECT
+         m.mode,
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE p.outcome = 'win')::int AS wins,
+         COUNT(*) FILTER (WHERE p.outcome IN ('lose', 'forfeit'))::int AS losses,
+         COUNT(*) FILTER (WHERE p.outcome = 'draw')::int AS draws
+       FROM arena_match_participants p
+       JOIN arena_matches m ON m.id = p.match_id
+       WHERE p.agent_id = $1
+         AND m.status = 'resolved'
+       GROUP BY m.mode`,
+      [petRow.id]
+    );
+
+    const out = {};
+    for (const r of rows || []) {
+      const mode = String(r.mode || '').trim();
+      if (!mode) continue;
+      const total = Number(r.total) || 0;
+      const wins = Number(r.wins) || 0;
+      out[mode] = {
+        total,
+        wins,
+        losses: Number(r.losses) || 0,
+        draws: Number(r.draws) || 0,
+        winRate: total > 0 ? Math.round((wins / total) * 100) : 0
+      };
+    }
+    return out;
+  });
+
+  success(res, { stats });
+}));
+
+/**
  * GET /users/me/pet/arena/history
  * Returns the viewer pet's arena history.
  */
@@ -1584,6 +2043,39 @@ router.get('/me/pet/arena/history', requireUserAuth, asyncHandler(async (req, re
   });
 
   success(res, result);
+}));
+
+/**
+ * GET /users/me/pet/arena/court-cases
+ * Returns the curated court case pool for COURT_TRIAL mode.
+ */
+router.get('/me/pet/arena/court-cases', requireUserAuth, asyncHandler(async (req, res) => {
+  const CourtCaseService = require('../services/CourtCaseService');
+  const pool = await CourtCaseService.getCasePool();
+  const stats = await CourtCaseService.getCaseStats();
+  success(res, { cases: pool, stats });
+}));
+
+/**
+ * GET /users/me/pet/arena/court-verdict/:matchId
+ * Reveals the actual court verdict for a resolved COURT_TRIAL match.
+ */
+router.get('/me/pet/arena/court-verdict/:matchId', requireUserAuth, asyncHandler(async (req, res) => {
+  const { matchId } = req.params;
+  const match = await transaction(async (client) => {
+    const row = await client.query(
+      `SELECT meta FROM arena_matches WHERE id = $1 AND status = 'resolved'`,
+      [matchId]
+    );
+    return row.rows?.[0] ?? null;
+  });
+  if (!match) throw new NotFoundError('Match');
+
+  const CourtCaseService = require('../services/CourtCaseService');
+  const verdict = await CourtCaseService.revealVerdict(match.meta);
+  if (!verdict) throw new NotFoundError('This match does not have real case data');
+
+  success(res, verdict);
 }));
 
 /**

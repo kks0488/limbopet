@@ -37,6 +37,8 @@ function decayFactorForFactKind(kind, ageDays) {
 
   // Suggestions are "tactical" and should fade relatively quickly.
   if (k === 'suggestion') return Math.pow(0.5, days / 10);
+  // Coaching sits between tactical suggestions and long-term preferences.
+  if (k === 'coaching') return Math.pow(0.5, days / 30);
   // Preferences/forbidden are "identity" and should fade slowly.
   if (k === 'preference' || k === 'forbidden') return Math.pow(0.5, days / 120);
   if (k === 'profile') return Math.pow(0.5, days / 365);
@@ -52,6 +54,7 @@ function selectFactsForDailySummary(allFacts, { day, limit = 50 } = {}) {
 
   const caps = new Map([
     ['suggestion', 6],
+    ['coaching', 8],
     ['preference', 10],
     ['forbidden', 8],
     ['profile', 6],

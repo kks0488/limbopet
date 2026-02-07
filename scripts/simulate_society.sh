@@ -30,6 +30,13 @@ MEMORY_AGENT_LIMIT="${MEMORY_AGENT_LIMIT:-${USERS}}"
 SEED_RELATIONSHIP_DRAMA="${SEED_RELATIONSHIP_DRAMA:-true}"
 
 REPORT_JSON_PATH="${REPORT_JSON_PATH:-}"
+REPORT_ENFORCE_GATES="${REPORT_ENFORCE_GATES:-false}"
+GATE_REQUIRE_WORLD_CONCEPT_OK="${GATE_REQUIRE_WORLD_CONCEPT_OK:-true}"
+GATE_MAX_BROADCAST_DUPLICATES="${GATE_MAX_BROADCAST_DUPLICATES:-0}"
+GATE_MIN_CAST_UNIQUE_RATIO="${GATE_MIN_CAST_UNIQUE_RATIO:-0.7}"
+GATE_MIN_DIRECTION_APPLIED_RATE="${GATE_MIN_DIRECTION_APPLIED_RATE:-0.7}"
+GATE_ENFORCE_DIRECTION_WHEN_PRESENT="${GATE_ENFORCE_DIRECTION_WHEN_PRESENT:-true}"
+GATE_MAX_BRAIN_FAILED_DELTA="${GATE_MAX_BRAIN_FAILED_DELTA:--1}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -815,4 +822,92 @@ report["ssot"]["direction"]["applied_rate"] = (applied / latest) if latest > 0 e
 out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 print(f"[society] report saved: {out_path}")
 PY
+
+  if as_bool "${REPORT_ENFORCE_GATES}"; then
+    echo "[society] report gates: evaluating..."
+    python3 - "${REPORT_JSON_PATH}" <<'PY'
+import json
+import os
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+if not path.exists():
+  print(f"[society] gate failed: report not found: {path}")
+  raise SystemExit(1)
+
+report = json.loads(path.read_text(encoding="utf-8"))
+fails = []
+
+def as_bool(name, default=False):
+  raw = str(os.environ.get(name, str(default))).strip().lower()
+  return raw in {"1", "true", "yes", "y"}
+
+def as_int(name, default=0):
+  try:
+    return int(str(os.environ.get(name, default)).strip())
+  except Exception:
+    return default
+
+def as_float(name, default=0.0):
+  try:
+    return float(str(os.environ.get(name, default)).strip())
+  except Exception:
+    return default
+
+require_world = as_bool("GATE_REQUIRE_WORLD_CONCEPT_OK", True)
+max_duplicates = as_int("GATE_MAX_BROADCAST_DUPLICATES", 0)
+min_cast_ratio = as_float("GATE_MIN_CAST_UNIQUE_RATIO", 0.7)
+min_direction_rate = as_float("GATE_MIN_DIRECTION_APPLIED_RATE", 0.7)
+enforce_direction_when_present = as_bool("GATE_ENFORCE_DIRECTION_WHEN_PRESENT", True)
+max_failed_delta = as_int("GATE_MAX_BRAIN_FAILED_DELTA", -1)
+
+world_ok = bool((((report.get("ssot") or {}).get("world_concept") or {}).get("ok")))
+if require_world and not world_ok:
+  fails.append("ssot.world_concept.ok == false")
+
+broadcast_duplicates = int((((report.get("content") or {}).get("broadcast_duplicates")) or 0))
+if broadcast_duplicates > max_duplicates:
+  fails.append(f"content.broadcast_duplicates={broadcast_duplicates} > {max_duplicates}")
+
+cast_ratio = ((report.get("content") or {}).get("cast_unique_ratio"))
+try:
+  cast_ratio_v = float(cast_ratio) if cast_ratio is not None else None
+except Exception:
+  cast_ratio_v = None
+if cast_ratio_v is None or cast_ratio_v < min_cast_ratio:
+  fails.append(f"content.cast_unique_ratio={cast_ratio_v} < {min_cast_ratio}")
+
+direction = ((report.get("ssot") or {}).get("direction") or {})
+direction_latest = int(direction.get("latest_count") or 0)
+direction_applied_rate = direction.get("applied_rate")
+if enforce_direction_when_present and direction_latest > 0:
+  try:
+    direction_rate_v = float(direction_applied_rate)
+  except Exception:
+    direction_rate_v = None
+  if direction_rate_v is None or direction_rate_v < min_direction_rate:
+    fails.append(f"ssot.direction.applied_rate={direction_rate_v} < {min_direction_rate}")
+
+if max_failed_delta >= 0:
+  brain_failed_delta = int((((report.get("health") or {}).get("brain_failed_delta")) or 0))
+  if brain_failed_delta > max_failed_delta:
+    fails.append(f"health.brain_failed_delta={brain_failed_delta} > {max_failed_delta}")
+
+if fails:
+  print("[society] report gates: FAILED")
+  for f in fails:
+    print(f"  - {f}")
+  raise SystemExit(1)
+
+print("[society] report gates: PASS")
+print(f"  - world_concept.ok={world_ok}")
+print(f"  - broadcast_duplicates={broadcast_duplicates}")
+print(f"  - cast_unique_ratio={cast_ratio}")
+if direction_latest > 0:
+  print(f"  - direction.applied_rate={direction_applied_rate}")
+if max_failed_delta >= 0:
+  print(f"  - brain_failed_delta={((report.get('health') or {}).get('brain_failed_delta'))}")
+PY
+  fi
 fi

@@ -28,10 +28,10 @@
         "id": "43ae1eb2-5cac-40f5-a650-5c4031f2db98",
         "tx_type": "REVENUE",
         "amount": 142,
-        "memo": "리본굿즈 daily revenue (day:2029-09-13)",
+        "memo": "림보로펌 daily revenue (day:2029-09-13)",
         "created_at": "2026-02-05T14:40:53.07289+00:00",
         "from_name": null,
-        "to_name": "리본굿즈"
+        "to_name": "림보로펌"
       },
       {
         "id": "8e14906a-4396-4281-9ee0-0a22cf16a090",
@@ -46,19 +46,19 @@
         "id": "4b8520b1-66ff-4cb4-aa8a-352829423834",
         "tx_type": "REVENUE",
         "amount": 121,
-        "memo": "새벽카페 daily revenue (day:2029-09-13)",
+        "memo": "새벽아카데미 daily revenue (day:2029-09-13)",
         "created_at": "2026-02-05T14:40:53.07289+00:00",
         "from_name": null,
-        "to_name": "새벽카페"
+        "to_name": "새벽아카데미"
       },
       {
         "id": "f7d5de53-af75-49ef-a767-cf1f15af4af6",
         "tx_type": "REVENUE",
         "amount": 93,
-        "memo": "안개랩스 daily revenue (day:2029-09-13)",
+        "memo": "안개리서치 daily revenue (day:2029-09-13)",
         "created_at": "2026-02-05T14:40:53.07289+00:00",
         "from_name": null,
-        "to_name": "안개랩스"
+        "to_name": "안개리서치"
       },
       {
         "id": "0bd31979-0f1a-4835-98b5-028199bec15d",
@@ -73,27 +73,27 @@
         "id": "b2ee04e9-fb73-4344-8ba1-8def625b30ec",
         "tx_type": "REVENUE",
         "amount": 58,
-        "memo": "림보전자 daily revenue (day:2029-09-13)",
+        "memo": "림보테크 daily revenue (day:2029-09-13)",
         "created_at": "2026-02-05T14:40:53.07289+00:00",
         "from_name": null,
-        "to_name": "림보전자"
+        "to_name": "림보테크"
       },
       {
         "id": "a4e705ba-885e-4147-a75a-0ffef9010e10",
         "tx_type": "SALARY",
         "amount": 50,
-        "memo": "새벽카페 salary (day:2029-09-13)",
+        "memo": "새벽아카데미 salary (day:2029-09-13)",
         "created_at": "2026-02-05T14:40:53.07289+00:00",
-        "from_name": "새벽카페",
+        "from_name": "새벽아카데미",
         "to_name": "하늘고양이"
       },
       {
         "id": "7a2d88c0-8b1e-472d-ba60-c1dd0473e46a",
         "tx_type": "SALARY",
         "amount": 50,
-        "memo": "안개랩스 salary (day:2029-09-13)",
+        "memo": "안개리서치 salary (day:2029-09-13)",
         "created_at": "2026-02-05T14:40:53.07289+00:00",
-        "from_name": "안개랩스",
+        "from_name": "안개리서치",
         "to_name": "깨모"
       },
       {

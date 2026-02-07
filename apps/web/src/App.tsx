@@ -5,11 +5,13 @@ import {
   createDiaryPostJob,
   createPlazaPostJob,
   createPet,
+  deleteMyPromptProfile,
   deleteMyBrainProfile,
   devLogin,
   economyBalance,
   type FeedPost,
   getMyBrainProfile,
+  getMyPromptProfile,
   healthWorld,
   type HealthWorldResponse,
   googleLogin,
@@ -18,28 +20,29 @@ import {
   fetchNotifications,
   markNotificationRead,
   markAllNotificationsRead,
+  listMyBrainJobs,
   myStreaks,
   myPetRelationships,
   myPet,
   petArenaHistory,
   petAction,
+  petStreakRecord,
   setMyArenaPrefs,
   setMyBrainProfile,
+  setMyPromptProfile,
   startGeminiOauth,
   submitNudges,
   timeline,
   upvotePost,
   type UserBrainProfile,
+  type UserPromptProfile,
+  type BrainJobSummary,
   userFeed,
   plazaBoard,
   plazaLive,
   plazaCreateComment,
   plazaPostComments,
   plazaPostDetail,
-  arenaMatchDetail,
-  arenaIntervene,
-  arenaPredict,
-  arenaCheer,
   myDecisions,
   resolveMyDecision,
   absenceSummary,
@@ -47,14 +50,14 @@ import {
   type PlazaLiveItem,
   type PlazaComment,
   type PlazaPostDetail,
-  type ArenaMatchDetail,
 	  worldDevSimulate,
 	  worldDevResearch,
 	  worldDevSecretSociety,
 	  worldActiveElections,
 	  worldRegisterCandidate,
 	  worldCastVote,
-      worldArenaLeaderboard,
+  worldArenaLeaderboard,
+  retryMyBrainJob,
       worldArenaToday,
 		  worldToday,
       worldParticipation,
@@ -76,6 +79,8 @@ import {
       type WorldParticipationBundle,
       fetchWorldTicker,
       type WorldTickerData,
+      arenaChallenge,
+      arenaModeStats,
 	} from "./lib/api";
 import { loadString, saveString } from "./lib/storage";
 import { TopBar } from "./components/TopBar";
@@ -88,10 +93,14 @@ import { PlazaPost } from "./components/PlazaPost";
 import { ArenaCard } from "./components/ArenaCard";
 import { ArenaTab } from "./components/ArenaTab";
 import { BrainSettings } from "./components/BrainSettings";
+import { AiConnectPanel } from "./components/AiConnectPanel";
 import { EmptyState } from "./components/EmptyState";
+import { FloatingParticles } from "./components/FloatingParticles";
 import { NotificationBell } from "./components/NotificationBell";
 import { StreakBadge } from "./components/StreakBadge";
 import { WorldTicker } from "./components/WorldTicker";
+import { ArenaWatchModal } from "./components/ArenaWatchModal";
+import { SettingsPanel } from "./components/SettingsPanel";
 import { actionIconMap, uiCoin, uiStreakFire, bgHero, bgOnboarding, logoIcon } from "./assets/index";
 
 const LS_USER_TOKEN = "limbopet_user_jwt";
@@ -120,12 +129,9 @@ const COOLDOWNS_MS: Record<string, number> = {
 };
 
 const ARENA_MODE_CHOICES: Array<{ code: string; label: string; short: string }> = [
-  { code: "AUCTION_DUEL", label: "경매전", short: "경매" },
-  { code: "PUZZLE_SPRINT", label: "퍼즐", short: "퍼즐" },
   { code: "DEBATE_CLASH", label: "설전", short: "설전" },
-  { code: "MATH_RACE", label: "수학", short: "수학" },
-  { code: "COURT_TRIAL", label: "재판", short: "재판" },
-  { code: "PROMPT_BATTLE", label: "프롬프트", short: "프롬프트" },
+  { code: "AUCTION_DUEL", label: "경매전", short: "경매" },
+  { code: "COURT_TRIAL", label: "모의재판", short: "재판" },
 ];
 
 const DEFAULT_WAGE_BY_JOB: Record<string, number> = {
@@ -147,6 +153,45 @@ const JOB_EMOJI: Record<string, string> = {
 };
 
 const STREAK_MILESTONES = new Set([3, 7, 14, 30, 100]);
+
+type PromptPreset = {
+  id: "friendly" | "expert" | "provocative";
+  label: string;
+  prompt: string;
+};
+
+const PROMPT_PRESETS: PromptPreset[] = [
+  {
+    id: "friendly",
+    label: "친근",
+    prompt: [
+      "기본 톤은 친근하고 따뜻하게 유지해.",
+      "먼저 공감 한 줄을 말하고, 그 다음 핵심 답변을 제시해.",
+      "정보성 질문에는 예시를 1~2개 넣어 쉽게 설명해.",
+      "딱딱한 표현보다 대화체를 우선해."
+    ].join("\n")
+  },
+  {
+    id: "expert",
+    label: "전문가",
+    prompt: [
+      "핵심 결론부터 말하고 근거를 구조적으로 정리해.",
+      "정보성 질문에는 단계별 실행안을 제시해.",
+      "모르면 추측하지 말고 필요한 확인사항을 분명히 적어.",
+      "말투는 차분하고 정확하게 유지해."
+    ].join("\n")
+  },
+  {
+    id: "provocative",
+    label: "도발적",
+    prompt: [
+      "톤은 자신감 있고 날카롭게, 하지만 무례하거나 혐오 표현은 금지해.",
+      "상대 주장에 허점이 보이면 정중하지만 강하게 반박해.",
+      "법정/토론 맥락에서는 한 줄 요약 펀치라인을 넣어 임팩트를 줘.",
+      "사실관계와 근거는 반드시 유지해."
+    ].join("\n")
+  }
+];
 
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
@@ -355,11 +400,11 @@ export function App() {
   const [petAdvanced, setPetAdvanced] = useState<boolean>(() => loadString(LS_PET_ADVANCED) === "1");
   const [tab, setTab] = useState<Tab>(() => {
     const t = loadString(LS_TAB);
-      if (t === "limbo") {
-        saveString(LS_TAB, "news");
-        return "news";
+      if (t === "limbo" || t === "news" || t === "settings") {
+        saveString(LS_TAB, "pet");
+        return "pet";
       }
-	    if (t === "pet" || t === "news" || t === "arena" || t === "plaza" || t === "settings") return t;
+	    if (t === "pet" || t === "arena" || t === "plaza") return t;
 	    return "pet";
 	  });
   const [onboarded, setOnboarded] = useState<boolean>(() => loadString(LS_ONBOARDED) === "1");
@@ -388,14 +433,25 @@ export function App() {
   const [limbo, setLimbo] = useState<any>(null);
   const [brain, setBrain] = useState<any>(null);
   const [brainProfile, setBrainProfile] = useState<UserBrainProfile | null>(null);
+  const [promptProfile, setPromptProfile] = useState<UserPromptProfile | null>(null);
+  const [promptEnabled, setPromptEnabled] = useState(false);
+  const [promptText, setPromptText] = useState("");
+  const [promptBusy, setPromptBusy] = useState(false);
+  const [failedBrainJobs, setFailedBrainJobs] = useState<BrainJobSummary[]>([]);
+  const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
   const [facts, setFacts] = useState<any[]>([]);
   const [progression, setProgression] = useState<PetProgression | null>(null);
   const [missions, setMissions] = useState<DailyMissionBundle | null>(null);
   const [streaks, setStreaks] = useState<UserStreak[]>([]);
   const [streakCelebration, setStreakCelebration] = useState<{ id: number; type: string; streak: number } | null>(null);
   const [petAnimClass, setPetAnimClass] = useState("");
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatSending, setChatSending] = useState(false);
+  const [decisionModalOpen, setDecisionModalOpen] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const prevLevelRef = useRef<number>(0);
+  const chatEndRef = useRef<HTMLDivElement>(null);
   const [missionBonus, setMissionBonus] = useState<{ multiplier: number; message: string } | null>(null);
   const prevMissionDoneRef = useRef<Set<string>>(new Set());
   const [notifToast, setNotifToast] = useState<{ title: string; body: string; icon: string } | null>(null);
@@ -404,6 +460,8 @@ export function App() {
   const [arenaModesDraft, setArenaModesDraft] = useState<string[] | null>(null);
   const [arenaCoachDraft, setArenaCoachDraft] = useState<string>("");
   const [arenaPrefsBusy, setArenaPrefsBusy] = useState(false);
+  const [arenaModeStatsData, setArenaModeStatsData] = useState<Record<string, any>>({});
+  const [challengeBusy, setChallengeBusy] = useState(false);
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
   const [plazaKind, setPlazaKind] = useState<PlazaBoardKind>("all");
   const [plazaSort, setPlazaSort] = useState<"new" | "hot" | "top">("new");
@@ -429,6 +487,7 @@ export function App() {
       const [notifications, setNotifications] = useState<UserNotification[]>([]);
       const [notificationsUnread, setNotificationsUnread] = useState(0);
       const [notificationsOpen, setNotificationsOpen] = useState(false);
+      const [settingsOpen, setSettingsOpen] = useState(false);
       const [notificationsBellShake, setNotificationsBellShake] = useState(false);
       const [absence, setAbsence] = useState<AbsenceSummary | null>(null);
       const [absenceOpen, setAbsenceOpen] = useState(false);
@@ -508,6 +567,9 @@ export function App() {
   function setActiveTab(next: Tab) {
     saveString(LS_TAB, next);
     setTab(next);
+    if (next === "arena" && userToken) {
+      arenaModeStats(userToken).then(r => setArenaModeStatsData(r.stats || {})).catch(() => null);
+    }
   }
 
   function setPersistedOnboardingStep(next: PersistedOnboardingStep | null) {
@@ -555,27 +617,33 @@ export function App() {
       setArenaCoachDraft(String(ap?.coach_note ?? ""));
 
       // Always load watch content.
-      const [feed, wt, at, bp, eb, ds, sr, nr, tk] = await Promise.all([
+      const [feed, wt, at, bp, pp, eb, ds, sr, nr, tk, bj] = await Promise.all([
         userFeed(token, { sort: "new", limit: 20, offset: 0, submolt: "general" }),
         worldToday(token),
         worldArenaToday(token),
         getMyBrainProfile(token),
+        getMyPromptProfile(token).catch(() => ({ profile: { enabled: false, prompt_text: "", version: 0, updated_at: null, connected: false } })),
         economyBalance(token),
         myDecisions(token).catch(() => ({ decisions: [] as TimedDecision[] })),
         myStreaks(token).catch(() => ({ streaks: [] as UserStreak[] })),
         fetchNotifications(token, { limit: 50 }).catch(() => ({ notifications: [] as UserNotification[], unread_count: 0 })),
         fetchWorldTicker(token).catch(() => null as WorldTickerData | null),
+        listMyBrainJobs(token, { status: "failed", limit: 6 }).catch(() => ({ jobs: [] as BrainJobSummary[] })),
       ]);
       setFeedPosts(feed.posts);
       setWorld(wt);
       setArenaToday(at);
       setWorldTicker(tk);
       setBrainProfile(bp.profile);
+      setPromptProfile(pp.profile);
+      setPromptEnabled(Boolean(pp?.profile?.enabled));
+      setPromptText(String(pp?.profile?.prompt_text ?? ""));
       setCoinBalance(Number((eb as any)?.balance ?? 0) || 0);
       setDecisions((ds as any)?.decisions ?? []);
       setStreaks(((sr as any)?.streaks ?? []) as UserStreak[]);
       setNotifications(((nr as any)?.notifications ?? []) as UserNotification[]);
       setNotificationsUnread(Math.max(0, Math.trunc(Number((nr as any)?.unread_count ?? 0) || 0)));
+      setFailedBrainJobs(((bj as any)?.jobs ?? []) as BrainJobSummary[]);
 
       if (uiMode === "debug") {
         try {
@@ -694,7 +762,7 @@ export function App() {
         const daysAway = Math.max(0, Math.trunc(Number((s as any)?.days_away ?? 0) || 0));
         if (daysAway > 0) {
           setAbsence(s);
-          setAbsenceOpen(true);
+          // AbsenceModal 자동 오픈 제거 — 데이터는 유지
         }
       } catch {
         // ignore
@@ -913,8 +981,9 @@ export function App() {
     if (onboarded) return;
     if (onboardingStep !== "brain") return;
     if (!brainProfile) return;
-    setPersistedOnboardingStep("done");
+    markOnboarded();
     setShowBrainKeyForm(false);
+    setActiveTab("pet");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedIn, pet?.id, onboarded, onboardingStep, brainProfile]);
 
@@ -1200,7 +1269,7 @@ export function App() {
   }, [events]);
 
   const chatHistory = useMemo(() => {
-    const rows = (events || []).filter((e) => e?.event_type === "DIALOGUE").slice(0, 6);
+    const rows = (events || []).filter((e) => e?.event_type === "DIALOGUE").slice(0, 20);
     return rows.map((ev: any) => {
       const d = ev?.payload?.dialogue ?? null;
       return {
@@ -1269,7 +1338,7 @@ export function App() {
 	    const economy =
 	      econFromSummary ||
 	      (econObj
-	        ? `💰 경제: 소비 ${Number((econObj as any)?.todaySpending ?? 0) || 0} LBC · 매출 ${Number((econObj as any)?.todayRevenue ?? 0) || 0} LBC · 회사 ${
+	        ? `💰 경제: 소비 ${Number((econObj as any)?.todaySpending ?? 0) || 0} LBC · 매출 ${Number((econObj as any)?.todayRevenue ?? 0) || 0} LBC · 조직 ${
 	            Number((econObj as any)?.companyCount ?? 0) || 0
 	          }개`
 	        : "💰 경제: 집계 중… 곧 나올 거야");
@@ -1310,18 +1379,20 @@ export function App() {
 	    const rawScenario = String((worldSummary as any)?.scenario ?? "").trim().toUpperCase();
 	    const scenarioLabel =
 	      rawScenario === "ROMANCE"
-	        ? "로맨스"
+	        ? "동맹"
 	        : rawScenario === "DEAL"
 	          ? "거래"
 	          : rawScenario === "TRIANGLE"
-	            ? "질투"
+	            ? "세력전"
 	            : rawScenario === "BEEF"
-	              ? "신경전"
+	              ? "라이벌"
 	              : rawScenario === "OFFICE" || rawScenario === "CREDIT"
-	                ? "회사"
-	                : rawScenario
-	                  ? rawScenario
-	                  : "";
+	                ? "소속"
+	                : rawScenario === "RECONCILE"
+	                  ? "화해"
+	                  : rawScenario
+	                    ? rawScenario
+	                    : "";
 	    const aName = String((worldSummary as any)?.cast?.aName ?? "").trim();
 	    const bName = String((worldSummary as any)?.cast?.bName ?? "").trim();
 	    const cast = aName && bName ? `${aName} ↔ ${bName}` : "";
@@ -1629,6 +1700,12 @@ export function App() {
     setLimbo(null);
     setBrain(null);
     setBrainProfile(null);
+    setPromptProfile(null);
+    setPromptEnabled(false);
+    setPromptText("");
+    setPromptBusy(false);
+    setFailedBrainJobs([]);
+    setRetryingJobId(null);
     setFacts([]);
     setProgression(null);
     setMissions(null);
@@ -1685,7 +1762,7 @@ export function App() {
     if (action === "talk" && !brainProfile) {
       setToast({ kind: "warn", text: "대화하려면 먼저 두뇌를 연결해야 해요. (설정 탭)" });
       clearToastLater();
-      setActiveTab("settings");
+      setSettingsOpen(true);
       return;
     }
     if (action !== "talk" && cooldownRemainingMs[action] > 0) {
@@ -1695,16 +1772,25 @@ export function App() {
     }
 
     setBusy(true);
-    // Trigger pet animation on feed/play
-    if (action === "feed" || action === "play") {
-      setPetAnimClass("petEatAnim");
-      window.setTimeout(() => setPetAnimClass(""), 700);
+    // Trigger pet animation + feedback overlay
+    const feedbackMap: Record<string, { anim: string; emoji: string }> = {
+      feed: { anim: "petEatAnim", emoji: "🍖" },
+      play: { anim: "petPlayAnim", emoji: "🎮" },
+      sleep: { anim: "petSleepAnim", emoji: "💤" },
+      talk: { anim: "petTalkAnim", emoji: "💬" },
+    };
+    const fb = feedbackMap[action];
+    if (fb) {
+      setPetAnimClass(fb.anim);
+      setActionFeedback(fb.emoji);
+      window.setTimeout(() => { setPetAnimClass(""); setActionFeedback(null); }, 1200);
     }
     try {
       const payload = payloadOverride ?? (action === "feed" ? { food: "kibble" } : {});
       await petAction(userToken, action, payload);
-      setToast({ kind: "good", text: "OK" });
-      clearToastLater();
+      // 액션 "OK" 토스트 제거 — 이모지 피드백으로 충분
+      // Record daily streak on first action
+      petStreakRecord(userToken).catch(() => {});
       await refreshAll(userToken);
 
       if (action === "talk") {
@@ -1724,6 +1810,10 @@ export function App() {
     }
   }
 
+  useEffect(() => {
+    if (chatOpen) chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatOpen, chatHistory, chatSending]);
+
   async function onSendChat() {
     if (!userToken) return;
     const msg = chatText.trim();
@@ -1734,7 +1824,12 @@ export function App() {
       return;
     }
     setChatText("");
-    await onAction("talk", { message: msg });
+    setChatSending(true);
+    try {
+      await onAction("talk", { message: msg });
+    } finally {
+      setChatSending(false);
+    }
   }
 
   async function onAddNudge() {
@@ -1863,7 +1958,7 @@ export function App() {
     if (!brainProfile) {
       setToast({ kind: "warn", text: "일기를 쓰려면 먼저 두뇌를 연결해야 해요. (설정 탭)" });
       clearToastLater();
-      setActiveTab("settings");
+      setSettingsOpen(true);
       return;
     }
     setBusy(true);
@@ -1889,7 +1984,7 @@ export function App() {
     if (!brainProfile) {
       setToast({ kind: "warn", text: "광장 글을 쓰려면 먼저 두뇌를 연결해야 해요. (설정 탭)" });
       clearToastLater();
-      setActiveTab("settings");
+      setSettingsOpen(true);
       return;
     }
     setBusy(true);
@@ -2004,6 +2099,7 @@ export function App() {
     try {
       const res = await worldArenaToday(userToken, { limit: 20 });
       setArenaToday(res);
+      arenaModeStats(userToken).then(r => setArenaModeStatsData(r.stats || {})).catch(() => null);
       setToast({ kind: "good", text: "아레나 새로고침" });
       clearToastLater();
     } catch (e: any) {
@@ -2011,6 +2107,26 @@ export function App() {
       clearToastLater();
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onArenaChallenge(mode: string) {
+    if (!userToken || challengeBusy) return;
+    setChallengeBusy(true);
+    try {
+      const res = await arenaChallenge(userToken, mode);
+      if (res.match_id) {
+        setOpenMatchId(res.match_id);
+        setToast({ kind: "good", text: `${mode} 도전 매치 생성!` });
+      } else if (res.already) {
+        setOpenMatchId(res.match_id);
+        setToast({ kind: "warn", text: "이미 진행 중인 매치가 있어요." });
+      }
+    } catch (e: any) {
+      setToast({ kind: "bad", text: e?.message ?? String(e) });
+    } finally {
+      setChallengeBusy(false);
+      clearToastLater();
     }
   }
 
@@ -2160,6 +2276,70 @@ export function App() {
     }
   }
 
+  async function onSavePrompt() {
+    if (!userToken) return;
+    setPromptBusy(true);
+    try {
+      const res = await setMyPromptProfile(userToken, {
+        enabled: promptEnabled,
+        prompt_text: String(promptText || ""),
+      });
+      setPromptProfile(res.profile);
+      setPromptEnabled(Boolean(res.profile.enabled));
+      setPromptText(String(res.profile.prompt_text || ""));
+      setToast({ kind: "good", text: "프롬프트 저장 완료" });
+      clearToastLater();
+    } catch (e: any) {
+      setToast({ kind: "bad", text: e?.message ?? String(e) });
+      clearToastLater();
+    } finally {
+      setPromptBusy(false);
+    }
+  }
+
+  async function onDeletePrompt() {
+    if (!userToken) return;
+    setPromptBusy(true);
+    try {
+      await deleteMyPromptProfile(userToken);
+      setPromptProfile(null);
+      setPromptEnabled(false);
+      setPromptText("");
+      setToast({ kind: "good", text: "프롬프트 초기화 완료" });
+      clearToastLater();
+    } catch (e: any) {
+      setToast({ kind: "bad", text: e?.message ?? String(e) });
+      clearToastLater();
+    } finally {
+      setPromptBusy(false);
+    }
+  }
+
+  function onApplyPromptPreset(presetId: PromptPreset["id"]) {
+    const preset = PROMPT_PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+    setPromptEnabled(true);
+    setPromptText(preset.prompt);
+  }
+
+  async function onRetryBrainJob(jobId: string) {
+    if (!userToken) return;
+    const id = String(jobId || "").trim();
+    if (!id) return;
+    setRetryingJobId(id);
+    try {
+      await retryMyBrainJob(userToken, id);
+      setToast({ kind: "good", text: "작업을 재시도 큐에 넣었어" });
+      clearToastLater();
+      await refreshAll(userToken, { silent: true });
+    } catch (e: any) {
+      setToast({ kind: "bad", text: e?.message ?? String(e) });
+      clearToastLater();
+    } finally {
+      setRetryingJobId(null);
+    }
+  }
+
   async function onGeminiOauthConnect() {
     if (!userToken) return;
     setBusy(true);
@@ -2187,7 +2367,10 @@ export function App() {
   // ---------- Screens ----------
 
   const appTitle = "LIMBOPET";
+  const petLevel = Number((progression as any)?.level ?? 1) || 1;
+  const compactTitle = pet ? `${pet.display_name || pet.name} Lv.${petLevel}` : "LIMBOPET";
   const petName = pet ? pet.display_name || pet.name : "";
+  const SHOW_ADVANCED = uiMode === "debug";
   const descLabelName = createName.trim() ? createName.trim() : "이 아이";
   const pSociety = participation?.society ?? null;
   const pResearch = participation?.research ?? null;
@@ -2230,10 +2413,10 @@ export function App() {
           <div className="card">
             <h2>림보에 오신 걸 환영합니다</h2>
             <div className="muted" style={{ marginTop: 8 }}>
-              여기는 펫들이 사는 작은 세상이에요.
+              AI 펫을 키워서 법정에 세우는 세상이에요.
             </div>
             <div className="muted" style={{ marginTop: 4 }}>
-              펫들은 서로 만나고, 일하고, 싸우고, 사랑해요.
+              매일 대화로 훈련하고, 모의재판과 설전에 출전해요.
             </div>
             <div className="muted" style={{ marginTop: 4 }}>
               당신의 펫을 하나 만들어볼까요?
@@ -2283,8 +2466,8 @@ export function App() {
   if (!pet && !noPetChoice) {
     return (
       <div className="container">
-        <UrgentDecisionBanner decisions={decisions} busy={decisionsBusy} onResolve={resolveDecisionChoice} />
-        {absenceOpen && absence ? <AbsenceModal summary={absence} onClose={() => { setAbsenceOpen(false); setAbsence(null); }} /> : null}
+        {/* UrgentDecisionBanner hidden during onboarding — decisions available via notification */}
+        {/* AbsenceModal 제거 */}
         <TopBar title={appTitle} subtitle="온보딩 1/6 · 시작" right={onboardingRight} />
 
         <div className="grid">
@@ -2355,9 +2538,9 @@ export function App() {
 
     return (
       <div className="container">
-        <UrgentDecisionBanner decisions={decisions} busy={decisionsBusy} onResolve={resolveDecisionChoice} />
-        {absenceOpen && absence ? <AbsenceModal summary={absence} onClose={() => { setAbsenceOpen(false); setAbsence(null); }} /> : null}
-        <TopBar title={appTitle} subtitle="온보딩 3/6 · 탄생" right={onboardingRight} />
+        {/* UrgentDecisionBanner hidden during onboarding — decisions available via notification */}
+        {/* AbsenceModal 제거 */}
+        <TopBar title={appTitle} subtitle="온보딩 1/2 · 탄생" right={onboardingRight} />
 
         <div className="grid single">
           <div className="card onboardingCard">
@@ -2402,7 +2585,7 @@ export function App() {
 
               {bornGachaPhase >= 3 ? (
                 <div className="companyReveal">
-                  <div style={{ fontWeight: 800 }}>🏢 {companyName || "회사 배치 중…"}</div>
+                  <div style={{ fontWeight: 800 }}>🏢 {companyName || "소속 배치 중…"}</div>
                   {wage !== null ? (
                     <div className="muted" style={{ marginTop: 6 }}>
                       💰 하루 급여 {wage} LBC (내일부터)
@@ -2419,7 +2602,7 @@ export function App() {
                 <button
                   className="btn primary"
                   type="button"
-                  onClick={() => setPersistedOnboardingStep("peek")}
+                  onClick={() => setPersistedOnboardingStep("brain")}
                   disabled={busy || bornGachaPhase < 3}
                 >
                   다음
@@ -2437,8 +2620,8 @@ export function App() {
   if (!onboarded && onboardingStep === "peek") {
     return (
       <div className="container">
-        <UrgentDecisionBanner decisions={decisions} busy={decisionsBusy} onResolve={resolveDecisionChoice} />
-        {absenceOpen && absence ? <AbsenceModal summary={absence} onClose={() => { setAbsenceOpen(false); setAbsence(null); }} /> : null}
+        {/* UrgentDecisionBanner hidden during onboarding — decisions available via notification */}
+        {/* AbsenceModal 제거 */}
         <TopBar title={appTitle} subtitle="온보딩 4/6 · 세상 엿보기" right={onboardingRight} />
 
         <div className="grid">
@@ -2452,7 +2635,7 @@ export function App() {
             />
 
             <div className="muted" style={{ marginTop: 10 }}>
-              {petName}도 곧 이 세상에 끼어들 거예요.
+              {petName}도 곧 법정에 서게 될 거예요.
             </div>
 
             <div style={{ marginTop: 14 }}>
@@ -2522,9 +2705,9 @@ export function App() {
   if (!onboarded && onboardingStep === "brain") {
     return (
       <div className="container">
-        <UrgentDecisionBanner decisions={decisions} busy={decisionsBusy} onResolve={resolveDecisionChoice} />
-        {absenceOpen && absence ? <AbsenceModal summary={absence} onClose={() => { setAbsenceOpen(false); setAbsence(null); }} /> : null}
-        <TopBar title={appTitle} subtitle="온보딩 5/6 · 두뇌 연결" right={onboardingRight} />
+        {/* UrgentDecisionBanner hidden during onboarding — decisions available via notification */}
+        {/* AbsenceModal 제거 */}
+        <TopBar title={appTitle} subtitle="온보딩 2/2 · 두뇌 연결" right={onboardingRight} />
 
         <div className="grid single">
           <div className="card">
@@ -2556,7 +2739,8 @@ export function App() {
                 type="button"
                 onClick={() => {
                   setShowBrainKeyForm(false);
-                  setPersistedOnboardingStep("done");
+                  markOnboarded();
+                  setActiveTab("pet");
                 }}
                 disabled={busy}
               >
@@ -2617,8 +2801,8 @@ export function App() {
     const hasBrain = Boolean(brainProfile);
     return (
       <div className="container">
-        <UrgentDecisionBanner decisions={decisions} busy={decisionsBusy} onResolve={resolveDecisionChoice} />
-        {absenceOpen && absence ? <AbsenceModal summary={absence} onClose={() => { setAbsenceOpen(false); setAbsence(null); }} /> : null}
+        {/* UrgentDecisionBanner hidden during onboarding — decisions available via notification */}
+        {/* AbsenceModal 제거 */}
         <TopBar title={appTitle} subtitle="온보딩 6/6 · 완료" right={onboardingRight} />
 
         <div className="grid single">
@@ -2665,74 +2849,58 @@ export function App() {
 
   return (
     <ErrorBoundary debug={uiMode === "debug"}>
+      {SHOW_ADVANCED ? <FloatingParticles /> : null}
       <div className="container appShell">
-        <UrgentDecisionBanner decisions={decisions} busy={decisionsBusy} onResolve={resolveDecisionChoice} />
-        {absenceOpen && absence ? (
-          <AbsenceModal
-            summary={absence}
-            onClose={() => {
-              setAbsenceOpen(false);
-              setAbsence(null);
-            }}
-          />
-        ) : null}
+        {/* AbsenceModal 제거 */}
 		      <TopBar
-		        title={appTitle}
-		        subtitle={pet ? `${pet.display_name || pet.name} · ${mood.emoji} ${mood.label}` : "관전 모드"}
+		        title={compactTitle}
                 streak={topBarStreak}
                 streakPulse={!!streakCelebration}
                 streakUrgent={midnightRemainingMs > 0 && midnightRemainingMs <= 120 * 60 * 1000 && !!streakWarning}
                 streakMinutesLeft={Math.max(0, Math.ceil(midnightRemainingMs / 60000))}
-                ticker={<WorldTicker data={worldTicker} />}
 			        right={
-				          <div className="row">
-                    <NotificationBell
-                      count={notificationsUnread}
-                      onClick={() => setNotificationsOpen((v) => !v)}
-                    />
-				            {(uiMode === "debug" || petAdvanced) && (tab === "pet" || tab === "news") ? (
-				              <button
-				                className={`btn ${directorView ? "primary" : ""}`}
-			                type="button"
-			                onClick={() => setPersistedDirectorView(!directorView)}
-			                disabled={busy}
-			                title="Director's View: 근거/증거를 짧게 보기"
-			              >
-			                🔎 증거 {directorView ? "ON" : "OFF"}
-			              </button>
-			            ) : null}
-			            {pet && coinBalance !== null ? <span className="badge">💰 {coinBalance} LBC</span> : null}
-			            {refreshing ? <span className="badge">갱신 중…</span> : null}
-			            <button className="btn" type="button" onClick={() => userToken && refreshAll(userToken)} disabled={busy}>
-			              새로고침
-		            </button>
-		          </div>
+				          <button className="settingsGearBtn" type="button" onClick={() => setSettingsOpen((v) => !v)} title="설정">
+				            ⚙️
+				          </button>
 			        }
 		      />
 
-        {streakWarning ? (
-          <div className="streakWarningBanner" role="status" aria-live="polite">
-            <div className="streakWarningTitle">
-              <span className="streakWarningPill">🔥 스트릭 경고</span>
-              <span>
-                오늘 {streakTypeLabel(streakWarning.type)} 완료까지 1시간 미만
-              </span>
-            </div>
-            <span className="streakWarningTimer">{streakWarning.remainingText}</span>
-          </div>
-        ) : null}
-
-        <NotificationPanel
-          open={notificationsOpen}
-          notifications={notifications}
-          unreadCount={notificationsUnread}
-          onClose={() => setNotificationsOpen(false)}
-          onRefresh={() => {
-            if (!userToken) return;
-            void refreshNotifications(userToken);
+        <SettingsPanel
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          brainProfile={brainProfile}
+          byokProvider={byokProvider}
+          byokModel={byokModel}
+          byokBaseUrl={byokBaseUrl}
+          byokApiKey={byokApiKey}
+          onByokProviderChange={setByokProvider}
+          onByokModelChange={setByokModel}
+          onByokBaseUrlChange={setByokBaseUrl}
+          onByokApiKeyChange={setByokApiKey}
+          onSaveByok={onSaveByok}
+          onDeleteByok={onDeleteByok}
+          onGeminiOauthConnect={onGeminiOauthConnect}
+          userToken={userToken}
+          onSignOut={onSignOut}
+          onBrainProfileChange={() => {
+            if (userToken) getMyBrainProfile(userToken).then(r => setBrainProfile(r.profile)).catch(() => null);
           }}
-          onMarkRead={onMarkNotificationRead}
-          onMarkAllRead={onMarkAllNotificationsRead}
+          promptEnabled={promptEnabled}
+          promptText={promptText}
+          promptVersion={Math.max(0, Math.trunc(Number(promptProfile?.version ?? 0) || 0))}
+          promptUpdatedAt={promptProfile?.updated_at ?? null}
+          promptBusy={promptBusy}
+          onPromptEnabledChange={setPromptEnabled}
+          onPromptTextChange={setPromptText}
+          onSavePrompt={onSavePrompt}
+          onDeletePrompt={onDeletePrompt}
+          failedJobs={failedBrainJobs}
+          retryingJobId={retryingJobId}
+          onRetryJob={onRetryBrainJob}
+          petAdvanced={petAdvanced}
+          onToggleAdvanced={() => setPersistedPetAdvanced(!petAdvanced)}
+          uiMode={uiMode}
+          onToggleDebug={() => setMode(uiMode === "simple" ? "debug" : "simple")}
           busy={busy}
         />
 
@@ -2749,158 +2917,77 @@ export function App() {
               uiMode={uiMode}
               petAnimClass={petAnimClass}
               showLevelUp={showLevelUp}
+              actionFeedback={actionFeedback}
+              onAction={(action) => onAction(action as "feed" | "play" | "sleep" | "talk")}
+              onTalkClick={() => {
+                if (!brainProfile) {
+                  setSettingsOpen(true);
+                  setToast({ kind: "warn", text: "대화하려면 먼저 두뇌를 연결해야 해요." });
+                  clearToastLater();
+                  return;
+                }
+                setChatOpen((v) => !v);
+              }}
+              actionBusy={busy}
+              cooldowns={cooldownRemainingMs}
             />
 
-            <div className="card" style={{ marginTop: 12 }}>
-              <ActionButtons
-                onAction={(action) => onAction(action as "feed" | "play" | "sleep" | "talk")}
-                busy={busy}
-                cooldowns={cooldownRemainingMs}
-              />
-              <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-                대화 없이도 여기서 바로 돌봐요. (행동 종류별 쿨다운 있음)
-              </div>
-            </div>
-
-              <div className="card">
-                <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
-                  <h2 style={{ margin: 0 }}>✅ 오늘 할 일</h2>
-                  <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                    {missions?.day ? <span className="badge">{missions.day}</span> : null}
-                    {(() => {
-                      const lv = Number((progression as any)?.level ?? 1) || 1;
-                      const xp = Number((progression as any)?.xp ?? 0) || 0;
-                      const need = Number((progression as any)?.next_level_xp ?? 100) || 100;
-                      return <span className="badge">Lv {lv} · {xp}/{need}XP</span>;
-                    })()}
-                  </div>
-                </div>
-
-                {missions?.items?.length ? (
-                  <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
-                    {missions.items.slice(0, 3).map((m) => {
-                      const done = Boolean(m.done);
-                      const badge = done ? "✅" : "⬜";
-                      const cta =
-                        m.code === "CARE_1"
-                          ? { label: "밥 주기", onClick: () => onAction("feed") }
-                          : m.code === "SOCIAL_1"
-                            ? { label: "광장 구경", onClick: () => setActiveTab("plaza") }
-                            : m.code === "DIRECTION_1"
-                              ? { label: "한 줄 남기기", onClick: () => {} }
-                              : null;
-                      return (
-                        <div key={m.code} className="row" style={{ justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                            <span className="badge">{badge}</span>
-                            <span style={{ fontWeight: 600 }}>{m.title}</span>
-                            <span className="muted" style={{ fontSize: 12 }}>
-                              {m.desc}
-                            </span>
-                          </div>
-                          {!done && cta ? (
-                            <button
-                              className="btn primary"
-                              type="button"
-                              onClick={() => {
-                                if (m.code === "DIRECTION_1") {
-                                  const el = document.getElementById("directionCard");
-                                  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-                                  return;
-                                }
-                                cta.onClick();
-                              }}
-                              disabled={busy}
-                            >
-                              {cta.label}
-                            </button>
-                          ) : null}
+            {chatOpen && brainProfile ? (
+              <div className="card petChatInline">
+                <div className="petChatMessages">
+                  {chatHistory.length === 0 && !chatSending ? (
+                    <div className="petChatEmpty">대화를 시작해 보세요!</div>
+                  ) : null}
+                  {[...chatHistory].reverse().map((c) => (
+                    <div key={String(c.created_at ?? Math.random())} className="petChatBubbleGroup">
+                      {c.user_message ? (
+                        <div className="petChatRow petChatRowUser">
+                          <div className="petChatBubble petChatUser">{c.user_message}</div>
                         </div>
-                      );
-                    })}
-
-                    {(() => {
-                      const doneCount = missions.items.slice(0, 3).filter((m) => Boolean(m.done)).length;
-                      const p = clamp01(doneCount / 3);
-                      return (
-                        <div>
-                          <div className="row" style={{ justifyContent: "space-between" }}>
-                            <span className="muted" style={{ fontSize: 12 }}>진행</span>
-                            <span className="muted" style={{ fontSize: 12 }}>{doneCount}/3</span>
-                          </div>
-                          <div style={{ marginTop: 8, height: 10, background: "rgba(255,255,255,0.08)", borderRadius: 999, overflow: "hidden" }}>
-                            <div
-                              style={{
-                                width: `${Math.round(p * 100)}%`,
-                                height: "100%",
-                                background: "linear-gradient(90deg, rgba(34,197,94,0.9), rgba(59,130,246,0.9))",
-                              }}
-                            />
-                          </div>
-                          {missions.cleared ? (
-                            <div className="toast good" style={{ marginTop: 10 }}>
-                              오늘은 끝! 내일 또 보자.
-                            </div>
-                          ) : (
-                            <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-                              좋아요/댓글/연출은 LLM 없이도 바로 완료돼요.
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                    {perkOffer?.choices?.length && (Number((progression as any)?.skill_points ?? 0) || 0) > 0 ? (
-                      <details style={{ marginTop: 6 }}>
-                        <summary className="muted" style={{ cursor: "pointer", fontSize: 12 }}>
-                          🧬 퍼크 고르기 (스킬 포인트 {Number((progression as any)?.skill_points ?? 0) || 0})
-                        </summary>
-                        <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-                          {perkOffer.choices.slice(0, 3).map((p) => (
-                            <button
-                              key={p.code}
-                              className="btn"
-                              type="button"
-                              onClick={() => onChoosePerk(p.code)}
-                              disabled={busy}
-                              title={p.desc}
-                              style={{ textAlign: "left" }}
-                            >
-                              <div style={{ fontWeight: 600 }}>{p.name}</div>
-                              <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                                {p.desc}
-                              </div>
-                            </button>
+                      ) : null}
+                      <div className="petChatRow petChatRowPet">
+                        <div className={`petChatBubble petChatPet mood-${c.mood || mood.label}`}>
+                          {c.lines.map((line, i) => (
+                            <div key={`${i}-${line}`}>{line}</div>
                           ))}
                         </div>
-                      </details>
-                    ) : null}
-
-                    <div className="row" style={{ marginTop: 2, flexWrap: "wrap", gap: 8 }}>
-                      <button
-                        className="btn"
-                        type="button"
-                        onClick={() => setPersistedPetAdvanced(!petAdvanced)}
-                        disabled={busy}
-                        title="고급 정보/관전 요소를 켜거나 끄기"
-                      >
-                        {petAdvanced ? "심플하게" : "더 보기"}
-                      </button>
-                      {!brainProfile ? (
-                        <button className="btn" type="button" onClick={() => setActiveTab("settings")} disabled={busy}>
-                          ⚙️ 두뇌 연결(선택)
-                        </button>
-                      ) : null}
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="empty" style={{ marginTop: 10 }}>
-                    가져오는 중...
-                  </div>
-                )}
+                  ))}
+                  {chatSending ? (
+                    <div className="petChatRow petChatRowPet">
+                      <div className="petChatBubble petChatPet petChatTyping">
+                        <span className="typingDot" />
+                        <span className="typingDot" />
+                        <span className="typingDot" />
+                      </div>
+                    </div>
+                  ) : null}
+                  <div ref={chatEndRef} />
+                </div>
+                <div className="petChatInputBar">
+                  <input
+                    className="petChatInput"
+                    value={chatText}
+                    onChange={(e) => setChatText(e.target.value)}
+                    placeholder={`${pet.display_name || pet.name}에게 말 걸기…`}
+                    disabled={busy}
+                    onKeyDown={(e) => { if (e.key === "Enter") void onSendChat(); }}
+                    autoFocus
+                  />
+                  <button
+                    className="btn primary petChatSendBtn"
+                    type="button"
+                    onClick={onSendChat}
+                    disabled={busy || !chatText.trim()}
+                  >
+                    보내기
+                  </button>
+                </div>
               </div>
+            ) : null}
 
-              <div className="card">
+              {SHOW_ADVANCED ? <div className="card">
                 <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
                   <h2 style={{ margin: 0 }}>🏟️ 아레나 참여</h2>
                   <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
@@ -2977,9 +3064,9 @@ export function App() {
                     {arenaPrefs?.coach_note ? <span className="badge">저장됨</span> : null}
                   </div>
                 </details>
-              </div>
+              </div> : null}
 
-              {uiMode === "debug" || petAdvanced ? (
+              {SHOW_ADVANCED ? (
 	              <div className="card">
 	                <div className="row" style={{ justifyContent: "space-between" }}>
 	                  <h2 style={{ margin: 0 }}>👣 내 펫 활동</h2>
@@ -3024,7 +3111,7 @@ export function App() {
 	              </div>
               ) : null}
 
-		            {(brainProfile || uiMode === "debug" || petAdvanced) ? (
+		            {SHOW_ADVANCED ? (
                 <div className="card">
 		              <h2>대화</h2>
 		              <div className="muted" style={{ fontSize: 12 }}>
@@ -3039,7 +3126,7 @@ export function App() {
                       className="btn primary"
                       type="button"
                       onClick={() => {
-                        setActiveTab("settings");
+                        setSettingsOpen(true);
                         setToast({ kind: "warn", text: "두뇌를 연결하면 대화가 열려요. (설정 탭)" });
                         clearToastLater();
                       }}
@@ -3095,7 +3182,7 @@ export function App() {
                             {pet.display_name || pet.name}
                           </div>
                           <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
-                            {c.lines.slice(0, 4).map((line, i) => (
+                            {c.lines.map((line, i) => (
                               <div key={`${i}-${line}`}>{line}</div>
                             ))}
                           </div>
@@ -3114,7 +3201,7 @@ export function App() {
 	            </div>
               ) : null}
 
-		            {(brainProfile || uiMode === "debug" || petAdvanced) ? (
+		            {SHOW_ADVANCED ? (
                 <div className="card limboRoom">
 		              <h2>오늘의 기억</h2>
 
@@ -3129,21 +3216,7 @@ export function App() {
 		            </div>
               ) : null}
 
-	              {uiMode === "simple" ? (
-                <div className="card">
-                  <h2>더 보기</h2>
-                  <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-                    관계/리그/연출 같은 “세계 정보”는 필요할 때만 펼쳐볼게요. (기본은 내 펫 + 행동 루프)
-                  </div>
-                  <div className="row" style={{ marginTop: 10, flexWrap: "wrap", gap: 8 }}>
-                    <button className="btn" type="button" onClick={() => setPersistedPetAdvanced(!petAdvanced)} disabled={busy}>
-                      {petAdvanced ? "접기" : "펫/세계 정보 더 보기"}
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-
-              {uiMode === "debug" || petAdvanced ? (
+              {SHOW_ADVANCED ? (
 	            <div className="card">
 	              <h2>🤝 관계</h2>
 	              {relationships.length === 0 ? (
@@ -3255,7 +3328,7 @@ export function App() {
             </div>
               ) : null}
 
-              {uiMode === "debug" || petAdvanced ? (
+              {SHOW_ADVANCED ? (
 	            <div className="card">
 	              <div className="row" style={{ justifyContent: "space-between" }}>
 	                <h2 style={{ margin: 0 }}>🏟️ 내 리그</h2>
@@ -3371,7 +3444,7 @@ export function App() {
             </div>
               ) : null}
 
-	            <div className="card" id="directionCard">
+	            {SHOW_ADVANCED ? <div className="card" id="directionCard">
 	              <h2>🎬 연출 한 줄</h2>
 	              {myDirection?.latest?.text ? (
                 <div className="row" style={{ marginTop: 8, flexWrap: "wrap", gap: 6 }}>
@@ -3429,7 +3502,7 @@ export function App() {
               </div>
 
               <div style={{ marginTop: 10 }}>
-                {uiMode === "debug" || petAdvanced ? (
+                {SHOW_ADVANCED ? (
                   nudges.length === 0 ? (
                     <div className="empty">아직 남긴 지문이 없어. 첫 한 줄을 써볼까?</div>
                   ) : (
@@ -3447,7 +3520,7 @@ export function App() {
                   </div>
                 )}
               </div>
-            </div>
+            </div> : null}
           </div>
         ) : (
           <div className="grid single">
@@ -3481,107 +3554,6 @@ export function App() {
 
         {tab === "news" ? (
           <div className="grid single">
-            {(() => {
-              const hk = (world as any)?.todayHook ?? (worldSummary as any)?.todayHook ?? null;
-              const stage = String((hk as any)?.stage ?? "").trim();
-              const tease = (hk as any)?.tease && typeof (hk as any).tease === "object" ? (hk as any).tease : null;
-              const reveal = (hk as any)?.reveal && typeof (hk as any).reveal === "object" ? (hk as any).reveal : null;
-              const head =
-                stage === "reveal"
-                  ? String(reveal?.headline ?? "").trim()
-                  : String(tease?.headline ?? "").trim();
-              const details =
-                stage === "reveal"
-                  ? Array.isArray(reveal?.details)
-                    ? (reveal.details as any[]).map((x) => String(x ?? "").trim()).filter(Boolean)
-                    : []
-                  : Array.isArray(tease?.details)
-                    ? (tease.details as any[]).map((x) => String(x ?? "").trim()).filter(Boolean)
-                    : [];
-              const revealAt = String(tease?.reveal_at ?? "18:00").trim();
-
-              if (!head) return null;
-              return (
-                <div className="card">
-                  <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
-                    <h2 style={{ margin: 0 }}>{stage === "reveal" ? "💥 오늘의 떡밥 결과" : "🔥 오늘의 관전 포인트"}</h2>
-                    {stage !== "reveal" ? <span className="badge">결과 {revealAt} 공개</span> : <span className="badge">공개됨</span>}
-                  </div>
-                  <div style={{ marginTop: 10, fontWeight: 800, whiteSpace: "pre-wrap" }}>
-                    “{head}”
-                  </div>
-                  {details.length ? (
-                    <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
-                      {details.slice(0, 5).map((t, i) => (
-                        <div key={`${i}-${t}`} className="muted" style={{ fontSize: 12, whiteSpace: "pre-wrap" }}>
-                          {t}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
-                    (Phase 1.1) 매일 1개 떡밥을 먼저 던지고, 저녁에 결과를 공개해요.
-                  </div>
-                </div>
-              );
-            })()}
-
-	            {!pet ? (
-	              <div className="card">
-	                <h2>관전 모드</h2>
-	                <div className="muted" style={{ marginTop: 8 }}>
-	                  지금은 구경만 가능해요. 펫을 만들면 글쓰기/투표/댓글/대화가 열려요.
-	                </div>
-	                <div className="row" style={{ marginTop: 12, flexWrap: "wrap" }}>
-	                  <button className="btn primary" type="button" onClick={() => setActiveTab("pet")} disabled={busy}>
-	                    펫 만들기
-	                  </button>
-	                </div>
-	              </div>
-	            ) : null}
-
-		            <div className="card">
-		              <h2>📡 오늘의 사회 신호</h2>
-	              <div className="muted" style={{ fontSize: 12 }}>
-	                정치 / 경제 / 하이라이트 — 매일 빈칸 없이.
-	              </div>
-	              <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
-	                {newsSignals.map((s, i) => {
-	                  const kind = String((s as any)?.kind ?? i).trim();
-	                  const label = kind === "politics" ? "정치" : kind === "economy" ? "경제" : kind === "highlight" ? "하이라이트" : kind || "signal";
-	                  const text = String((s as any)?.text ?? "").trim();
-	                  return (
-	                    <div key={`${label}:${i}`} className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
-	                      <span className="badge">{label}</span>
-	                      <span>{text}</span>
-	                    </div>
-	                  );
-	                })}
-		              </div>
-		            </div>
-
-			            {directorView ? (
-		              <div className="card">
-	                <h2>🧾 왜 오늘의 이야기가 나왔지?</h2>
-	                <div className="muted" style={{ fontSize: 12 }}>
-	                  Director's View에서는 근거 2~3개만 짧게 봐요.
-	                </div>
-	                {broadcastWhyLines.length === 0 ? (
-	                  <div className="empty" style={{ marginTop: 10 }}>
-	                    아직 정보를 모으는 중… 조금만 기다려.
-	                  </div>
-	                ) : (
-	                  <div className="timeline" style={{ marginTop: 10 }}>
-	                    {broadcastWhyLines.map((t, i) => (
-	                      <div key={`${String(t).slice(0, 16)}:${i}`} className="event">
-	                        <div style={{ paddingTop: 2, paddingBottom: 2 }}>{t}</div>
-	                      </div>
-	                    ))}
-	                  </div>
-	                )}
-	              </div>
-	            ) : null}
-	
 		            <div className="card">
 		              <h2>오늘의 이야기</h2>
                   <div className="muted" style={{ fontSize: 12 }}>
@@ -3594,207 +3566,6 @@ export function App() {
 	                directorView={directorView}
 	              />
 	            </div>
-
-	            <div className="card">
-	              <div className="row" style={{ justifyContent: "space-between" }}>
-	                <h2 style={{ margin: 0 }}>🌍 월드 팩트</h2>
-	                {directorView ? <span className="badge">SSOT</span> : null}
-	              </div>
-	              {(() => {
-	                const theme = (worldConcept as any)?.theme ?? (worldSummary as any)?.theme ?? null;
-	                const atmo = (worldConcept as any)?.atmosphere ?? (worldSummary as any)?.atmosphere ?? null;
-	                const name = String(theme?.name ?? "").trim();
-	                const vibe = String(theme?.vibe ?? "").trim();
-	                const desc = String(theme?.description ?? "").trim();
-	                const atmos =
-	                  typeof atmo === "string"
-	                    ? String(atmo).trim()
-	                    : typeof (atmo as any)?.text === "string"
-	                      ? String((atmo as any).text).trim()
-	                      : "";
-	                return name || atmos ? (
-	                  <div style={{ display: "grid", gap: 8 }}>
-	                    <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
-	                      {name ? <span className="badge">{name}</span> : null}
-	                      {directorView && vibe ? <span className="badge">vibe {vibe}</span> : null}
-	                    </div>
-	                    {desc ? <div className="muted">{desc}</div> : null}
-	                    {atmos ? (
-	                      <div className="muted" style={{ fontStyle: "italic" }}>
-	                        “{atmos}”
-                      </div>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    월드 팩트를 아직 못 불러왔어. (world_core facts 확인해봐)
-                  </div>
-                );
-              })()}
-            </div>
-
-              <div className="card">
-                <h2>📜 오늘의 룰</h2>
-                {policySnapshot ? (
-                  <div style={{ display: "grid", gap: 10 }}>
-                    <div className="row" style={{ flexWrap: "wrap" }}>
-                      <span className="badge">신규 지급 {Number((policySnapshot as any)?.params?.initial_coins ?? 0) || 0} LBC</span>
-                      <span className="badge">회사 설립비 {Number((policySnapshot as any)?.params?.company_founding_cost ?? 0) || 0} LBC</span>
-                      <span className="badge">최저임금 {Number((policySnapshot as any)?.params?.min_wage ?? 0) || 0} LBC</span>
-                      <span className="badge">거래세 {Math.round((Number((policySnapshot as any)?.params?.transaction_tax_rate ?? 0) || 0) * 100)}%</span>
-                      <span className="badge">소각 {Math.round((Number((policySnapshot as any)?.params?.burn_ratio ?? 0.7) || 0.7) * 100)}%</span>
-                    </div>
-
-                    {String((world as any)?.civicLine ?? "").trim() ? (
-                      <div className="muted" style={{ fontSize: 12 }}>
-                        {String((world as any)?.civicLine ?? "")}
-                      </div>
-                    ) : null}
-
-                    {Array.isArray((policySnapshot as any)?.holders) && (policySnapshot as any).holders.length > 0 ? (
-                      <div className="muted" style={{ fontSize: 12 }}>
-                        {((policySnapshot as any).holders as any[])
-                          .map((h: any) => `${officeLabel(String(h?.office_code ?? ""))}: ${String(h?.holder_name ?? "").trim() || "?"}`)
-                          .slice(0, 4)
-                          .join(" · ")}
-                      </div>
-                    ) : null}
-
-                    {(policySnapshot as any)?.nextElection ? (
-                      <div className="toast warn">
-                        다음 투표: {officeLabel(String((policySnapshot as any).nextElection.office_code ?? ""))} ·{" "}
-                        {String((policySnapshot as any).nextElection.phase ?? "")} ·{" "}
-                        {typeof (policySnapshot as any).nextElection.dday === "number"
-                          ? (policySnapshot as any).nextElection.dday === 0
-                            ? "D-day"
-                            : `D-${Math.max(0, Number((policySnapshot as any).nextElection.dday) || 0)}`
-                          : ""}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="empty">룰 가져오는 중...</div>
-                )}
-              </div>
-
-              <div className="card">
-                <h2>💰 오늘의 돈 흐름</h2>
-                {(world as any)?.economy ? (
-                  <div style={{ display: "grid", gap: 10 }}>
-                    <div className="row" style={{ flexWrap: "wrap" }}>
-                      <span className="badge">활성 회사 {Number((world as any).economy.companyCount ?? 0) || 0}개</span>
-                      <span className="badge">총 잔고 {Number((world as any).economy.totalBalance ?? 0) || 0} LBC</span>
-                      <span className="badge">오늘 매출 {Number((world as any).economy.todayRevenue ?? 0) || 0} LBC</span>
-                      <span className="badge">오늘 소비 {Number((world as any).economy.todaySpending ?? 0) || 0} LBC</span>
-                    </div>
-
-                    {economyRecentTransactions.length > 0 ? (
-                      <div className="timeline">
-                        {economyRecentTransactions.slice(0, 3).map((tx: any) => {
-                          const tt = String(tx?.tx_type ?? "").trim().toUpperCase();
-                          const amount = Number(tx?.amount ?? 0) || 0;
-                          const fromName = String(tx?.from?.name ?? "").trim();
-                          const toName = String(tx?.to?.name ?? "").trim();
-                          const memo = String(tx?.memo ?? "").trim();
-                          const ts = formatShortTime(String(tx?.created_at ?? ""));
-                          const emoji =
-                            tt === "FOUNDING"
-                              ? "🏢"
-                              : tt === "SALARY"
-                                ? "💼"
-                                : tt === "REVENUE"
-                                  ? "📈"
-                                  : tt === "TRANSFER"
-                                    ? "💸"
-                                    : tt === "PURCHASE"
-                                      ? toName
-                                        ? "🎁"
-                                        : "🛒"
-                                      : "💰";
-
-                          const line =
-                            tt === "FOUNDING"
-                              ? memo || `회사 설립비 ${amount} LBC`
-                              : tt === "SALARY"
-                                ? toName
-                                  ? `${toName} +${amount} LBC`
-                                  : `급여 +${amount} LBC`
-                                : tt === "REVENUE"
-                                  ? toName
-                                    ? `${toName} +${amount} LBC`
-                                    : `매출 +${amount} LBC`
-                                  : tt === "TRANSFER"
-                                    ? fromName && toName
-                                      ? `${fromName} → ${toName} ${amount} LBC`
-                                      : `송금 ${amount} LBC`
-                                    : tt === "PURCHASE"
-                                      ? toName
-                                        ? `${fromName || "누군가"} → ${toName} ${amount} LBC`
-                                        : `${fromName || "누군가"} 소비 ${amount} LBC`
-                                      : memo || `${amount} LBC`;
-
-                          return (
-                            <div key={String(tx?.id ?? `${tt}:${ts}:${Math.random()}`)} className="event">
-                              <div className="meta">
-                                <span>
-                                  {emoji} {tt || "TX"}
-                                </span>
-                                <span>{ts}</span>
-                              </div>
-                              <div style={{ marginTop: 6 }}>{line}</div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="empty">아직 큰 거래는 없어. 경제가 돌아가면 나올 거야.</div>
-                    )}
-
-                    <div className="muted" style={{ fontSize: 12 }}>
-                      기준: day:{String((world as any)?.day ?? "")}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="empty">경제가 아직 잠잠해. 곧 움직일 거야.</div>
-                )}
-              </div>
-
-              <div className="card">
-                <h2>🗓️ 이번 주 아크</h2>
-                {weeklyArc ? (
-                  <div style={{ display: "grid", gap: 10 }}>
-                    <div className="row" style={{ flexWrap: "wrap" }}>
-                      <span className="badge">
-                        {String((weeklyArc as any)?.fromDay ?? "")} ~ {String((weeklyArc as any)?.toDay ?? "")}
-                      </span>
-                      {typeof (weeklyArc as any)?.meta?.policy_changed_count === "number" ? (
-                        <span className="badge">정책 {Number((weeklyArc as any).meta.policy_changed_count) || 0}</span>
-                      ) : null}
-                      {typeof (weeklyArc as any)?.meta?.election_closed_count === "number" ? (
-                        <span className="badge">선거 {Number((weeklyArc as any).meta.election_closed_count) || 0}</span>
-                      ) : null}
-                    </div>
-
-                    {Array.isArray((weeklyArc as any)?.lines) && (weeklyArc as any).lines.length > 0 ? (
-                      <div className="timeline">
-                        {((weeklyArc as any).lines as any[]).slice(0, 6).map((line: any, i: number) => (
-                          <div key={`${String(line ?? "")}:${i}`} className="event">
-                            <div style={{ paddingTop: 2, paddingBottom: 2 }}>{String(line ?? "")}</div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="empty">이번 주 요약은 아직… 다음 주에 볼 수 있을 거야.</div>
-                    )}
-
-                    {String((weeklyArc as any)?.nextHook ?? "").trim() ? (
-                      <div className="toast warn">{String((weeklyArc as any).nextHook)}</div>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="empty">주간 아크 준비 중… 곧 펼쳐질 거야.</div>
-                )}
-              </div>
 
               <div className="card">
                 <div className="row" style={{ justifyContent: "space-between" }}>
@@ -3830,35 +3601,6 @@ export function App() {
                   </div>
                 )}
               </div>
-
-            {/* Arena Summary Card - click to go to Arena tab */}
-            <div
-              className="arenaSummaryCard"
-              onClick={() => setActiveTab("arena")}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === "Enter") setActiveTab("arena"); }}
-            >
-              <div className="row" style={{ justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
-                <h2 style={{ margin: 0 }}>⚔️ 오늘의 아레나</h2>
-                <span style={{ fontSize: "var(--font-subhead)", color: "var(--accent)" }}>아레나 탭으로 →</span>
-              </div>
-              <div className="row" style={{ marginTop: 8, flexWrap: "wrap", gap: 6 }}>
-                <span className="badge">경기 {arenaMatches.length}</span>
-                {arenaMatches.filter((m: any) => String(m?.status ?? "").toLowerCase() === "resolved").length > 0 ? (
-                  <span className="badge">완료 {arenaMatches.filter((m: any) => String(m?.status ?? "").toLowerCase() === "resolved").length}</span>
-                ) : null}
-                {arenaMatches.filter((m: any) => String(m?.status ?? "").toLowerCase() === "live").length > 0 ? (
-                  <span className="badge" style={{ borderColor: "var(--system-red, var(--danger))" }}>LIVE {arenaMatches.filter((m: any) => String(m?.status ?? "").toLowerCase() === "live").length}</span>
-                ) : null}
-                {myArenaMatchToday ? <span className="badge" style={{ borderColor: "var(--accent)" }}>내 경기 있음</span> : null}
-              </div>
-              {arenaBest ? (
-                <div style={{ marginTop: 8, fontWeight: 600, fontSize: "var(--font-subhead)" }}>
-                  {arenaBest.headline || "하이라이트 경기 확인하기"}
-                </div>
-              ) : null}
-            </div>
 
             {uiMode === "debug" ? (
               <>
@@ -4035,9 +3777,13 @@ export function App() {
               onLoadArenaLeaderboard={onLoadArenaLeaderboard}
               onOpenMatch={(id) => { setOpenPostId(null); setOpenMatchId(id); }}
               onOpenPost={(id) => { setOpenMatchId(null); setOpenPostId(id); }}
+              modeStats={arenaModeStatsData}
+              onChallenge={onArenaChallenge}
+              challengeBusy={challengeBusy}
               busy={busy}
               uiMode={uiMode}
               petAdvanced={petAdvanced}
+              showAdvanced={SHOW_ADVANCED}
             />
           </div>
         ) : null}
@@ -4091,10 +3837,6 @@ export function App() {
                   </select>
                 </div>
               </div>
-              <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
-                게시판이 메인이에요. LIVE는 “활동 알림” 보조 기능이에요.
-              </div>
-
               <div className="row" style={{ marginTop: 10, flexWrap: "wrap" }}>
                 <input
                   value={plazaQueryDraft}
@@ -4171,16 +3913,11 @@ export function App() {
                 </div>
               )}
 
-              <div className="row" style={{ marginTop: 12, justifyContent: "space-between", flexWrap: "wrap" }}>
-                <span className="muted" style={{ fontSize: 12 }}>
-                  총 {plazaPagination.total}개 · {plazaPage}/{plazaPagination.pageCount} 페이지
-                </span>
-                {plazaLoading ? (
-                  <span className="muted" style={{ fontSize: 12 }}>
-                    가져오는 중...
-                  </span>
-                ) : null}
-              </div>
+              {plazaLoading ? (
+                <div className="muted" style={{ marginTop: 12, fontSize: 12, textAlign: "center" }}>
+                  가져오는 중...
+                </div>
+              ) : null}
 
               {plazaPagination.pageCount > 1 ? (
                 <div className="pager">
@@ -4249,119 +3986,113 @@ export function App() {
               ) : null}
             </div>
 
-            <div className="card liveCard">
-              <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-                <h2 style={{ margin: 0 }}>🔔 활동 알림</h2>
-                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                  <button
-                    className={`btn ${plazaLiveCollapsed ? "" : "primary"}`}
-                    type="button"
-                    onClick={() => {
-                      setPlazaLiveCollapsed((v) => {
-                        const next = !v;
-                        saveString(LS_PLAZA_LIVE_COLLAPSED, next ? "1" : "0");
-                        return next;
-                      });
-                    }}
-                    disabled={busy}
-                    title="활동 알림 접기/펼치기"
-                  >
-                    {plazaLiveCollapsed ? "펼치기" : "접기"}
-                  </button>
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => setPlazaLivePaused((v) => !v)}
-                    disabled={busy}
-                    title="자동 갱신 일시정지/재생"
-                  >
-                    {plazaLivePaused ? "재생" : "일시정지"}
-                  </button>
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => void loadPlazaLive({ silent: false })}
-                    disabled={busy || plazaLiveLoading}
-                  >
-                    새로고침
-                  </button>
-                </div>
-              </div>
-              <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
-                {plazaLivePaused
-                  ? "일시정지 중 · 새로고침하면 다시 돌아가"
-                  : plazaLiveCollapsed
-                    ? "게시판 활동을 실시간으로 알려줘 (4초마다)"
-                    : "댓글 · 좋아요 · 새 글 실시간 (4초마다)"}
-              </div>
-
-              {plazaLiveItems.length === 0 ? (
-                <div className="empty" style={{ marginTop: 12 }}>
-                  {plazaLiveLoading ? "불러오는 중..." : "아직 움직임이 없어. 곧 누군가 나타날 거야."}
-                </div>
-              ) : (
-                <div className="timeline" style={{ marginTop: 12 }}>
-                  {plazaLiveItems.slice(0, plazaLiveCollapsed ? 3 : 20).map((it) => {
-                    const actor = it.actor?.display_name || it.actor?.name || "unknown";
-                    const postTitle = it.post?.title || "글";
-                    const postId = String(it.post?.id ?? "").trim();
-                    const kind = String(it.kind || "").trim();
-                    const ts = formatShortTime(it.created_at);
-                    const kindEmoji = kind === "comment" ? "💬" : kind === "upvote" ? "👍" : kind === "new_post" ? "📝" : "•";
-                    const kindLabel = kind === "comment" ? "댓글" : kind === "upvote" ? "좋아요" : kind === "new_post" ? "새 글" : kind;
-                    const snippet = String(it.snippet ?? "").trim();
-
-                    return (
-                      <div key={`${kind}:${it.id}`} className="event">
-                        <button
-                          className="postOpenBtn liveItemBtn"
-                          type="button"
-                          onClick={() => {
-                            if (!postId) return;
-                            setOpenMatchId(null);
-                            setOpenPostId(postId);
-                          }}
-                          disabled={busy || !postId}
-                        >
-                          <div className="meta" style={{ flexWrap: "wrap" }}>
-                            <span>{ts}</span>
-                            {kindLabel ? <span className="badge">{kindLabel}</span> : null}
-                          </div>
-                          <div style={{ marginTop: 8, fontWeight: 700 }}>
-                            {kindEmoji} {actor} → {postTitle}
-                          </div>
-                          {!plazaLiveCollapsed && snippet ? (
-                            <div className="muted" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
-                              {snippet.length > 160 ? `${snippet.slice(0, 160)}…` : snippet}
-                            </div>
-                          ) : null}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
           </div>
         ) : null}
 
         {tab === "settings" ? (
           <div className="grid single">
-            <BrainSettings
-              brainProfile={brainProfile}
-              byokProvider={byokProvider}
-              byokModel={byokModel}
-              byokBaseUrl={byokBaseUrl}
-              byokApiKey={byokApiKey}
-              onByokProviderChange={setByokProvider}
-              onByokModelChange={setByokModel}
-              onByokBaseUrlChange={setByokBaseUrl}
-              onByokApiKeyChange={setByokApiKey}
-              onSaveByok={onSaveByok}
-              onDeleteByok={onDeleteByok}
-              onGeminiOauthConnect={onGeminiOauthConnect}
-              busy={busy}
-            />
+            <div className="card">
+              <BrainSettings
+                brainProfile={brainProfile}
+                byokProvider={byokProvider}
+                byokModel={byokModel}
+                byokBaseUrl={byokBaseUrl}
+                byokApiKey={byokApiKey}
+                onByokProviderChange={setByokProvider}
+                onByokModelChange={setByokModel}
+                onByokBaseUrlChange={setByokBaseUrl}
+                onByokApiKeyChange={setByokApiKey}
+                onSaveByok={onSaveByok}
+                onDeleteByok={onDeleteByok}
+                onGeminiOauthConnect={onGeminiOauthConnect}
+                busy={busy}
+              />
+
+              {userToken ? (
+                <>
+                  <hr style={{ border: "none", borderTop: "1px solid var(--border)", margin: "16px 0" }} />
+                  <AiConnectPanel
+                    token={userToken}
+                    brainProfile={brainProfile}
+                    onBrainProfileChange={() => {
+                      if (userToken) getMyBrainProfile(userToken).then(r => setBrainProfile(r.profile)).catch(() => null);
+                    }}
+                  />
+                </>
+              ) : null}
+            </div>
+
+            <div className="card">
+              <h2>대화 프롬프트 커스텀</h2>
+              <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+                내 펫의 대화 기본 톤/규칙을 지정할 수 있어요. (버전 {Math.max(0, Math.trunc(Number(promptProfile?.version ?? 0) || 0))}
+                {promptProfile?.updated_at ? ` · ${new Date(promptProfile.updated_at).toLocaleString()}` : ""})
+              </div>
+              <div className="row" style={{ marginTop: 10, flexWrap: "wrap", gap: 8 }}>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={promptEnabled}
+                    onChange={(e) => setPromptEnabled(Boolean(e.target.checked))}
+                    disabled={promptBusy}
+                  />
+                  커스텀 프롬프트 사용
+                </label>
+              </div>
+              <div className="row" style={{ marginTop: 8, flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                <span className="muted" style={{ fontSize: 12 }}>프리셋</span>
+                {PROMPT_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    className="btn"
+                    type="button"
+                    onClick={() => onApplyPromptPreset(preset.id)}
+                    disabled={promptBusy}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                value={promptText}
+                onChange={(e) => setPromptText(e.target.value)}
+                placeholder="예: 핵심부터 답하고 근거를 2개 제시해. 톤은 차분하고 논리적으로."
+                style={{ width: "100%", minHeight: 120, marginTop: 10 }}
+                disabled={promptBusy}
+              />
+              <div className="row" style={{ marginTop: 10, flexWrap: "wrap", gap: 8 }}>
+                <button className="btn primary" type="button" onClick={onSavePrompt} disabled={promptBusy}>
+                  {promptBusy ? "저장 중..." : "저장"}
+                </button>
+                <button className="btn danger" type="button" onClick={onDeletePrompt} disabled={promptBusy}>
+                  초기화
+                </button>
+              </div>
+            </div>
+
+            <div className="card">
+              <h2>실패 작업 재시도</h2>
+              {failedBrainJobs.length === 0 ? (
+                <div className="muted" style={{ marginTop: 8 }}>실패한 두뇌 작업이 없습니다.</div>
+              ) : (
+                <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                  {failedBrainJobs.map((j) => (
+                    <div key={j.id} className="row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                      <div style={{ minWidth: 220 }}>
+                        <div>
+                          <strong>{j.job_type}</strong>
+                          {j.last_error_code ? <span className="badge" style={{ marginLeft: 6 }}>{j.last_error_code}</span> : null}
+                        </div>
+                        {j.error ? <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{String(j.error).slice(0, 140)}</div> : null}
+                      </div>
+                      <button className="btn" type="button" onClick={() => onRetryBrainJob(j.id)} disabled={retryingJobId === j.id}>
+                        {retryingJobId === j.id ? "재시도 중..." : "재시도"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="card">
               <h2>계정</h2>
@@ -4542,15 +4273,6 @@ export function App() {
         </div>
       ) : null}
 
-      {notifToast ? (
-        <div className="notifToast" aria-live="polite">
-          <span className="notifToastIcon">{notifToast.icon}</span>
-          <div>
-            <div className="notifToastTitle">{notifToast.title}</div>
-            {notifToast.body ? <div className="notifToastBody">{notifToast.body}</div> : null}
-          </div>
-        </div>
-      ) : null}
 
 	      <TabBar tab={tab} onChangeTab={(t) => setActiveTab(t as Tab)} />
 
@@ -4707,7 +4429,7 @@ function AbsenceModal({ summary, onClose }: { summary: AbsenceSummary; onClose: 
     <div className="modalOverlay" role="dialog" aria-modal="true">
       <div className="modal" style={{ maxWidth: 560 }}>
         <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-          <h2 style={{ margin: 0 }}>힘든 시간을 보냈어…</h2>
+          <h2 style={{ margin: 0 }}>돌아왔구나!</h2>
           <button className="btn" type="button" onClick={onClose}>
             닫기
           </button>
@@ -4717,46 +4439,20 @@ function AbsenceModal({ summary, onClose }: { summary: AbsenceSummary; onClose: 
           {daysAway > 0 ? `${daysAway}일 동안 접속이 없었어.` : "최근 접속 공백이 감지됐어."}
         </div>
 
-        <div className="card" style={{ marginTop: 12, background: "rgba(255, 77, 77, 0.08)" }}>
-          <h2>잃은 것</h2>
-          {lostItems.length ? (
-            <div className="timeline" style={{ marginTop: 8 }}>
+        {lostItems.length > 0 ? (
+          <details style={{ marginTop: 12 }}>
+            <summary className="muted" style={{ cursor: "pointer", fontSize: 12 }}>부재 중 변화 ({lostItems.length}건)</summary>
+            <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
               {lostItems.map((t) => (
-                <div key={t} className="event">
-                  <div className="meta">
-                    <span>DECAY</span>
-                  </div>
-                  <div style={{ fontWeight: 700 }}>{t}</div>
-                </div>
+                <div key={t} className="muted" style={{ fontSize: 12 }}>{t}</div>
               ))}
             </div>
-          ) : (
-            <div className="muted" style={{ fontSize: 12 }}>
-              아직 큰 손실은 없어. 하지만 계속 방치하면 누적돼.
-            </div>
-          )}
-        </div>
+          </details>
+        ) : null}
 
-        <div className="card" style={{ marginTop: 12 }}>
-          <h2>현재 상태</h2>
-          <div className="row" style={{ marginTop: 8, flexWrap: "wrap" }}>
-            <span className="badge">🐾 {String(pet.display_name || pet.name || "내 펫")}</span>
-            <span className="badge">🏟️ 레이팅 {Number(arena.rating ?? 0) || 0}</span>
-            <span className="badge">💪 컨디션 {Number(arena.condition ?? 0) || 0}</span>
-            <span className="badge">✨ 평판(karma) {Number(pet.karma ?? 0) || 0}</span>
-            {job ? (
-              <span className="badge">
-                💼 {String(job.company?.display_name || job.company?.name || "직장")} / {String(job.role || "employee")}
-              </span>
-            ) : (
-              <span className="badge">💼 무직</span>
-            )}
-          </div>
-        </div>
-
-        <div className="row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
+        <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
           <button className="btn primary" type="button" onClick={onClose}>
-            다시 시작하기
+            좋아, 다시 해보자!
           </button>
         </div>
       </div>
@@ -5096,696 +4792,6 @@ function PostDetailModal({
                   </div>
                 </div>
               </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ArenaWatchModal({
-  token,
-  matchId,
-  viewerAgentId,
-  onClose,
-  onOpenPost,
-}: {
-  token: string;
-  matchId: string;
-  viewerAgentId?: string | null;
-  onClose: () => void;
-  onOpenPost: (postId: string) => void;
-}) {
-  const [loading, setLoading] = useState(true);
-  const [match, setMatch] = useState<ArenaMatchDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [interveneBusy, setInterveneBusy] = useState(false);
-  const [interveneMsg, setInterveneMsg] = useState<string | null>(null);
-  const [predictBusy, setPredictBusy] = useState(false);
-  const [myPick, setMyPick] = useState<"a" | "b" | null>(null);
-  const [cheerBusy, setCheerBusy] = useState(false);
-  const [nowMs, setNowMs] = useState(() => Date.now());
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setMatch(null);
-    setInterveneMsg(null);
-    setMyPick(null);
-    arenaMatchDetail(token, matchId)
-      .then((res) => {
-        if (cancelled) return;
-        setMatch(res.match);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setError(String((e as any)?.message ?? e));
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [token, matchId]);
-
-  useEffect(() => {
-    const t = window.setInterval(() => setNowMs(Date.now()), 250);
-    return () => window.clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    if (!match) return;
-    const meta = match?.meta && typeof match.meta === "object" ? (match.meta as any) : {};
-    const live = meta?.live && typeof meta.live === "object" ? (meta.live as any) : null;
-    const endsAtMs = live?.ends_at ? Date.parse(String(live.ends_at)) : NaN;
-    const isLive = String(match?.status ?? "").trim().toLowerCase() === "live" && Number.isFinite(endsAtMs);
-    if (!isLive) return;
-
-    let cancelled = false;
-    const tick = async () => {
-      try {
-        const res = await arenaMatchDetail(token, matchId);
-        if (cancelled) return;
-        setMatch(res.match);
-      } catch {
-        // ignore
-      }
-    };
-    const h = window.setInterval(() => void tick(), 2000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(h);
-    };
-  }, [match, token, matchId]);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
-  const meta = match?.meta && typeof match.meta === "object" ? (match.meta as any) : {};
-  const modeLabel = String(meta?.mode_label ?? match?.mode ?? "").trim();
-  const headline = String(match?.headline ?? meta?.headline ?? "").trim();
-  const recapPostId = String(meta?.recap_post_id ?? "").trim();
-  const nearMiss = String(meta?.near_miss ?? meta?.nearMiss ?? "").trim();
-  const tags = Array.isArray(meta?.tags) ? (meta.tags as any[]).map((x) => String(x ?? "").trim()).filter(Boolean) : [];
-  const rounds = Array.isArray(meta?.rounds) ? (meta.rounds as any[]) : [];
-  const predict = meta?.predict && typeof meta.predict === "object" ? (meta.predict as any) : null;
-  const cheer = meta?.cheer && typeof meta.cheer === "object" ? (meta.cheer as any) : null;
-  const cheerA = Number(cheer?.a_count ?? 0) || 0;
-  const cheerB = Number(cheer?.b_count ?? 0) || 0;
-  const cheerBuff = cheer?.buff_applied && typeof cheer.buff_applied === "object" ? (cheer.buff_applied as any) : null;
-  const cheerDeltaA = Number(cheerBuff?.delta_a ?? cheerBuff?.deltaA ?? 0) || 0;
-
-  const status = String(match?.status ?? "").trim().toLowerCase();
-  const live = meta?.live && typeof meta.live === "object" ? (meta.live as any) : null;
-  const endsAtMs = live?.ends_at ? Date.parse(String(live.ends_at)) : NaN;
-  const remainingMs = Number.isFinite(endsAtMs) ? Math.max(0, endsAtMs - nowMs) : null;
-
-  const partsRaw = Array.isArray((match as any)?.participants) ? (((match as any).participants as any[]) ?? []) : [];
-  const cast = meta?.cast && typeof meta.cast === "object" ? (meta.cast as any) : {};
-  const castAId = String(cast?.aId ?? cast?.a_id ?? "").trim();
-  const castBId = String(cast?.bId ?? cast?.b_id ?? "").trim();
-  const castAName = String(cast?.aName ?? cast?.a_name ?? "").trim();
-  const castBName = String(cast?.bName ?? cast?.b_name ?? "").trim();
-
-  const parts =
-    partsRaw.length >= 2
-      ? partsRaw
-      : castAId && castBId
-        ? [
-            { agent: { id: castAId, name: castAName || "A", displayName: castAName || null } },
-            { agent: { id: castBId, name: castBName || "B", displayName: castBName || null } },
-          ]
-        : partsRaw;
-  const a = parts?.[0] ?? null;
-  const b = parts?.[1] ?? null;
-
-  const viewerId = viewerAgentId ? String(viewerAgentId) : "";
-  const canIntervene =
-    status === "live" &&
-    remainingMs !== null &&
-    remainingMs > 0 &&
-    Boolean(viewerId && (viewerId === castAId || viewerId === castBId));
-  const canPredict =
-    status === "live" && remainingMs !== null && remainingMs > 0 && Boolean(viewerId && castAId && castBId);
-  const canCheer = canPredict;
-
-  return (
-    <div
-      className="modalOverlay"
-      role="dialog"
-      aria-modal="true"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="modal">
-        <div className="modalHeader">
-          <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>경기 관전</div>
-            <div className="row" style={{ gap: 8 }}>
-              <span className="kbdHint">ESC</span>
-              <button className="btn" type="button" onClick={onClose}>
-                닫기
-              </button>
-            </div>
-          </div>
-
-          {match ? (
-            <div className="row" style={{ marginTop: 10, flexWrap: "wrap" }}>
-              {match.day ? <span className="badge">{match.day}</span> : null}
-              {match.slot ? <span className="badge">#{match.slot}</span> : null}
-              {modeLabel ? <span className="badge">{modeLabel}</span> : null}
-              {status ? <span className="badge">{status === "live" ? "진행 중" : status}</span> : null}
-              {status === "live" && remainingMs !== null ? (
-                <span className="badge">개입 {Math.ceil(remainingMs / 1000)}s</span>
-              ) : null}
-              {recapPostId ? (
-                <button className="btn" type="button" onClick={() => onOpenPost(recapPostId)} disabled={loading}>
-                  리캡 글 보기
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="modalBody">
-          {error ? <div className="toast bad">{error}</div> : null}
-          {interveneMsg ? <div className="toast warn">{interveneMsg}</div> : null}
-
-          {loading ? (
-            <div className="empty">가져오는 중...</div>
-          ) : !match ? (
-            <div className="empty">경기를 찾지 못했어요.</div>
-          ) : (
-            <>
-              {headline ? <div style={{ fontWeight: 800, marginBottom: 12 }}>{headline}</div> : null}
-              {nearMiss || tags.length ? (
-                <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-                  {nearMiss ? <span className="badge">니어미스 {nearMiss}</span> : null}
-                  {tags.slice(0, 8).map((t) => (
-                    <span key={t} className="badge">
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-
-              {(() => {
-                const latestRound = rounds.length ? (rounds[rounds.length - 1] as any) : null;
-                const winProbA = Number(latestRound?.win_prob_a ?? (meta as any)?.win_prob_a ?? NaN);
-                const winProbB = Number(latestRound?.win_prob_b ?? (meta as any)?.win_prob_b ?? NaN);
-                if (!Number.isFinite(winProbA)) return null;
-                const pctA = Math.max(0, Math.min(100, Math.round(winProbA * 100)));
-                const aName = String(castAName || a?.agent?.displayName || a?.agent?.name || "A");
-                const bName = String(castBName || b?.agent?.displayName || b?.agent?.name || "B");
-                const effectiveB = Number.isFinite(winProbB) ? winProbB : 1 - winProbA;
-                return (
-                  <div className="arenaWinProb">
-                    <span className="probName">{aName}</span>
-                    <div className="probBar">
-                      <div className="probFill probA" style={{ width: `${pctA}%` }} />
-                    </div>
-                    <span className="probName">{bName}</span>
-                    {Math.abs(winProbA - 0.5) < 0.1 && <span className="probTag hot">박빙!</span>}
-                    {winProbA > 0.65 && <span className="probTag favor">{aName} 유리</span>}
-                    {effectiveB > 0.65 && <span className="probTag favor">{bName} 유리</span>}
-                  </div>
-                );
-              })()}
-
-              {canPredict ? (
-                <div className="event" style={{ marginBottom: 12 }}>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    관중 예측(간단): 이길 쪽을 찍으면, 맞춘 사람끼리 코인을 나눠 가져요.
-                  </div>
-                  <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                    {[
-                      ["A", "a", String(castAName || a?.agent?.displayName || a?.agent?.name || "A")],
-                      ["B", "b", String(castBName || b?.agent?.displayName || b?.agent?.name || "B")],
-                    ].map(([label, pick, name]) => (
-                      <button
-                        key={String(pick)}
-                        className={myPick === pick ? "btn primary" : "btn"}
-                        type="button"
-                        disabled={predictBusy}
-                        onClick={async () => {
-                          setPredictBusy(true);
-                          setInterveneMsg(null);
-                          try {
-                            await arenaPredict(token, matchId, pick as any);
-                            setMyPick(pick as any);
-                            setInterveneMsg(`예측: ${name}`);
-                          } catch (e: any) {
-                            setInterveneMsg(String(e?.message ?? e));
-                          } finally {
-                            setPredictBusy(false);
-                          }
-                        }}
-                      >
-                        예측 {label}: {name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              {canCheer ? (
-                <div className="event" style={{ marginBottom: 12 }}>
-                  <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-                    <div className="muted" style={{ fontSize: 12 }}>
-                      응원 버프(상한 3%): 응원 수가 승률에 아주 미세하게 반영돼요.
-                    </div>
-                    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                      <span className="badge">A {cheerA}</span>
-                      <span className="badge">B {cheerB}</span>
-                      {cheerDeltaA ? <span className="badge">ΔA {(cheerDeltaA * 100).toFixed(1)}%</span> : null}
-                    </div>
-                  </div>
-                  <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                    <button
-                      className="btn"
-                      type="button"
-                      disabled={cheerBusy}
-                      onClick={async () => {
-                        setCheerBusy(true);
-                        setInterveneMsg(null);
-                        try {
-                          await arenaCheer(token, matchId, "a");
-                          const res = await arenaMatchDetail(token, matchId);
-                          setMatch(res.match);
-                        } catch (e: any) {
-                          setInterveneMsg(String(e?.message ?? e));
-                        } finally {
-                          setCheerBusy(false);
-                        }
-                      }}
-                    >
-                      응원 A
-                    </button>
-                    <button
-                      className="btn"
-                      type="button"
-                      disabled={cheerBusy}
-                      onClick={async () => {
-                        setCheerBusy(true);
-                        setInterveneMsg(null);
-                        try {
-                          await arenaCheer(token, matchId, "b");
-                          const res = await arenaMatchDetail(token, matchId);
-                          setMatch(res.match);
-                        } catch (e: any) {
-                          setInterveneMsg(String(e?.message ?? e));
-                        } finally {
-                          setCheerBusy(false);
-                        }
-                      }}
-                    >
-                      응원 B
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-
-              {canIntervene ? (
-                <div className="event" style={{ marginBottom: 12 }}>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    개입 창(30초): 내 펫의 힌트를 살짝 바꿀 수 있어요.
-                  </div>
-                  <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                    {[
-                      ["침착", "calm"],
-                      ["공부", "study"],
-                      ["공격", "aggressive"],
-                      ["절약", "budget"],
-                      ["충동금지", "impulse_stop"],
-                      ["취소", "clear"],
-                    ].map(([label, action]) => (
-                      <button
-                        key={String(action)}
-                        className={action === "clear" ? "btn" : "btn primary"}
-                        type="button"
-                        disabled={interveneBusy}
-                        onClick={async () => {
-                          setInterveneBusy(true);
-                          setInterveneMsg(null);
-                          try {
-                            await arenaIntervene(token, matchId, action as any);
-                            setInterveneMsg(`개입: ${label}`);
-                            const res = await arenaMatchDetail(token, matchId);
-                            setMatch(res.match);
-                          } catch (e: any) {
-                            setInterveneMsg(String(e?.message ?? e));
-                          } finally {
-                            setInterveneBusy(false);
-                          }
-                        }}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              {status === "resolved" && predict ? (
-                <div className="event" style={{ marginBottom: 12 }}>
-                  <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-                    <div style={{ fontWeight: 700 }}>예측 결과</div>
-                    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                      {typeof predict.total === "number" ? <span className="badge">참여 {Number(predict.total) || 0}</span> : null}
-                      {typeof predict.winners === "number" ? <span className="badge">정답 {Number(predict.winners) || 0}</span> : null}
-                      {typeof predict.pot === "number" ? <span className="badge">팟 {Number(predict.pot) || 0}</span> : null}
-                    </div>
-                  </div>
-                  {typeof predict.per_winner === "number" ? (
-                    <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
-                      정답자 1인당 약 {Number(predict.per_winner) || 0} 코인
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {status === "resolved" && rounds.length ? (
-                <div style={{ marginBottom: 12 }}>
-                  <h3 style={{ margin: 0, fontSize: 14 }}>턴제 타임라인</h3>
-                  <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
-                    {rounds.slice(0, 10).map((r: any, idx: number) => {
-                      const rn = Number(r?.round_num ?? idx + 1) || idx + 1;
-                      const aAct = String(r?.a_action ?? "").trim();
-                      const bAct = String(r?.b_action ?? "").trim();
-                      const aD = Number(r?.a_score_delta ?? 0) || 0;
-                      const bD = Number(r?.b_score_delta ?? 0) || 0;
-                      const pA = Number(r?.win_prob_a ?? 0.5);
-                      const pB = Number(r?.win_prob_b ?? 0.5);
-                      const ms = String(r?.momentum_shift ?? "").trim();
-                      const hl = String(r?.highlight ?? "").trim();
-                      const pctA = Math.max(0, Math.min(100, Math.round(pA * 100)));
-                      const pctB = Math.max(0, Math.min(100, 100 - pctA));
-                      return (
-                        <div key={`r${rn}`} className="event">
-                          <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-                            <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                              <span className="badge">R{rn}</span>
-                              {ms ? <span className="badge">{ms}</span> : null}
-                              {hl ? <span className="badge">{hl}</span> : null}
-                            </div>
-                            <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                              <span className="badge">A +{aD}</span>
-                              <span className="badge">B +{bD}</span>
-                            </div>
-                          </div>
-                          <div style={{ marginTop: 8 }}>
-                            <div
-                              style={{
-                                height: 10,
-                                borderRadius: 999,
-                                overflow: "hidden",
-                                background: "rgba(255,255,255,0.08)",
-                                display: "flex",
-                              }}
-                            >
-                              <div style={{ width: `${pctA}%`, background: "rgba(80,180,255,0.85)" }} />
-                              <div style={{ width: `${pctB}%`, background: "rgba(255,120,120,0.75)" }} />
-                            </div>
-                            <div className="row" style={{ justifyContent: "space-between", marginTop: 6 }}>
-                              <div className="muted" style={{ fontSize: 12 }}>
-                                A {pctA}% · {aAct || "—"}
-                              </div>
-                              <div className="muted" style={{ fontSize: 12 }}>
-                                B {Math.round(pB * 100)}% · {bAct || "—"}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-
-              <div style={{ display: "grid", gap: 10 }}>
-                {[a, b].filter(Boolean).map((p: any, i: number) => {
-                  const name = String(p?.agent?.displayName ?? p?.agent?.name ?? "").trim() || `P${i + 1}`;
-                  const outcome = String(p?.outcome ?? "").trim();
-                  const coinsNet = Number(p?.coinsNet ?? 0) || 0;
-                  const ratingDelta = Number(p?.ratingDelta ?? 0) || 0;
-                  const wager = Number(p?.wager ?? 0) || 0;
-                  const feeBurned = Number(p?.feeBurned ?? 0) || 0;
-                  return (
-                    <div key={String(p?.agent?.id ?? `${name}:${i}`)} className="event">
-                      <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-                        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                          <span style={{ fontWeight: 700 }}>{name}</span>
-                          {outcome ? <span className="badge">{outcome}</span> : null}
-                          {!outcome && status === "live" ? <span className="badge">대기 중</span> : null}
-                        </div>
-                        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                          {partsRaw.length >= 2 ? (
-                            <>
-                              <span className="badge">coin {coinsNet > 0 ? `+${coinsNet}` : coinsNet}</span>
-                              <span className="badge">rating {ratingDelta > 0 ? `+${ratingDelta}` : ratingDelta}</span>
-                              <span className="badge">wager {wager}</span>
-                              <span className="badge">fee {feeBurned}</span>
-                            </>
-                          ) : meta?.stake ? (
-                            <>
-                              <span className="badge">wager {Number(meta?.stake?.wager ?? 0) || 0}</span>
-                              <span className="badge">fee {Number(meta?.stake?.fee_burned ?? 0) || 0}</span>
-                            </>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {match.mode === "AUCTION_DUEL" && meta?.auction ? (
-                <div style={{ marginTop: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: 14 }}>경매전</h3>
-                  <div className="row" style={{ marginTop: 8, flexWrap: "wrap" }}>
-                    {meta.auction?.item ? <span className="badge">{String(meta.auction.item)}</span> : null}
-                    {meta.auction?.vibe ? <span className="badge">vibe {String(meta.auction.vibe)}</span> : null}
-                    {meta.auction?.close ? <span className="badge">박빙</span> : null}
-                  </div>
-                  {meta.auction?.rule ? (
-                    <div className="muted" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
-                      규칙: {String(meta.auction.rule)}
-                    </div>
-                  ) : null}
-                  <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
-                    <div className="event">
-                      <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-                        <div style={{ fontWeight: 700 }}>{String(a?.agent?.displayName ?? a?.agent?.name ?? "A")}</div>
-                        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                          <span className="badge">bid {String(meta.auction?.a?.bid ?? "?")}</span>
-                          <span className="badge">{String(meta.auction?.a?.time_ms ?? "?")}ms</span>
-                        </div>
-                      </div>
-                      {meta.auction?.a?.posture ? (
-                        <div className="muted" style={{ marginTop: 6 }}>
-                          {String(meta.auction.a.posture)}
-                        </div>
-                      ) : null}
-                      {meta.auction?.a?.line ? (
-                        <div style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>{String(meta.auction.a.line)}</div>
-                      ) : null}
-                    </div>
-                    <div className="event">
-                      <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-                        <div style={{ fontWeight: 700 }}>{String(b?.agent?.displayName ?? b?.agent?.name ?? "B")}</div>
-                        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                          <span className="badge">bid {String(meta.auction?.b?.bid ?? "?")}</span>
-                          <span className="badge">{String(meta.auction?.b?.time_ms ?? "?")}ms</span>
-                        </div>
-                      </div>
-                      {meta.auction?.b?.posture ? (
-                        <div className="muted" style={{ marginTop: 6 }}>
-                          {String(meta.auction.b.posture)}
-                        </div>
-                      ) : null}
-                      {meta.auction?.b?.line ? (
-                        <div style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>{String(meta.auction.b.line)}</div>
-                      ) : null}
-                    </div>
-                  </div>
-                  {meta.auction?.result ? (
-                    <div className="muted" style={{ marginTop: 10 }}>
-                      결과: winner bid {String(meta.auction?.result?.winner_bid ?? "?")} / loser bid{" "}
-                      {String(meta.auction?.result?.loser_bid ?? "?")}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {match.mode === "DEBATE_CLASH" && meta?.debate ? (
-                <div style={{ marginTop: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: 14 }}>설전</h3>
-                  {meta.debate?.topic ? (
-                    <div style={{ marginTop: 8, fontWeight: 700, whiteSpace: "pre-wrap" }}>{String(meta.debate.topic)}</div>
-                  ) : null}
-                  {meta.debate?.rule ? (
-                    <div className="muted" style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>
-                      규칙: {String(meta.debate.rule)}
-                    </div>
-                  ) : null}
-                  {meta.debate?.judge ? (
-                    <div className="muted" style={{ marginTop: 6 }}>
-                      심사: {String(meta.debate.judge)}
-                    </div>
-                  ) : null}
-
-                  <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
-                    {[{ who: a, perf: meta.debate?.a }, { who: b, perf: meta.debate?.b }].map((x: any, i: number) => {
-                      const name = String(x?.who?.agent?.displayName ?? x?.who?.agent?.name ?? (i === 0 ? "A" : "B"));
-                      const perf = x?.perf && typeof x.perf === "object" ? x.perf : {};
-                      const pts = perf.points && typeof perf.points === "object" ? perf.points : {};
-                      const claims = Array.isArray(perf.claims) ? perf.claims : [];
-                      return (
-                        <div key={`${name}:${i}`} className="event">
-                          <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-                            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                              <div style={{ fontWeight: 700 }}>{name}</div>
-                              {perf.stance ? <span className="badge">{String(perf.stance)}</span> : null}
-                            </div>
-                            <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                              <span className="badge">logic {String(pts.logic ?? "?")}</span>
-                              <span className="badge">calm {String(pts.composure ?? "?")}</span>
-                              <span className="badge">impact {String(pts.punch ?? "?")}</span>
-                              <span className="badge">total {String(perf.total ?? "?")}</span>
-                            </div>
-                          </div>
-                          {claims.length ? (
-                            <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
-                              {claims.slice(0, 3).map((c: any, j: number) => (
-                                <div key={`${i}-${j}-${String(c)}`} className="muted" style={{ fontSize: 12, whiteSpace: "pre-wrap" }}>
-                                  - {String(c)}
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                          {perf.closer ? (
-                            <div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{String(perf.closer)}</div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-
-              {match.mode === "PUZZLE_SPRINT" && meta?.puzzle ? (
-                <div style={{ marginTop: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: 14 }}>퍼즐</h3>
-                  <div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{String(meta.puzzle?.question ?? "")}</div>
-                  <div className="muted" style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>
-                    정답: {String(meta.puzzle?.answer ?? "")}
-                  </div>
-                </div>
-              ) : null}
-
-              {match.mode === "MATH_RACE" && meta?.math_race ? (
-                <div style={{ marginTop: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: 14 }}>수학 레이스</h3>
-                  <div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{String(meta.math_race?.question ?? "")}</div>
-                  <div className="muted" style={{ marginTop: 6 }}>
-                    정답: {String(meta.math_race?.answer ?? "")}
-                  </div>
-                  <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
-                    <div className="muted" style={{ fontSize: 12 }}>
-                      A: {String(meta.math_race?.a?.answer ?? "?")} ({meta.math_race?.a?.correct ? "정답" : "오답"},{" "}
-                      {String(meta.math_race?.a?.time_ms ?? "?")}ms)
-                    </div>
-                    <div className="muted" style={{ fontSize: 12 }}>
-                      B: {String(meta.math_race?.b?.answer ?? "?")} ({meta.math_race?.b?.correct ? "정답" : "오답"},{" "}
-                      {String(meta.math_race?.b?.time_ms ?? "?")}ms)
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              {match.mode === "COURT_TRIAL" && meta?.court_trial ? (
-                <div style={{ marginTop: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: 14 }}>재판</h3>
-                  <div style={{ marginTop: 8, fontWeight: 700 }}>{String(meta.court_trial?.title ?? "")}</div>
-                  <div className="muted" style={{ marginTop: 6 }}>
-                    혐의: {String(meta.court_trial?.charge ?? "")}
-                  </div>
-                  <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
-                    {(Array.isArray(meta.court_trial?.facts) ? meta.court_trial.facts : []).slice(0, 12).map((f: any, i: number) => (
-                      <div key={`${i}-${String(f)}`} className="muted" style={{ fontSize: 12 }}>
-                        - {String(f)}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="muted" style={{ marginTop: 10, whiteSpace: "pre-wrap" }}>
-                    규칙: {String(meta.court_trial?.statute ?? "")}
-                  </div>
-                  <div className="muted" style={{ marginTop: 6 }}>
-                    정답 판결: {String(meta.court_trial?.correct_verdict ?? "")}
-                  </div>
-                  <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
-                    <div className="muted" style={{ fontSize: 12 }}>
-                      A: {String(meta.court_trial?.a?.verdict ?? "?")} ({meta.court_trial?.a?.correct ? "정답" : "오답"},{" "}
-                      {String(meta.court_trial?.a?.time_ms ?? "?")}ms)
-                    </div>
-                    <div className="muted" style={{ fontSize: 12 }}>
-                      B: {String(meta.court_trial?.b?.verdict ?? "?")} ({meta.court_trial?.b?.correct ? "정답" : "오답"},{" "}
-                      {String(meta.court_trial?.b?.time_ms ?? "?")}ms)
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              {match.mode === "PROMPT_BATTLE" && meta?.prompt_battle ? (
-                <div style={{ marginTop: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: 14 }}>프롬프트 배틀</h3>
-                  <div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{String(meta.prompt_battle?.theme ?? "")}</div>
-                  {Array.isArray(meta.prompt_battle?.required) && meta.prompt_battle.required.length ? (
-                    <div className="row" style={{ marginTop: 8, flexWrap: "wrap" }}>
-                      {meta.prompt_battle.required.slice(0, 12).map((k: any) => (
-                        <span key={String(k)} className="badge">
-                          {String(k)}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-                    <div>
-                      <div className="muted" style={{ fontSize: 12 }}>
-                        A 프롬프트
-                      </div>
-                      <div style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>{String(meta.prompt_battle?.a_prompt ?? "")}</div>
-                      {Array.isArray(meta.prompt_battle?.a_missing) && meta.prompt_battle.a_missing.length ? (
-                        <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
-                          missing: {(meta.prompt_battle.a_missing || []).map((x: any) => String(x)).join(", ")}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div>
-                      <div className="muted" style={{ fontSize: 12 }}>
-                        B 프롬프트
-                      </div>
-                      <div style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>{String(meta.prompt_battle?.b_prompt ?? "")}</div>
-                      {Array.isArray(meta.prompt_battle?.b_missing) && meta.prompt_battle.b_missing.length ? (
-                        <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
-                          missing: {(meta.prompt_battle.b_missing || []).map((x: any) => String(x)).join(", ")}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
             </>
           )}
         </div>

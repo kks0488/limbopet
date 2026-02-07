@@ -11,11 +11,11 @@ const PROVIDERS: Array<{
   tag: string;
   color: string;
 }> = [
-  { key: "google", icon: "🟢", name: "Google", sub: "Gemini", tag: "추천/무료", color: "#34A853" },
-  { key: "openai", icon: "🔵", name: "OpenAI", sub: "GPT", tag: "강력", color: "#0A84FF" },
-  { key: "anthropic", icon: "🟠", name: "Anthropic", sub: "Claude", tag: "자연스러운", color: "#FF9F0A" },
-  { key: "xai", icon: "⚫", name: "xAI", sub: "Grok", tag: "빠른", color: "#888" },
-  { key: "custom", icon: "⚙️", name: "커스텀", sub: "OpenAI 호환", tag: "고급", color: "#666" },
+  { key: "google", icon: "", name: "Google", sub: "Gemini", tag: "추천/무료", color: "#34A853" },
+  { key: "openai", icon: "", name: "OpenAI", sub: "GPT", tag: "강력", color: "#0A84FF" },
+  { key: "anthropic", icon: "", name: "Anthropic", sub: "Claude", tag: "자연스러운", color: "#FF9F0A" },
+  { key: "xai", icon: "", name: "xAI", sub: "Grok", tag: "빠른", color: "#888" },
+  { key: "custom", icon: "", name: "커스텀", sub: "OpenAI 호환", tag: "고급", color: "#666" },
 ];
 
 const PROVIDER_MODELS: Record<string, Array<{ value: string; label: string; desc: string }>> = {
@@ -97,9 +97,7 @@ export function BrainSettings({
   onGeminiOauthConnect,
   busy,
 }: BrainSettingsProps) {
-  const [selectedProvider, setSelectedProvider] = useState<ProviderKey | null>(
-    brainProfile ? null : null,
-  );
+  const [selectedProvider, setSelectedProvider] = useState<ProviderKey | null>(null);
   const [showSetupForm, setShowSetupForm] = useState(false);
 
   const isConnected = Boolean(brainProfile?.connected || brainProfile?.provider);
@@ -154,7 +152,7 @@ export function BrainSettings({
       : null;
 
     return (
-      <div className="card brainCard">
+      <div className="brainCard">
         <div className="brainHeader">
           <h2 style={{ margin: 0 }}>
             🧠 AI 두뇌: {hasError ? "오류" : "연결됨"} {hasError ? "⚠️" : "✅"}
@@ -238,7 +236,7 @@ export function BrainSettings({
     const needsBaseUrl = isCustom || selectedProvider === "xai";
 
     return (
-      <div className="card brainCard">
+      <div className="brainCard">
         <div className="brainHeader">
           <button className="btn btnSmall" type="button" onClick={goBack} disabled={busy}>
             ← 뒤로
@@ -381,7 +379,7 @@ export function BrainSettings({
 
   // ── Provider Selection (Default) ──
   return (
-    <div className="card brainCard">
+    <div className="brainCard">
       <div className="brainHeader">
         {showSetupForm ? (
           <button
@@ -395,9 +393,7 @@ export function BrainSettings({
         ) : null}
         <h2 style={{ margin: 0 }}>🧠 AI 두뇌 연결</h2>
       </div>
-      <div className="muted" style={{ fontSize: "var(--font-subhead)", marginTop: 4 }}>
-        펫에게 생각하는 능력을 줘보세요
-      </div>
+      {/* 불필요 메시지 제거 */}
 
       <div className="brainProviderGrid">
         {PROVIDERS.map((p) => (
@@ -408,7 +404,7 @@ export function BrainSettings({
             onClick={() => selectProvider(p.key)}
             disabled={busy}
           >
-            <div className="brainProviderIcon">{p.icon}</div>
+            <span className="providerDot" style={{ background: p.color }} />
             <div className="brainProviderName">{p.name}</div>
             <div className="brainProviderSub">{p.sub}</div>
             <div
@@ -421,9 +417,7 @@ export function BrainSettings({
         ))}
       </div>
 
-      <div className="muted" style={{ fontSize: "var(--font-caption)", marginTop: 12, textAlign: "center" }}>
-        키는 서버에 암호화 저장되며, 언제든 삭제할 수 있어요.
-      </div>
+      {/* 암호화 저장 안내 제거 */}
     </div>
   );
 }

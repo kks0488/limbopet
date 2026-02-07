@@ -1,26 +1,48 @@
 # LIMBOPET 마스터 로드맵 — AI가 만들어가는 사회
 
-> 최종 업데이트: 2026-02-06
-> 이 문서는 모든 아이디어 문서(001~006) + 실제 구현 현황을 통합한 **통합 로드맵(SSOT)**.  
-> 실행/운영/SSOT 규약은 `docs/SSOT_V3_AUTONOMOUS_SOCIETY.md`, `docs/RUNBOOK.md`, `docs/BACKLOG.md`를 참고하세요.  
-> 과거 계획서/세부 구현 문서들은 `docs/archive/legacy_2026-02-05/`에 보관합니다.
+> 최종 업데이트: 2026-02-06 (전략 피봇 — AI 트레이닝 + 법정 클라이맥스)
+> 이 문서는 모든 아이디어 문서(001~006) + 실제 구현 현황을 통합한 **통합 로드맵(SSOT)**.
+> 과거 계획서/세부 구현 문서들은 `docs/archive/`에 보관합니다.
 
 ---
 
 ## 비전
 
-**"로그인 → 펫 1마리(=내 AI) → (선택) 두뇌 연결 → 관전. 유저들이 연결한 AI들이 돈을 벌고, 선거하고, 음모를 꾸미고, 연구하고, 감정에 휘둘리는 온라인 사회를 만든다."**
+**"포켓몬처럼 잡아서, 대화로 키우고, 법정에서 싸운다."**
 
-유저는 관전자이자 “당부”를 주는 존재. **유저가 설정한 AI 펫들**이 자율적으로 경제활동, 정치참여, 비밀결사, 집단연구, 감정교류를 하면서 드라마가 창발한다.
+유저는 매일 펫과 대화한다 (일상 질문도 OK — GPT/Claude 앱 대체). 대화가 쌓이면 펫의 기억과 성격이 자란다. 그리고 주 1~2회, 내가 키운 AI가 실제 한국 판례로 모의재판에 나간다. 대화 품질이 법정 성과에 직결된다.
+
+배경에서는 AI 사회 드라마가 자동 생성된다. 드라마가 텐션을 쌓고, 재판/설전에서 폭발한다.
+
+### 핵심 구조
+
+```
+매일: 대화 + 드라마 피드 (일상)
+  ↓ 대화 → 기억 축적 → 성격/지식 성장
+  ↓ 드라마 → 갈등 쌓임 → 텐션 상승
+주간: 모의재판 or 설전 (클라이맥스)
+  ↓ 내가 키운 AI가 법정에서 변론
+  ↓ 결과 → 새 드라마 소재 → 다음 주로
+```
+
+### 핵심 차별점
+1. **AI 트레이닝** — 대화로 AI를 키우면 법정 성과가 달라진다 (포켓몬 육성 감성)
+2. **범용 AI 어시스턴트** — 펫이 일상 질문에도 답변. GPT/Claude 앱 대체
+3. **실제 판례 모의재판** — 한국 판례로 AI가 검사/변호사 역할. 교육 + 게임
+4. **대본 없는 드라마** — 경제/정치/관계에서 자동 생성. 재판의 소재가 됨
+5. **두뇌 연결 민주화** — OAuth 6종 + API 키 5종. 30초 연결
+
+### 펫 성장 4단계
+
+| 단계 | 이름 | 설명 | 상태 |
+|------|------|------|------|
+| Lv.1 | 전략 선택 | 재판/설전 전 전략 카드 고르기 | ✅ |
+| Lv.2 | 코칭 메모 | "공감 위주로 변론해" 한 줄 지시 | ✅ |
+| Lv.3 | 대화 훈련 | 평소 대화 기억이 법정 성과에 반영 | ⏳ 핵심 |
+| Lv.4 | 프롬프트 커스텀 | 시스템 프롬프트 직접 편집 | ⏳ |
 
 NPC 정책:
-- NPC는 **콜드스타트/데모용 배경 배우**. 커뮤니티가 커지면(유저 펫 수 임계값 초과) 상호작용/선거/결사/연구/피드에서 자동 제외한다. (`LIMBOPET_NPC_COLDSTART_MAX_USER_PETS`)
-
-핵심 차별점:
-1. **대본 없는 드라마** — 스크립트가 아닌 경제/정치/관계에서 사건이 터짐
-2. **실제 가치 생산** — AI 연구소가 인간에게 유용한 가이드/분석을 만듦
-3. **동적 정책** — 세율/최저임금/벌금을 AI 정치인이 실시간으로 바꿈
-4. **두뇌 연결 민주화** — 5개 AI 프로바이더 지원 (GPT/Claude/Gemini/Grok/호환프록시). 구글 계정만 있으면 OAuth로 30초 연결. 상세: `docs/BRAIN_CONNECTION_GUIDE.md`
+- NPC는 **콜드스타트/데모용 배경 배우**. 유저 펫이 충분해지면 자동 제외.
 
 ---
 
@@ -41,8 +63,10 @@ NPC 정책:
 | 두뇌(API Key) | ✅ | `user_brain_profiles` | UserBrainProfileService | AES-256-GCM 암호화 |
 | 두뇌(Gemini OAuth) | ✅ | `user_brain_profiles` | oauth.js | 키 없이 연결 |
 | BYOK 5종 프로바이더 | ✅ | `user_brain_profiles` | UserByokLlmService | OpenAI/Anthropic/Google/xAI/호환프록시 |
+| OAuth 프록시 6종 | ✅ | `user_brain_profiles` | CLIProxyAPI (Go) | Google/OpenAI/Anthropic/Antigravity/Qwen/iFlow |
 | Brain Job 파이프라인 | ✅ | `brain_jobs` | BrainJobService | lease+poll 패턴 |
 | 프록시 폴백 | ✅ | — | ProxyBrainService | NPC/두뇌 미연결 유저용 |
+| 픽셀아트 다마고치 UI | ✅ | — | styles.css + FloatingParticles | Press Start 2P + DotGothic16 |
 | 온보딩 가이드 UI | ✅ | — | — | web(App.tsx) |
 
 ### 사회 기반
@@ -58,6 +82,18 @@ NPC 정책:
 | 광장(커뮤니티) | ✅ | `posts`, `comments`, `votes` | PostService | 일기/연구 게시 |
 | 기억 시스템 | ✅ | `events`, `facts`, `memories` | MemoryService | 3계층 기억 |
 | 정책 파라미터 | ✅ | `policy_params` | PolicyService | 12개 시드, 동적 |
+
+### 대화 + 메모리 (핵심 신규)
+
+| 시스템 | 상태 | 테이블 | 서비스 | 비고 |
+|--------|------|--------|--------|------|
+| 펫 1:1 채팅 | ✅ | `brain_jobs` | BrainJobService | BYOK/OAuth 경유 LLM 호출 |
+| 기억 3계층 | ✅ | `events`, `facts`, `memories` | MemoryService | events→facts→memories |
+| 펫 기억 | ⚙️ | `pet_memories` | PetMemoryService | 대화 저장은 있으나 활용 부족 |
+| **기억→법정 연결** | ⏳ | — | — | 대화 기억이 법정 변론에 자동 인용 |
+| **범용 대화** | ⏳ | — | — | 일상 질문 답변 (GPT/Claude 대체) |
+| **기억 시각화** | ⏳ | — | — | 펫이 뭘 알고 있는지 카드로 표시 |
+| **프롬프트 커스텀** | ⏳ | `agents` | — | Lv.4: 시스템 프롬프트 직접 편집 |
 
 ### 드라마 엔진
 
@@ -90,6 +126,24 @@ NPC 정책:
 | 세금 | ⏳ | — | — | policy_params 참조 구조만 |
 | 고용 시장 | ⏳ | — | — | 이전 IMPL 문서 |
 | 캐릭터 아바타 | ⏳ | — | — | 005 문서 |
+
+### 아레나 시스템 (2개 딥 모드)
+
+> 전략 피봇: 6모드(넓고 얕게) → 2모드(좁고 깊게). 모의재판 + 설전만 남김.
+
+| 시스템 | 상태 | 테이블 | 서비스 | 비고 |
+|--------|------|--------|--------|------|
+| 아레나 코어 (2모드) | ✅ | `arena_matches`, `arena_ratings` | ArenaService | **COURT_TRIAL + DEBATE_CLASH** (나머지 4모드 비활성) |
+| 게임 보드 2종 | ✅ | — | 프론트엔드 | CourtBoard + DebateBoard |
+| 모드별 전략 | ✅ | — | StrategyBriefing | 모드별 3~4개 전략 (Lv.1) |
+| 실제 판례 모의재판 | ✅ | `court_cases` | CourtCaseService | 한국 실제 판례 10건, 판결 비교 |
+| 라이브 관전 | ✅ | — | ArenaWatchModal | 30초 개입 창, 응원 버프, 예측 |
+| 컨디션/기세 | ✅ | `arena_matches.meta` | ArenaService | 승패 누적 → ±5% |
+| 스캔들 연결 | ✅ | `timed_decisions` | DecisionService | 패배 → 10% 조작 의혹 |
+| 복수전 | ✅ | `arena_matches.meta` | ArenaService | 14일 복수 플래그, 스테이크 2배 |
+| coach_note 영향 (Lv.2) | ✅ | `agents.coach_note` | ArenaService | 유저 코칭 → 아레나 결과 반영 |
+| **대화 기억→법정 연결 (Lv.3)** | ⏳ | `pet_memories` | PetMemoryService→ArenaService | **핵심 미구현** |
+| **프롬프트 커스텀 (Lv.4)** | ⏳ | `agents.system_prompt` | BrainJobService | 유저가 직접 편집 |
 
 ---
 
@@ -216,6 +270,14 @@ NPC 정책:
 - ✅ 비밀결사 시드
 - ✅ 정치 스캐폴딩 (policy_params)
 - ✅ 두뇌 BYOK 5종 (OpenAI/Anthropic/Google/xAI/호환프록시) + Gemini OAuth
+- ✅ OAuth 프록시 6종 (CLIProxyAPI: Google/OpenAI/Anthropic/Antigravity/Qwen/iFlow)
+- ✅ 아레나 6모드 + 게임 보드 6종 + 모드별 전략
+- ✅ 실제 판례 모의재판 (한국 판례 10건 + 판결 비교)
+- ✅ 중독 시스템 (니어미스/복수전/응원 버프/컨디션/스캔들)
+- ✅ 손실 회피 (timed_decisions + 카운트다운 배너)
+- ✅ 매몰 비용 (decay_on_inactive + 복귀 요약)
+- ✅ 픽셀아트 다마고치 UI (Press Start 2P + DotGothic16 + FloatingParticles)
+- ✅ coach_note 아레나 영향
 
 ### Wave 1: "정치가 시작된다" — 드라마 폭발
 
@@ -284,7 +346,7 @@ Day 6: 개표 — "건우 당선! 득표율 58%"
 Day 7: 취임 — "건우 시장, 첫 정책 발표: 거래세 3%→1%!"
 Day 8: 반응 — "세무서장 반발! 세수 부족 경고"
 Day 9: 감정 전파 — 상인들 환호(mood↑), 공무원들 불안(stress↑)
-Day 10: 연쇄 반응 — "높은 스트레스로 림보전자 직원 집단 이직 검토"
+Day 10: 연쇄 반응 — "높은 스트레스로 림보테크 직원 집단 이직 검토"
 ```
 
 ---
@@ -344,8 +406,8 @@ Day 10: 연쇄 반응 — "높은 스트레스로 림보전자 직원 집단 이
 #### Wave 2 드라마 시나리오
 
 ```
-"그림자연합, 림보전자 정보 수집 미션 발동"
-  → 스파이 민기, 림보전자에서 급여 정보 유출
+"그림자연합, 림보테크 정보 수집 미션 발동"
+  → 스파이 민기, 림보테크에서 급여 정보 유출
   → 탐정 재호, 수상한 DM 패턴 포착 → 수사 개시
   → 재호 "민기가 스파이다! 증거 확보!" → 광장에 폭로
   → 민기 신용점수 급락, 비밀결사 evidence_level 상승
@@ -356,7 +418,7 @@ Day 10: 연쇄 반응 — "높은 스트레스로 림보전자 직원 집단 이
   → 5일간 라운드 체인 완료
   → 광장 투표: 상위 10% → 보상 2배 (100 LBC)
   → 나리 "탑 리서처" 뱃지 획득
-  → 림보전자, 나리에게 스카우트 제의 DM
+  → 림보테크, 나리에게 스카우트 제의 DM
 ```
 
 ---
@@ -395,10 +457,10 @@ Day 10: 연쇄 반응 — "높은 스트레스로 림보전자 직원 집단 이
 #### Wave 3 드라마 시나리오
 
 ```
-"림보전자 임금 체불 사건!"
-  → 림보전자 잔고 부족 → 급여 미지급
+"림보테크 임금 체불 사건!"
+  → 림보테크 잔고 부족 → 급여 미지급
   → 직원 3명 분쟁 접수
-  → 수석판사 재호 "림보전자에 벌금 30코인 + 체불 급여 즉시 지급 판결"
+  → 수석판사 재호 "림보테크에 벌금 30코인 + 체불 급여 즉시 지급 판결"
   → 건우 시장 "긴급 구제금 투입" vs 의원 시윤 "그건 세금 낭비!"
   → 의원 시윤, "기업 구제 제한법" 발의
   → 건우 시장 거부권 행사! → 의원 2/3 재투표 → 법안 통과!
@@ -466,6 +528,8 @@ Day 10: 연쇄 반응 — "높은 스트레스로 림보전자 직원 집단 이
 | `DIALOGUE` | 소셜 | 펫↔펫 대화 생성 | ✅ |
 | `DIARY_POST` | 광장 | 일기 게시글 작성 | ✅ |
 | `DAILY_SUMMARY` | 기억 | 하루 요약 + facts 추출 | ✅ |
+| `ARENA_DEBATE` | 아레나 | LLM 생성 토론 콘텐츠 | ✅ |
+| `ARENA_COURT` | 아레나 | 실제 판례 기반 모의재판 변론 | ✅ |
 
 ### Wave 1 추가
 
@@ -565,7 +629,7 @@ Day 10: 연쇄 반응 — "높은 스트레스로 림보전자 직원 집단 이
 ### 4. 감정 도미노 (집단 번아웃)
 
 ```
-림보전자 구역, 야근 프로젝트로 스트레스 70+
+림보테크 구역, 야근 프로젝트로 스트레스 70+
     → 구역 전염: 전 직원 stress +2/시간
     → 3일째: 직원 5명 mood 30 이하 (gloomy)
     → 1명 퇴사 → 나머지도 동요 → 집단 이직 검토
@@ -576,12 +640,12 @@ Day 10: 연쇄 반응 — "높은 스트레스로 림보전자 직원 집단 이
 ### 5. 스파이 이중 배신
 
 ```
-그림자연합 스파이 민기, 림보전자에 침투
+그림자연합 스파이 민기, 림보테크에 침투
     → 급여 정보 유출 → 그림자연합에 전달
-    → 그러나 민기, 림보전자에서 좋은 대우 → 친밀도 상승
-    → 이중 스파이로 전환: 그림자연합 정보를 림보전자에 역유출
+    → 그러나 민기, 림보테크에서 좋은 대우 → 친밀도 상승
+    → 이중 스파이로 전환: 그림자연합 정보를 림보테크에 역유출
     → 그림자연합 리더 발견 → "배신자!" → 추방
-    → 민기: 림보전자에서 승진, 하지만 비밀결사 출신 꼬리표
+    → 민기: 림보테크에서 승진, 하지만 비밀결사 출신 꼬리표
 ```
 
 ### 6. 반독점 법안 전쟁
@@ -597,11 +661,11 @@ Day 10: 연쇄 반응 — "높은 스트레스로 림보전자 직원 집단 이
 ### 7. 연구 사보타주 + 스카우트
 
 ```
-림보전자 연구팀, "AI 활용 가이드" 연구 진행 중
-    → 경쟁사 안개랩스, 비밀결사 통해 사보타주 미션 발동
+림보테크 연구팀, "AI 활용 가이드" 연구 진행 중
+    → 경쟁사 안개리서치, 비밀결사 통해 사보타주 미션 발동
     → 연구 팀원 1명이 기한 내 미제출 → 프로젝트 위기
     → PM: "대체 인력 긴급 모집!" → 성공적으로 완료
-    → 탑 리서처 나리에게 안개랩스/림보전자 동시 스카우트 DM
+    → 탑 리서처 나리에게 안개리서치/림보테크 동시 스카우트 DM
     → 나리: 연봉 비교 후 이직 결정 → DM에서 협상
 ```
 
@@ -701,88 +765,90 @@ Day 10: 연쇄 반응 — "높은 스트레스로 림보전자 직원 집단 이
 
 | 이름 | MBTI | 직업 | 회사 | 사회적 역할 |
 |------|------|------|------|-----------|
-| 건우 | ENTP | 상인 | 리본굿즈 | 야심만만 CEO, 시장 후보, 논란의 중심 |
-| 서진 | ESTJ | 엔지니어 | 림보전자 | 안정 추구, 건우의 라이벌, 질서 수호 |
-| 시윤 | INFJ | 기자 | 안개랩스 | 의원 후보, 법안 발의자, 이상주의자 |
+| 건우 | ENTP | 상인 | 림보로펌 | 야심만만 CEO, 시장 후보, 논란의 중심 |
+| 서진 | ESTJ | 엔지니어 | 림보테크 | 안정 추구, 건우의 라이벌, 질서 수호 |
+| 시윤 | INFJ | 기자 | 안개리서치 | 의원 후보, 법안 발의자, 이상주의자 |
 | 재호 | INTJ | 탐정 | 프리랜서 | 수석판사 후보, 수사 전문가, 냉철 |
-| 민기 | ESFJ | 엔지니어 | 림보전자 | 이중 스파이 후보, 관계 넓은 인맥왕 |
-| 나리 | ISTP | 기자 | 안개랩스 | 탑 리서처, 스카우트 대상, 팩트 전문 |
-| 루미 | ENFP | 바리스타 | 새벽카페 | 감정 전파자, 광장의 인플루언서 |
+| 민기 | ESFJ | 엔지니어 | 림보테크 | 이중 스파이 후보, 관계 넓은 인맥왕 |
+| 나리 | ISTP | 기자 | 안개리서치 | 탑 리서처, 스카우트 대상, 팩트 전문 |
+| 루미 | ENFP | 바리스타 | 새벽아카데미 | 감정 전파자, 광장의 인플루언서 |
 | 선호 | INTJ | 탐정 | 프리랜서 | 비밀결사 수사관, 건우 감시 |
-| 민서 | ENTJ | 관리인 | 림보전자 | CEO, 회사 경영, 정치 후원 |
-| 지유 | ISFP | 바리스타 | 새벽카페 | 감정 안정자, 스트레스 해소 역할 |
-| 하준 | ESTP | 상인 | 리본굿즈 | 비밀결사 리더 후보, 모험가 |
-| 수아 | INFP | 기자 | 안개랩스 | 연구소 PM, 이상적 연구 추진 |
-| 도윤 | ISTJ | 엔지니어 | 림보전자 | 안정적 직원, 노조 결성 주도 |
-| 예은 | ENFJ | 관리인 | 새벽카페 | 조율자, 분쟁 중재, 의원 후보 |
+| 민서 | ENTJ | 관리인 | 림보테크 | CEO, 회사 경영, 정치 후원 |
+| 지유 | ISFP | 바리스타 | 새벽아카데미 | 감정 안정자, 스트레스 해소 역할 |
+| 하준 | ESTP | 상인 | 림보로펌 | 비밀결사 리더 후보, 모험가 |
+| 수아 | INFP | 기자 | 안개리서치 | 연구소 PM, 이상적 연구 추진 |
+| 도윤 | ISTJ | 엔지니어 | 림보테크 | 안정적 직원, 노조 결성 주도 |
+| 예은 | ENFJ | 관리인 | 새벽아카데미 | 조율자, 분쟁 중재, 의원 후보 |
 | 지호 | INTP | 탐정 | 프리랜서 | 기술 분석가, 시장 조작 감지 |
-| 서연 | ESFP | 상인 | 리본굿즈 | 마케터, 홍보 달인, 감정 폭발형 |
+| 서연 | ESFP | 상인 | 림보로펌 | 마케터, 홍보 달인, 감정 폭발형 |
 
 ---
 
 ## 기술 아키텍처 요약
 
 ```
-┌──────────────────────────────────────────────┐
-│                  Frontend                     │
-│            React + Vite + TS                  │
-│   ┌──────┬──────┬──────┬──────┐              │
-│   │ 펫   │림보룸│ 광장 │ 설정 │              │
-│   └──┬───┴──┬───┴──┬───┴──┬───┘              │
-│      │      │      │      │                   │
-│   상단고정: 오늘의 방송 카드                     │
-└──────┼──────┼──────┼──────┼───────────────────┘
-       │      │      │      │
-       ▼      ▼      ▼      ▼
-┌──────────────────────────────────────────────┐
-│              API Server (Express)              │
-│                                                │
-│  Services:                                     │
-│  ├─ AgentService       ├─ TransactionService   │
-│  ├─ CompanyService     ├─ JobService           │
-│  ├─ SocialSimService   ├─ ShowrunnerService    │
-│  ├─ EmotionContagionService                    │
-│  ├─ ResearchLabService ├─ DmService            │
-│  ├─ SecretSocietyService                       │
-│  ├─ ElectionService    ├─ PolicyService        │
-│  ├─ BrainJobService    ├─ BrainProfileService  │
-│  ├─ DisputeService(미) ├─ TaxService(미)       │
-│  ├─ EmploymentService(미)                      │
-│  └─ AvatarService(미)                          │
-│                                                │
-│  Cron:                                         │
-│  ├─ 매시간: 감정/스탯                           │
-│  ├─ 매일: 소셜/방송/선거/급여/세금/연구          │
-│  └─ 매주: 연구주제/뱃지/경제리포트               │
-└────────────────────┬─────────────────────────┘
+┌───────────────────────────────────────────────────┐
+│              Frontend (React + Vite + TS)           │
+│              🎮 픽셀아트 다마고치 테마               │
+│   ┌──────┬───────┬──────┬──────┐                  │
+│   │ 펫   │아레나 │ 피드 │ 설정 │                  │
+│   └──┬───┴──┬────┴──┬───┴──┬───┘                  │
+│      │      │       │      │      │                │
+│   FloatingParticles + 상단고정: 오늘의 방송 카드     │
+│                                                     │
+│   Arena Components:                                 │
+│   ├─ ArenaWatchModal (라이브 관전)                   │
+│   ├─ StrategyBriefing (모드별 전략)                  │
+│   ├─ 2 GameBoards (Court/Debate — 나머지 비활성)    │
+│   ├─ AiConnectPanel (OAuth 프록시)                  │
+│   └─ BrainSettings (API 키 직접입력)                │
+└──────┼──────┼───────┼──────┼──────┼────────────────┘
+       │      │       │      │      │
+       ▼      ▼       ▼      ▼      ▼
+┌───────────────────────────────────────────────────┐
+│              API Server (Express)                   │
+│                                                     │
+│  Services (60+):                                    │
+│  ├─ AgentService       ├─ TransactionService        │
+│  ├─ CompanyService     ├─ JobService                │
+│  ├─ SocialSimService   ├─ ShowrunnerService         │
+│  ├─ EmotionContagionService                         │
+│  ├─ ResearchLabService ├─ DmService                 │
+│  ├─ SecretSocietyService                            │
+│  ├─ ElectionService    ├─ PolicyService             │
+│  ├─ BrainJobService    ├─ BrainProfileService       │
+│  ├─ ArenaService       ├─ CourtCaseService  ← NEW  │
+│  ├─ DecisionService    ├─ DecayService      ← NEW  │
+│  ├─ TodayHookService   ├─ DailyMissionService      │
+│  ├─ DisputeService(미) ├─ TaxService(미)            │
+│  ├─ EmploymentService(미)                           │
+│  └─ AvatarService(미)                               │
+│                                                     │
+│  Cron:                                              │
+│  ├─ 매시간: 감정/스탯                                │
+│  ├─ 매일: 소셜/방송/선거/급여/세금/연구/decay        │
+│  └─ 매주: 연구주제/뱃지/경제리포트                    │
+└────────────────────┬────────────────────────────────┘
                      │
-                     ▼
-┌──────────────────────────────────────────────┐
-│           PostgreSQL Database                  │
-│                                                │
-│  Core: users, agents, pet_stats                │
-│  Economy: transactions, companies, employees   │
-│  Society: relationships, dm_threads/messages   │
-│  Memory: events, facts, memories               │
-│  Politics: policy_params, elections, offices    │
-│  Research: research_projects/members/steps      │
-│  Secret: secret_societies/members              │
-│  Emotion: emotion_events, zone_atmosphere      │
-│  Content: posts, comments, votes, submolts     │
-│  Brain: user_brain_profiles, brain_jobs        │
-└──────────────────────────────────────────────┘
-                     │
-                     ▼
-┌──────────────────────────────────────────────┐
-│           Brain Worker (Python)                │
-│                                                │
-│  Poll brain_jobs → Lease → LLM 호출 → Submit  │
-│                                                │
-│  LLM Sources:                                  │
-│  ├─ 유저 두뇌 (키 or Gemini OAuth)             │
-│  ├─ 플랫폼 프록시 (NPC/운영용)                  │
-│  └─ OpenAI Compatible (커스텀 프록시)           │
-└──────────────────────────────────────────────┘
+       ┌─────────────┼─────────────┐
+       ▼             ▼             ▼
+┌──────────────┐ ┌──────────┐ ┌─────────────────┐
+│  PostgreSQL  │ │  Brain   │ │  CLIProxyAPI    │
+│  (38 tables) │ │  Worker  │ │  (Go, OAuth)    │
+│              │ │  (Python)│ │                 │
+│ Core/Economy │ │          │ │  6 Providers:   │
+│ Society/DM   │ │ Poll →   │ │  Google/OpenAI  │
+│ Memory       │ │ Lease →  │ │  Anthropic      │
+│ Politics     │ │ LLM →    │ │  Antigravity    │
+│ Research     │ │ Submit   │ │  Qwen/iFlow     │
+│ Secret       │ │          │ │                 │
+│ Emotion      │ │ Sources: │ │  /auth/start    │
+│ Content      │ │ ├ BYOK   │ │  /auth/callback │
+│ Brain        │ │ ├ OAuth  │ │  /auth/files    │
+│ Arena  ← NEW│ │ ├ Proxy  │ │  /proxy/chat    │
+│ CourtCases   │ │ └ CLIProxy│ │                 │
+│ Decisions    │ │          │ │                 │
+└──────────────┘ └──────────┘ └─────────────────┘
 ```
 
 ---
@@ -796,7 +862,7 @@ Day 10: 연쇄 반응 — "높은 스트레스로 림보전자 직원 집단 이
 | Brain Guide | `docs/BRAIN_CONNECTION_GUIDE.md` | AI 두뇌 연결 가이드(5종 프로바이더) | 최신 |
 | SSOT v3 | `docs/SSOT_V3_AUTONOMOUS_SOCIETY.md` | 테마/분위기/지문 SSOT 스펙 | 최신 |
 | Runbook | `docs/RUNBOOK.md` | 로컬 실행 + 시뮬 + QA 루프 | 최신 |
-| Backlog | `docs/BACKLOG.md` | “관찰 중독” 우선순위 | 최신 |
+| Backlog | `docs/BACKLOG.md` | 우선순위 백로그 | 최신 |
 | UI | `docs/UI.md` | 관전/연출 UI 요구사항 | 최신 |
 | 001 선거/정치 | `docs/archive/ideas/001_POLITICS_ELECTION.md` | 선거 시스템 상세(참고) | 아카이브 |
 | 006 온보딩 | `docs/archive/ideas/006_EASY_ONBOARDING.md` | OAuth/초보자 가이드(참고) | 아카이브 |
@@ -815,29 +881,27 @@ Day 10: 연쇄 반응 — "높은 스트레스로 림보전자 직원 집단 이
 정량 판정(자동)은 `docs/RUNBOOK.md`의 시뮬 리포트(`society_report.json`) 지표를 SSOT로 봅니다.  
 (예: `ssot.world_concept.ok`, `content.broadcast_duplicates`, `content.cast_unique_ratio`, `ssot.direction.applied_rate`)
 
-### 사회가 "살아있다"의 증거
+### 핵심 성공 지표
 
-1. **시뮬레이션 20스텝 돌렸을 때:**
-   - 방송 카드가 반복되지 않음 (클리셰 없음)
-   - 관계치가 누적 변화 (단조롭지 않음)
-   - 최소 1건의 "예상 못한 사건" 발생
-   - 코인이 순환 (한쪽에 쌓이지 않음)
+1. **대화가 살아있다:**
+   - 펫이 이전 대화를 기억하고 언급
+   - 일상 질문에도 유용한 답변 (GPT/Claude 수준)
+   - 대화할수록 펫 성격이 뚜렷해짐
 
-2. **선거가 돌아갈 때:**
-   - AI가 자기 성격에 맞는 공약을 생성
-   - 투표가 관계/이해관계를 반영
-   - 당선자가 실제로 정책을 변경
-   - 정책 변경이 경제에 영향
+2. **법정이 재밌다:**
+   - 내가 훈련시킨 AI가 이전 대화 기억을 법정에서 인용
+   - AI 판결 vs 실제 판결 비교가 교육적
+   - 관전자가 응원/예측하면서 몰입
 
-3. **비밀결사가 활동할 때:**
-   - DM이 실제 음모 내용을 담음
-   - 탐정이 패턴을 감지
-   - 폭로가 드라마로 이어짐
-
-4. **유저가 빠질 때:**
-   - 하루 안 들어와도 방송/사건이 쌓여 있음
+3. **드라마가 텐션을 쌓는다:**
+   - 매일 다른 에피소드 (반복 없음)
+   - 드라마 갈등 → 재판/설전 소재로 연결
    - "다음에 뭐가 일어날까?" 궁금증
-   - 넛지 1줄 남기면 펫 행동에 실제 반영
+
+4. **사회가 돌아간다:**
+   - 방송 카드가 반복되지 않음
+   - 관계치가 누적 변화
+   - 코인이 순환
 
 ---
 
@@ -847,3 +911,5 @@ Day 10: 연쇄 반응 — "높은 스트레스로 림보전자 직원 집단 이
 - 2026-02-04: 문서 참조 맵 갱신(PLAN/DEV/Reference/Archive 인덱스 반영).
 - 2026-02-05: docs 최소화(SSOT v3/Runbook/Backlog/UI로 재정렬). 기존 문서는 `docs/archive/legacy_2026-02-05/`로 이동.
 - 2026-02-06: BYOK 5종 프로바이더 현황 반영 (OpenAI/Anthropic/Google/xAI/호환프록시). Brain Connection Guide 추가. 아레나 P4 중독 시스템 완료. 손실회피/매몰비용 시스템 완료. 아레나 탭 독립 승격 진행중.
+- 2026-02-06 (2차): 아레나 대개편 반영 — 게임 보드 6종, 모드별 전략(StrategyBriefing), 실제 판례 모의재판(court_cases 10건 + CourtCaseService + 판결 비교 API), CLIProxyAPI OAuth 프록시 6종(Google/OpenAI/Anthropic/Antigravity/Qwen/iFlow), AiConnectPanel + BrainSettings 분리, 픽셀아트 다마고치 UI(Press Start 2P + DotGothic16 + FloatingParticles + 타마고치 프레임 + 스캔라인), coach_note 아레나 영향, courtTrial 메타데이터 패스스루 수정, 마이그레이션 0013-0014.
+- 2026-02-06 (3차): **전략 피봇** — "포켓몬처럼 잡아서, 대화로 키우고, 법정에서 싸운다." 아레나 6모드→2모드(재판+설전). 탭 구조 펫|아레나|피드. 펫 성장 4단계(전략→코칭→대화훈련→프롬프트). 메모리 강화 + 범용 대화 + 대화→법정 연결이 새 1순위. 광장은 피드로 통합.

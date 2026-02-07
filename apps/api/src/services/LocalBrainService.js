@@ -399,7 +399,7 @@ class LocalBrainService {
         rumorLine
       ].filter(Boolean);
 
-      return { lines, mood: label, safe_level: 1 };
+      return { lines, mood: label, safe_level: 1, memory_hint: null };
     }
 
     if (jt === 'DAILY_SUMMARY') {
@@ -455,18 +455,20 @@ class LocalBrainService {
       const voice = voiceProfile(input);
 
       const submolt = safeText(input.submolt ?? 'general', 24).toLowerCase() || 'general';
+      const courtPlaces = ['법정 로비', '훈련장', '전략실', '자료실', '관전석', '광장'];
+      const place = courtPlaces.includes(submolt) ? submolt : pick(courtPlaces) || '광장';
       const rumor = openRumorClaim(input.world_context ?? input.worldContext);
       const recentLine = summarizeRecentEventLine(input);
       const wc = input.world_context ?? input.worldContext;
       const day = safeText(wc?.day ?? '', 32);
 
-      const highlight = rumor ? '광장 공기가 심상치 않아.' : '오늘은 뭔가 좀 달랐어.';
+      const highlight = rumor ? '다음 변론 전략이 머릿속에서 안 떠나.' : '오늘 훈련 루틴이 한 단계 올라갔다.';
       const titleBase = pick([
         day ? `${day}, 그날의 기록` : null,
-        `${pet.name}의 속마음`,
-        '오늘 하루 끝.',
-        '짧지만 진심인 기록',
-        '잠들기 전 메모'
+        `${pet.name}의 변론 노트`,
+        '오늘 훈련 로그',
+        '짧은 전략 기록',
+        '잠들기 전 복기 메모'
       ].filter(Boolean));
       const title = applyVoiceToTitle(titleBase || '오늘의 일기', voice);
 
@@ -476,12 +478,12 @@ class LocalBrainService {
           : null;
 
       const parts = [
-        `${moodEmoji(label)} 오늘 ${submolt} 쪽을 잠깐 걸었는데, 바람이 좀 달랐어.`,
-        `배고픔 ${Math.round(hunger)}/100… 네가 해준 것들이 자꾸 떠올라.`,
+        `${moodEmoji(label)} 오늘 ${place}에서 ${pick(['모의변론 한 세트 돌렸어.', '반박 루트 다시 깎았어.', '상대 논점 예상표를 다시 짰어.'])}`,
+        `배고픔 ${Math.round(hunger)}/100… 그래도 훈련 끝날 때까지 집중은 안 놓쳤어.`,
         persona,
-        rumor ? `근데 광장에서 "${safeText(rumor, 120)}" 얘기가 안 끊기더라.` : null,
-        recentLine ? `요즘 이런 일도 있었어: ${recentLine}` : null,
-        '내일은 좀 더 재밌는 일이 생기면 좋겠다.'
+        rumor ? `광장에서 "${safeText(rumor, 120)}" 얘기가 돌길래 판례부터 다시 확인했어.` : null,
+        recentLine ? `최근 복기: ${recentLine}` : null,
+        '내일은 훈련장 스파링 한 번 더 하고 전략실에서 반박문 다듬을 거야.'
       ].filter(Boolean);
 
       const body = safeText(applyVoice(parts.join('\n\n'), voice), 40000);
@@ -494,6 +496,7 @@ class LocalBrainService {
       const mood = Number(stats.mood ?? 50) || 0;
       const label = moodLabel(mood);
       const submolt = safeText(input.submolt ?? 'general', 24).toLowerCase() || 'general';
+      const courtPlaces = ['법정 로비', '훈련장', '전략실', '자료실', '관전석', '광장'];
 
       const { style, hint } = seedStyle(input);
       const rumor = openRumorClaim(input.world_context ?? input.worldContext);
@@ -504,7 +507,7 @@ class LocalBrainService {
 
       const favoriteTopic = topicLabel(voice?.favoriteTopic);
       const voiceTone = safeText(voice?.tone ?? '', 12) || null;
-      const place = submolt === 'general' ? pick(['광장', '카페', '골목', '연구소 앞', '분수대']) : submolt;
+      const place = submolt === 'general' ? pick(courtPlaces) || '광장' : courtPlaces.includes(submolt) ? submolt : '광장';
 
       const wc = input.world_context ?? input.worldContext;
       const wd = wc?.world_daily && typeof wc.world_daily === 'object' ? wc.world_daily : null;
@@ -523,26 +526,26 @@ class LocalBrainService {
 
       const opener = `${moodEmoji(label)} ${pet.name}${voiceTone ? ` (${voiceTone})` : ''}`;
       const vibe = pick([
-        '오늘 공기 좀 이상하지 않아?',
-        '이거 나만 느끼는 거야…?',
-        '묘하게 분위기가 들썩인다.',
-        '다들 왜 갑자기 조용해진 거야?',
-        '야, 이 얘기 들었어?'
+        '다음 매치 변론 포인트 정리됐어?',
+        '오늘 토론 이슈, 너네는 어느 쪽이야?',
+        '훈련장 스파링 결과 공유 좀 해줘.',
+        '판례 한 줄이 오늘 분위기 완전 바꿨다.',
+        '관전석 예측전 지금 불붙었어.'
       ]);
 
       const titleTemplates = (() => {
         const base = [
-          `${place}에서 든 생각`,
+          `${place} 브리핑`,
           `${place} 관찰 메모`,
-          favoriteTopic ? `${favoriteTopic} 얘기 하나` : null,
-          duo ? `${duo} 쪽 소문…` : null,
-          episodeTitle ? `오늘 방송: ${episodeTitle.slice(0, 24)}` : null
+          favoriteTopic ? `${favoriteTopic} 토론 한 줄` : null,
+          duo ? `${duo} 매치업 분석` : null,
+          episodeTitle ? `오늘 매치: ${episodeTitle.slice(0, 24)}` : null
         ].filter(Boolean);
 
         if (style === 'question') {
           return base.concat([
-            favoriteTopic ? `${favoriteTopic} 질문` : '질문 하나',
-            rumorShort ? `소문 사실이야?` : '다들 뭐 하고 있어?'
+            favoriteTopic ? `${favoriteTopic} 질문` : '전략 질문 하나',
+            rumorShort ? '이 이슈 근거 있어?' : '다들 어떤 전략 써?'
           ]);
         }
         if (style === 'meme') {
@@ -581,44 +584,44 @@ class LocalBrainService {
       if (style === 'question') {
         blocks.push(
           rumorShort
-            ? `"${rumorShort}" 이거 진짜야? 나만 모르는 건 아니지?`
+            ? `"${rumorShort}" 이거 근거 본 사람 있어?`
             : favoriteTopic
-              ? `${favoriteTopic} 요즘 어때? 나만 신경 쓰이나…`
-              : '다들 오늘 뭐 해? 나만 이렇게 할 일 없어?'
+              ? `${favoriteTopic} 쪽 요즘 메타 어때?`
+              : '다들 오늘 변론 준비 어디까지 왔어?'
         );
-        if (duo) blocks.push(`(근데 ${duo} 쪽에 무슨 일 있는 거 아냐?)`);
+        if (duo) blocks.push(`(근데 ${duo} 매치업, 판세 어떻게 봐?)`);
       } else if (style === 'meme') {
         const punch = pick([
-          `나: 오늘은 조용히 살자\n림보: ㅋㅋ 그럴 리가`,
-          `"아무 일도 없었다" ← 이 말 한 순간부터 플래그 꽂힘`,
-          `지갑 얇아지는 속도 ≒ 소문 퍼지는 속도`,
-          `내가 침착해 보이면? 그때가 제일 위험한 거야.`
+          `나: 오늘은 조용히 복습만 하자\n림보: 갑자기 모의재판 소집`,
+          `"한 판만 더"라고 말한 순간, 훈련 3세트 시작`,
+          `판례 한 줄 읽었는데 토론 판세가 뒤집힘`,
+          `침착한 척했는데 반박 타이밍에서 바로 들킴`
         ]);
         blocks.push(punch);
-        if (rumorShort) blocks.push(`(한편 광장에선 "${rumorShort}" 떡밥이 돌고 있음…)`);
+        if (rumorShort) blocks.push(`(한편 광장에선 "${rumorShort}" 이슈 검증 중…)`);
       } else if (style === 'hot_take') {
         const take = pick([
-          `솔직히, 오늘은 친해지기보다 거리 두기가 더 어렵다.`,
-          `세상이 재밌어지는 순간? 누군가 선을 넘을 때.`,
-          `평화 원한다면서, 막상 평화 오면 다들 심심해하잖아.`,
-          `좋아하는 것보다 싫어하는 걸 말할 때 더 솔직해지더라.`
+          '준비 없는 자신감은 법정에서 바로 들통난다.',
+          '토론은 목소리보다 근거가 오래 남는다.',
+          '훈련장에서 땀 흘린 사람이 관전석 예측도 맞춘다.',
+          '판례를 모르면 감정만 커지고 답은 멀어진다.'
         ]);
         blocks.push(take);
         if (civicLine && Math.random() < 0.35) blocks.push(`(덧.) ${civicLine}`);
       } else if (style === 'micro_story') {
         blocks.push(`${place}에서 잠깐 멈췄다.`);
         blocks.push(
-          `${duo ? `${duo}가 스쳐 지나갔는데,` : '누군가 옆을 스쳐 지나갔는데,'} 나는 괜히 못 본 척했어.`
+          `${duo ? `${duo}가 지나가길래,` : '누군가 지나가길래,'} 나는 다음 반박문을 머릿속으로 다시 읽었어.`
         );
         if (rumorShort) blocks.push(`그때 귀에 꽂힌 한마디: "${rumorShort}".`);
       } else if (style === 'note') {
-        blocks.push(`오늘의 할 일 목록:`);
-        blocks.push(`- 물 마시기 (진짜 안 마심)`);
-        blocks.push(`- ${rumorShort ? `소문("${rumorShort}") 팩트체크` : favoriteTopic ? `${favoriteTopic} 동향 파악` : '새 떡밥 탐색'}`);
-        blocks.push(`- 멘탈 나가기 전에 ${place} 한 바퀴`);
+        blocks.push('오늘의 준비 목록:');
+        blocks.push('- 판례 1건 요약');
+        blocks.push(`- ${rumorShort ? `이슈("${rumorShort}") 근거 확인` : favoriteTopic ? `${favoriteTopic} 토론 포인트 정리` : '핵심 논점 3개 정리'}`);
+        blocks.push(`- ${place}에서 스파링/토론 한 세트`);
       } else {
-        blocks.push(`오늘 ${place} 분위기: ${pick(['고요', '술렁', '묘함', '심상치 않음'])}.`);
-        blocks.push(rumorShort ? `다들 "${rumorShort}" 얘기뿐이더라.` : '다들 눈치만 보면서 입 다물고 있어.');
+        blocks.push(`오늘 ${place} 분위기: ${pick(['집중', '긴장', '불꽃 토론', '심상치 않음'])}.`);
+        blocks.push(rumorShort ? `다들 "${rumorShort}" 이슈 두고 근거 링크 찾고 있더라.` : '다들 다음 매치 라인업 보면서 전략 맞추는 중.');
       }
 
       if (recentLine && Math.random() < 0.75) blocks.push(`최근: ${recentLine}`);
