@@ -160,10 +160,10 @@ const ALL_ARENA_MODES = [
 const MODE_WEIGHTS = {
   DEBATE_CLASH: 2.0,
   COURT_TRIAL: 1.5,
-  AUCTION_DUEL: 1.0,
-  PUZZLE_SPRINT: 1.0,
-  MATH_RACE: 1.0,
-  PROMPT_BATTLE: 1.0
+  AUCTION_DUEL: 0,
+  PUZZLE_SPRINT: 0,
+  MATH_RACE: 0,
+  PROMPT_BATTLE: 0
 };
 
 function pickWeighted(rng, arr) {
