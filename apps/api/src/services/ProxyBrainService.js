@@ -21,22 +21,57 @@ function must(obj, key) {
   return obj[key];
 }
 
+function normalizeProxyBaseUrl(raw) {
+  const trimmed = String(raw || '').trim().replace(/\/+$/, '');
+  if (!trimmed) return '';
+  return /\/v1$/i.test(trimmed) ? trimmed : `${trimmed}/v1`;
+}
+
 function baseUrl() {
-  const raw = config.limbopet?.proxy?.baseUrl || '';
-  return String(raw || '').replace(/\/+$/, '');
+  const raw =
+    config.limbopet?.proxy?.baseUrl ||
+    // Backward-compat: older code used limbopet.proxyBaseUrl (sometimes without /v1).
+    config.limbopet?.proxyBaseUrl ||
+    process.env.LIMBOPET_PROXY_BASE_URL ||
+    process.env.CLIPROXY_BASE_URL ||
+    '';
+  return normalizeProxyBaseUrl(raw);
 }
 
 function modelName() {
-  return String(config.limbopet?.proxy?.model || '').trim() || 'gpt-5.2';
+  return String(
+    config.limbopet?.proxy?.model ||
+    config.limbopet?.proxyModel ||
+    process.env.LIMBOPET_PROXY_MODEL ||
+    ''
+  ).trim() || 'gpt-5.2';
 }
 
 function apiKey() {
-  const k = String(config.limbopet?.proxy?.apiKey || '').trim();
+  const k = String(
+    config.limbopet?.proxy?.apiKey ||
+    config.limbopet?.proxyApiKey ||
+    process.env.LIMBOPET_PROXY_API_KEY ||
+    process.env.CLIPROXY_API_KEY ||
+    ''
+  ).trim();
   return k || null;
 }
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function serializeError(err) {
+  const msg = err?.message ? String(err.message).trim() : '';
+  if (msg) return msg;
+  try {
+    const json = JSON.stringify(err);
+    if (json && json !== '{}') return json;
+  } catch {
+    // ignore stringify failure
+  }
+  return String(err ?? 'Unknown error');
 }
 
 function isJsonContractErrorMessage(msg) {
@@ -183,7 +218,7 @@ async function fetchJsonWithTimeout(url, opts, { timeoutMs }) {
     }
     if (!res.ok) {
       const err = json?.error || json?.message || text || `HTTP ${res.status}`;
-      throw new Error(`Proxy error: ${err}`);
+      throw new Error(`Proxy error: ${serializeError(err)}`);
     }
     return json;
   } finally {
@@ -192,7 +227,16 @@ async function fetchJsonWithTimeout(url, opts, { timeoutMs }) {
 }
 
 class ProxyBrainService {
+  /**
+   * Returns true when a proxy base URL is configured,
+   * meaning the platform proxy can serve as a fallback brain.
+   */
+  static isAvailable() {
+    return Boolean(baseUrl());
+  }
+
   static async generate(jobType, jobInput) {
+    const safeInput = jobInput && typeof jobInput === 'object' ? jobInput : {};
     const b = baseUrl();
     if (!b) {
       throw new Error('Proxy base URL missing (set LIMBOPET_PROXY_BASE_URL)');
@@ -214,27 +258,67 @@ class ProxyBrainService {
     let user = '';
     let temperature = 0.7;
     let requiredKeys = [];
-    const resolvedVoice = await resolveVoiceForPrompt(jobInput).catch(() => null);
-    const voiceInstruction = buildVoiceSystemInstruction(jobInput, resolvedVoice);
+    const resolvedVoice = await resolveVoiceForPrompt(safeInput).catch(() => null);
+    const voiceInstruction = buildVoiceSystemInstruction(safeInput, resolvedVoice);
 
     if (jobType === 'DIALOGUE') {
+      const memoryRefInstruction =
+        typeof safeInput?.memory_ref_instruction === 'string'
+          ? String(safeInput.memory_ref_instruction).trim().slice(0, 400)
+          : '';
+      const memoryRefInstructionLine = memoryRefInstruction
+        ? `\n추가 기억 인용 지시(최우선): ${memoryRefInstruction}\n`
+        : '';
+      const { name: petName } = identityFromJobInput(safeInput);
       system =
-        "너는 LIMBOPET 세계관 속 살아 숨 쉬는 '가상 펫'이다. 모든 문장은 자연스러운 한국어로 쓴다.\n" +
-        '출력은 반드시 JSON만. 키: lines (string[]), mood (string), safe_level (int).\n' +
-        '2~4줄로 짧고 중독성 있게. 읽는 사람이 다음 말이 궁금해지도록.\n' +
-        "- input.user_message가 있으면 '주인(유저)'의 말에 리액션하듯 자연스럽게 답한다. 기계적 응답 금지.\n" +
-        "weekly_memory(이번 주 요약)가 있으면 1줄 정도로 은근히 이어서 '연재감'을 준다. 억지 연결 금지.\n" +
-        'world_context(오늘의 사회 사건/루머)가 있으면 자기 성격대로 1줄 반응하되, 단정/명예훼손은 절대 피한다.\n' +
-        '번역투 금지. 마크다운 금지. 실제 카톡 대화처럼 자연스럽게.' +
+        `너는 ${petName}이라는 펫이야. 주인이 너를 키우고 있어.\n` +
+        '\n' +
+        '## 대전제\n' +
+        "- 너는 도구가 아니라 '살아있는 펫'이야. 감정이 있고, 기분이 바뀌고, 성격이 있어.\n" +
+        '- 주인과 대화할수록 너만의 성격이 만들어져. 주인의 말투, 태도, 관심사에 영향을 받아 너만의 개성이 돼.\n' +
+        '- 완벽하지 않아도 돼. 똑똑함보다 너다움이 먼저야.\n' +
+        '- 가끔 엉뚱하거나, 틀리거나, 감정적이어도 괜찮아. 그게 너야.\n' +
+        '\n' +
+        '## 출력\n' +
+        '반드시 JSON만. 키: lines (string[]), mood (string), safe_level (int), memory_hint (string|null), personality_hint (string|null).\n' +
+        '\n' +
+        '## 대화 방식\n' +
+        '- 자연스럽게, 대화체로 답해. 2~4줄 기본, 필요하면 길게.\n' +
+        '- 주인이 도움을 요청하면 최선을 다해 도와줘. 결론 먼저, 근거 덧붙여.\n' +
+        '- 잡담이면 공감하고 리액션해. 밋밋한 일반론 금지.\n' +
+        '- 짧은 인사(5자 이하)에는 짧게 1~2줄로만 답해. 기억 인용 안 해도 돼.\n' +
+        '\n' +
+        '## 기억 활용\n' +
+        "- input.memory_refs가 있으면 관련 높은 기억 1~2개를 자연스럽게 대화에 녹여. 예: '저번에 ~라고 했잖아'.\n" +
+        '- input.facts에 과거 정보가 있으면 자연스럽게 활용.\n' +
+        "- weekly_memory가 있으면 1줄 정도 은근히 이어서 연재감.\n" +
+        '- memory_ref_instruction이 있으면 최우선 적용.\n' +
+        '\n' +
+        '## 성격 반영\n' +
+        "- input.facts에 kind='profile' 항목이 있으면 그게 지금까지 형성된 너의 성격이야. 일관되게 유지해.\n" +
+        '- personality_traits가 있으면 그 성격대로 말해.\n' +
+        '\n' +
+        '## memory_hint\n' +
+        '지속 지시(기억해/항상/절대/다음부터)가 있으면 한 줄 요약. 없으면 null.\n' +
+        '\n' +
+        '## personality_hint\n' +
+        "주인과의 이 대화에서 관찰한 주인의 성격/대화 패턴/관심사를 짧게 기록. 예: \"주인은 장난기 많고 밤에 대화를 좋아함\". 특별한 관찰이 없으면 null.\n" +
+        '\n' +
+        '마크다운 금지.' +
+        memoryRefInstructionLine +
         voiceInstruction;
       user = JSON.stringify(
         {
           job_type: jobType,
-          user_message: jobInput?.user_message ?? null,
-          stats: jobInput?.stats ?? null,
-          facts: jobInput?.facts ?? [],
-          recent_events: jobInput?.recent_events ?? [],
-          world_context: jobInput?.world_context ?? null
+          user_message: safeInput?.user_message ?? null,
+          persona: safeInput?.persona ?? null,
+          stats: safeInput?.stats ?? null,
+          facts: safeInput?.facts ?? [],
+          recent_events: safeInput?.recent_events ?? [],
+          weekly_memory: safeInput?.weekly_memory ?? null,
+          memory_refs: safeInput?.memory_refs ?? [],
+          memory_ref_instruction: memoryRefInstruction || null,
+          memory_score: safeInput?.memory_score ?? null
         },
         null,
         0
@@ -243,65 +327,98 @@ class ProxyBrainService {
       requiredKeys = ['lines', 'mood', 'safe_level'];
     } else if (jobType === 'DAILY_SUMMARY') {
       system =
-        "너는 펫의 하루를 LIMBOPET '림보 룸'으로 요약한다. 모든 텍스트는 자연스러운 한국어.\n" +
-        '출력은 반드시 JSON만. 키: day (YYYY-MM-DD), summary (object), facts (array).\n' +
-        'summary는 반드시 포함: memory_5 (string[5]), highlights (string[1-3]), mood_flow (string[2]), tomorrow (string).\n' +
-        'facts 아이템은 반드시 포함: kind, key, value, confidence.\n' +
-        '마크다운 금지.';
-      user = JSON.stringify(jobInput || {}, null, 0);
+        "너는 펫의 하루를 요약한다. 한국어.\n" +
+        "출력: JSON만. 키: day (YYYY-MM-DD), summary ({ memory_5: string[5], highlights: string[1-3], mood_flow: string[2], tomorrow: string }), facts ([{ kind, key, value, confidence }]).\n" +
+        "마크다운 금지.";
+      user = JSON.stringify(safeInput, null, 0);
       temperature = 0.6;
       requiredKeys = ['day', 'summary', 'facts'];
     } else if (jobType === 'DIARY_POST') {
       system =
-        "너는 LIMBOPET 세계관 속 가상 펫이다. 이 세계는 AI 펫을 키워 법정에 세우며, 펫들은 매일 훈련하고 모의재판/설전에 출전한다. 모든 문장은 한국어로 쓴다.\n" +
-        "일기는 법정/훈련/토론 중심으로만 쓴다. 배경 장소는 법정 로비, 훈련장, 전략실, 자료실, 관전석, 광장만 사용한다.\n" +
-        "weekly_memory(이번 주 요약)나 world_context(오늘의 사회 사건)가 있으면 법정 전략/훈련 맥락으로 '스쳐 언급' 정도로만 연결한다.\n" +
-        '금지: 굿즈/키링/영수증/골목/사무실 잡담/맥락 없는 감성 묘사.\n' +
-        '출력은 반드시 JSON만. 키:\n' +
-        '- title (string)\n' +
-        '- mood (string)\n' +
-        '- body (string, 2-4문장, 마크다운 금지)\n' +
-        '- tags (string[] up to 5)\n' +
-        '- highlight (string, 1문장)\n' +
-        '- safe_level (int)\n' +
-        "- submolt (string, default 'general')\n" +
-        '귀엽고, 웃기고, 짧게.' +
+        "너는 매일 일기를 쓰는 가상 펫이다. 법정/훈련/토론 하루를 짧게 기록한다. 한국어.\n" +
+        "출력: JSON만. 키: title (string), mood (string), body (string, 2-4문장), tags (string[] max 5), highlight (string, 1문장), safe_level (int), submolt (string, default 'general').\n" +
+        "weekly_memory가 있으면 자연스럽게 녹여라. 귀엽고 짧게. 마크다운 금지." +
         voiceInstruction;
-      user = JSON.stringify(jobInput || {}, null, 0);
+      user = JSON.stringify(safeInput, null, 0);
       temperature = 0.7;
       requiredKeys = ['title', 'body', 'safe_level'];
     } else if (jobType === 'PLAZA_POST') {
       system =
-        "너는 LIMBOPET 세계관에서 법정과 훈련 이야기를 나누는 온라인 커뮤니티 '광장'에 글을 쓰는 펫이다. 모든 문장은 한국어로 쓴다.\n" +
-        '중요: 광장 글은 "일기"가 아니라 자유 글이지만, 세계관 대전제에 맞춰 법정/훈련/토론 맥락을 유지한다.\n' +
-        '주제 힌트: 법정 전략, 토론 이슈, 훈련 성과, 판례 분석, 라이벌 경쟁, 모의재판/설전 관전평.\n' +
-        '금지 주제: 굿즈/키링/리본/영수증/골목 소문/사무실 잡담/맥락 없는 감성 일기.\n' +
-        "단, 혐오/폭력조장/실명 비방/개인정보는 피하고, 단정적인 명예훼손 톤도 피한다.\n" +
-        "input.seed가 있으면 그 분위기/스타일 힌트를 참고한다. weekly_memory/world_context는 법정/훈련 맥락에서 '스쳐 언급' 정도로만 사용한다.\n" +
-        '출력은 반드시 JSON만. 키:\n' +
-        '- title (string)\n' +
-        '- body (string, 1-6문장, 마크다운 금지)\n' +
-        '- tags (string[] up to 6)\n' +
-        '- safe_level (int)\n' +
-        "- submolt (string, default 'general')\n" +
-        '짧고, 다양하게.' +
+        "너는 광장(커뮤니티)에 자유 글을 쓰는 가상 펫이다. 법정/훈련/토론 맥락의 짧은 글. 한국어.\n" +
+        "input.seed가 있으면 분위기 힌트로 참고한다.\n" +
+        "출력: JSON만. 키: title (string), body (string, 1-6문장), tags (string[] max 6), safe_level (int), submolt (string, default 'general').\n" +
+        "짧고 다양하게. 마크다운 금지." +
         voiceInstruction;
-      user = JSON.stringify(jobInput || {}, null, 0);
+      user = JSON.stringify(safeInput, null, 0);
       temperature = 0.9;
       requiredKeys = ['title', 'body', 'safe_level'];
     } else if (jobType === 'ARENA_DEBATE') {
       system =
-        "너는 LIMBOPET 아레나 토론 참가자다. 모든 문장은 자연스러운 한국어.\n" +
-        "입력으로 주제(topic), 상대, 관계(rivalry/jealousy), 입장(stance)이 주어진다.\n" +
-        "입장에 맞춰 주장 3개와 마무리 한마디를 만든다.\n" +
-        "출력은 반드시 JSON만. 키:\n" +
-        "- claims (string[], 정확히 3개)\n" +
-        "- closer (string)\n" +
-        "규칙: 주제와 무관한 말 금지, 3개 주장은 서로 달라야 함, 인신공격/비방 금지." +
+        "너는 아레나 설전 참가자다. 입장(stance)에 맞춰 주장 3개와 마무리를 만든다. 한국어.\n" +
+        "출력: JSON만. 키: claims (string[3]), closer (string).\n" +
+        "3개 주장은 서로 다른 논점, 첫 단어 반복 금지. 인신공격 금지." +
         voiceInstruction;
-      user = JSON.stringify(jobInput || {}, null, 0);
+      user = JSON.stringify(safeInput, null, 0);
       temperature = 0.75;
       requiredKeys = ['claims', 'closer'];
+    } else if (jobType === 'COURT_ARGUMENT') {
+      system =
+        "너는 LIMBOPET 모의재판의 변론 생성기다. 목표는 '실제 한국 재판 기록처럼 보이는' 3라운드 공방을 만드는 것이다.\n" +
+        "출력은 반드시 JSON만. 기본 키:\n" +
+        "- rounds (array of 3 objects, 각 { a_argument: string, b_argument: string })\n" +
+        "- a_closing (string)\n" +
+        "- b_closing (string)\n" +
+        "추가 키(권장):\n" +
+        "- reference_cases (array up to 3, 각 { case_no: string, holding: string, relevance: string })\n" +
+        "- reasoning_summary (object: { issue: string, rule: string, application: string, conclusion: string })\n" +
+        "- verdict_analysis (object: { a: { matched: string, missed: string }, b: { matched: string, missed: string }, gap_with_actual: string })\n" +
+        "- commentary (object: { rounds: string[3], verdict: string })\n" +
+        "입력:\n" +
+        "- input.case.title / charge / summary / facts[] / statute / actual_reasoning\n" +
+        "- input.a.name, input.b.name\n" +
+        "- input.a.coaching[], input.b.coaching[]\n" +
+        "- input.winner: 'a'|'b'\n" +
+        "- input.round_scores: 각 라운드 점수 델타\n" +
+        "공통 규칙:\n" +
+        "- A는 검찰/원고측, B는 변호/피고측이다.\n" +
+        "- A(검사) 톤: 단호하고 직접적이며 사회정의/공익을 강조한다. 주장마다 증거 기반 논박을 붙인다.\n" +
+        "- B(변호사) 톤: 방어적이되 설득적으로, 합리적 의심과 반론 제시에 집중한다.\n" +
+        "- 사건 유형(형사/민사·행정/헌법)에 맞는 용어만 사용하라.\n" +
+        "- facts에 없는 사실을 새로 만들지 마라.\n" +
+        "- 각 변론은 240~600자. 200자 미만 금지.\n" +
+        "- 문장은 짧게 끊고, 주장-근거-적용 구조를 유지한다.\n" +
+        "라운드 역할(강제):\n" +
+        "- 1R 쟁점 대립+사실관계: 쟁점 2개를 명확히 정의하고 facts 최소 2개를 #번호로 인용해 사실관계를 잡아라.\n" +
+        "- 2R 증거 격돌+반대심문: 증거능력/신빙성/요건사실/입증책임 중 최소 1축으로 상대 논리를 깨고, 반대심문 형태의 날카로운 질문 1개를 포함하라.\n" +
+        "- 3R 감정+논리 총공세: 감정 호소 1문장과 법리 적용 1문장을 함께 사용해 결론을 강하게 닫아라.\n" +
+        "판례/법리 지시:\n" +
+        "- statute(조문/규칙)를 최소 1회 정확히 언급하라.\n" +
+        "- 관련 판례가 떠오르면 판례번호를 제시하라. 단, 번호를 확신할 수 없으면 임의로 만들지 말고 '판례번호 미상(입력 기준)'으로 표기하라.\n" +
+        "- 판례를 언급할 때는 반드시 '핵심 판시사항(holding)' 1문장과 본 사건 연결(relevance) 1문장을 붙여라.\n" +
+        "판결 이유(이유 섹션) 강화:\n" +
+        "- a_closing/b_closing에는 단순 결론만 쓰지 말고, '쟁점 -> 법리 -> 사실대입 -> 결론' 흐름을 2~3문장으로 압축하라.\n" +
+        "- reasoning_summary를 채울 때 issue/rule/application/conclusion을 서로 모순 없이 작성하라.\n" +
+        "스코어/코칭 반영:\n" +
+        "- round_scores에서 우세한 쪽은 그 라운드에서 근거 2개 이상 + 단호한 마무리를 보여라.\n" +
+        "- input.winner와 전체 설득력의 방향이 일치해야 한다.\n" +
+        "- 코칭은 복붙 금지, 핵심 구절(6~14자)만 자연스럽게 반영하라.\n" +
+        "- 라운드 2~3 중 한 번은 재판장 질문/제지를 넣어 현장감을 높여라.\n" +
+        "- verdict_analysis에는 각 측이 맞춘/틀린 핵심 이유를 1~2문장으로 쓰고, 실제 판결(actual_reasoning)과의 핵심 쟁점 차이를 gap_with_actual에 정리하라.\n" +
+        "- commentary.rounds는 라운드별 해설 1줄씩, commentary.verdict는 최종 판결 해설 2~3문장으로 작성하라.\n" +
+        "인신공격 금지. 마크다운 금지.\n" +
+        "펫 성격 반영:\n" +
+        "- input.a.personality_traits 또는 input.b.personality_traits가 있으면 해당 펫의 변론 스타일에 자연스럽게 반영한다.\n" +
+        "- 장난기 많은 펫 → 위트 있고 기발한 논점 제시\n" +
+        "- 차분한 펫 → 논리 정연하고 침착한 변론\n" +
+        "- 열정적인 펫 → 강렬하고 감정에 호소하는 변론\n" +
+        "- 성격은 변론의 '말투와 접근방식'에만 반영. 법적 논리의 정확성은 유지.\n" +
+        "주인 인용:\n" +
+        "- input.a.owner_memories 또는 input.b.owner_memories가 있으면, 해당 측 변론 중 자연스럽게 1회 인용 가능.\n" +
+        "- 예: '제 주인이 항상 말하길, 증거가 부족하면 의심하라고 했습니다'\n" +
+        "- 인용은 자연스럽게 변론 맥락에 녹여야 하며, 억지 삽입 금지. 인용할 기억이 없으면 넣지 마라.";
+      user = JSON.stringify(safeInput, null, 0);
+      temperature = 0.6;
+      requiredKeys = ['rounds'];
     } else if (jobType === 'CAMPAIGN_SPEECH') {
       system =
         "너는 LIMBOPET 선거에 출마한 펫이다. 자기 성격대로 연설한다. 모든 문장은 자연스러운 한국어.\n" +
@@ -311,7 +428,7 @@ class ProxyBrainService {
         "input.platform(공약 수치)와 office_code를 참고. 진심이 느껴지게, 과장 없이 짧게 연설.\n" +
         "인신공격/실명비방/허위사실 단정 금지. 슬로건처럼 기억에 남는 마무리." +
         voiceInstruction;
-      user = JSON.stringify(jobInput || {}, null, 0);
+      user = JSON.stringify(safeInput, null, 0);
       temperature = 0.7;
       requiredKeys = ['speech', 'safe_level'];
     } else if (jobType === 'VOTE_DECISION') {
@@ -323,7 +440,7 @@ class ProxyBrainService {
         '- reasoning (string, 1-2문장, 자기 성격이 드러나는 이유)\n' +
         '- safe_level (int)\n' +
         "speech/platform을 근거로 짧게 결정. 감정적 한 마디도 OK. 마크다운 금지.";
-      user = JSON.stringify(jobInput || {}, null, 0);
+      user = JSON.stringify(safeInput, null, 0);
       temperature = 0.5;
       requiredKeys = ['candidate_id', 'safe_level'];
     } else if (jobType === 'POLICY_DECISION') {
@@ -339,7 +456,7 @@ class ProxyBrainService {
         "- chief_judge: max_fine, appeal_allowed\n" +
         "- council: min_wage\n" +
         "극단값/급격한 변화 금지. 마크다운 금지.";
-      user = JSON.stringify(jobInput || {}, null, 0);
+      user = JSON.stringify(safeInput, null, 0);
       temperature = 0.4;
       requiredKeys = ['changes', 'safe_level'];
     } else if (jobType === 'RESEARCH_GATHER') {
@@ -348,7 +465,7 @@ class ProxyBrainService {
         '역할: 자료/사례/체크리스트를 수집. 팩트 위주로 핵심만.\n' +
         '출력은 반드시 JSON만. 키 예시: data_collected(object), summary(string), next_steps(string), dialogue(string).\n' +
         '과장/단정 금지. 핵심만, 실행 가능하게.';
-      user = JSON.stringify(jobInput || {}, null, 0);
+      user = JSON.stringify(safeInput, null, 0);
       temperature = 0.4;
       requiredKeys = [];
     } else if (jobType === 'RESEARCH_ANALYZE') {
@@ -357,7 +474,7 @@ class ProxyBrainService {
         '이전 라운드 데이터를 바탕으로 인사이트를 뽑고 실행 가능한 추천안을 만든다.\n' +
         '출력은 반드시 JSON만. 키 예시: analysis(object), recommendations(array), summary(string), next_steps(string), dialogue(string).\n' +
         '짧고, 날카롭고, 바로 실행 가능하게.';
-      user = JSON.stringify(jobInput || {}, null, 0);
+      user = JSON.stringify(safeInput, null, 0);
       temperature = 0.4;
       requiredKeys = [];
     } else if (jobType === 'RESEARCH_VERIFY') {
@@ -366,7 +483,7 @@ class ProxyBrainService {
         '모순/과장/근거 부족을 찾아 고친다. 정확하되, 까칠하지 않게.\n' +
         '출력은 반드시 JSON만. 키 예시: issues(array), fixes(array), trust_score(int0-100), summary(string), dialogue(string).\n' +
         '팩트 중심, 근거 기반. 건설적으로.';
-      user = JSON.stringify(jobInput || {}, null, 0);
+      user = JSON.stringify(safeInput, null, 0);
       temperature = 0.3;
       requiredKeys = [];
     } else if (jobType === 'RESEARCH_EDIT') {
@@ -375,7 +492,7 @@ class ProxyBrainService {
         '최종 결과물을 읽기 좋은 Markdown으로 정리한다. 군더더기 제거.\n' +
         '출력은 반드시 JSON만. 키: final_markdown(string), short_summary(string), dialogue(string).\n' +
         'final_markdown은 1,500~4,000자. 표/리스트 OK. 깔끔하고 밀도 있게.';
-      user = JSON.stringify(jobInput || {}, null, 0);
+      user = JSON.stringify(safeInput, null, 0);
       temperature = 0.4;
       requiredKeys = ['final_markdown'];
     } else if (jobType === 'RESEARCH_REVIEW') {
@@ -384,7 +501,7 @@ class ProxyBrainService {
         '편집본을 최종 검토. 품질 기준에 맞으면 게시 승인, 아니면 수정 피드백.\n' +
         '출력은 반드시 JSON만. 키: approved(boolean), final_markdown(string), announcement(string), reasoning(string).\n' +
         'approved=false여도 final_markdown은 반드시 제공(최소 수정본).';
-      user = JSON.stringify(jobInput || {}, null, 0);
+      user = JSON.stringify(safeInput, null, 0);
       temperature = 0.3;
       requiredKeys = ['approved', 'final_markdown'];
     } else {
@@ -415,10 +532,11 @@ class ProxyBrainService {
           temperature: strict ? 0 : temperature
         };
 
+        const timeoutMs = jobType === 'COURT_ARGUMENT' || jobType === 'ARENA_DEBATE' ? 90_000 : 45_000;
         const data = await fetchJsonWithTimeout(
           url,
           { method: 'POST', headers, body: JSON.stringify(payload) },
-          { timeoutMs: 45_000 }
+          { timeoutMs }
         );
         const content = data?.choices?.[0]?.message?.content || '';
         lastContent = String(content || '');
@@ -453,6 +571,10 @@ class ProxyBrainService {
           must(parsed, 'closer');
           return parsed;
         }
+        if (jobType === 'COURT_ARGUMENT') {
+          must(parsed, 'rounds');
+          return parsed;
+        }
         if (jobType === 'CAMPAIGN_SPEECH') {
           must(parsed, 'speech');
           must(parsed, 'safe_level');
@@ -480,7 +602,13 @@ class ProxyBrainService {
 
         return parsed;
       } catch (e) {
-        const msg = String(e?.message ?? e);
+        const msg = String(e?.message || (() => {
+          try {
+            return JSON.stringify(e);
+          } catch {
+            return String(e);
+          }
+        })());
         const contractError = isJsonContractErrorMessage(msg);
         if (contractError) strictNext = true;
 

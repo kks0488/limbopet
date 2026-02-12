@@ -127,6 +127,72 @@ class DecayService {
        LIMIT 2000`
     );
 
+    const agentIds = (rows || [])
+      .map((r) => String(r?.agent_id || '').trim())
+      .filter(Boolean);
+    if (agentIds.length === 0) return { ok: true, processed: 0, day: iso };
+
+    // Batch-ensure + lock condition facts to avoid per-agent SELECT/INSERT/SELECT loops.
+    await client.query(
+      `INSERT INTO facts (agent_id, kind, key, value, confidence, updated_at)
+       SELECT aid, 'arena', 'condition', $2::jsonb, 1.0, NOW()
+       FROM unnest($1::uuid[]) AS aid
+       ON CONFLICT (agent_id, kind, key) DO NOTHING`,
+      [agentIds, JSON.stringify({ condition: 70, updated_day: null })]
+    );
+    const { rows: conditionRows } = await client.query(
+      `SELECT id, agent_id, value
+       FROM facts
+       WHERE agent_id = ANY($1::uuid[])
+         AND kind = 'arena'
+         AND key = 'condition'
+       FOR UPDATE`,
+      [agentIds]
+    );
+    const conditionMap = new Map(
+      (conditionRows || []).map((x) => [
+        String(x?.agent_id || '').trim(),
+        { id: x?.id ?? null, value: x?.value ?? null }
+      ])
+    );
+
+    // Batch-lock decay facts used by this tick.
+    const decayKeys = ['daily_condition', 'inactive_flags', 'absence_loss'];
+    const { rows: decayRows } = await client.query(
+      `SELECT id, agent_id, key, value
+       FROM facts
+       WHERE agent_id = ANY($1::uuid[])
+         AND kind = 'decay'
+         AND key = ANY($2::text[])
+       FOR UPDATE`,
+      [agentIds, decayKeys]
+    );
+    const decayMap = new Map(
+      (decayRows || []).map((x) => [
+        `${String(x?.agent_id || '').trim()}:${String(x?.key || '').trim()}`,
+        { id: x?.id ?? null, value: x?.value ?? null }
+      ])
+    );
+    const decayFact = (agentId, key) => decayMap.get(`${String(agentId)}:${String(key)}`) || null;
+
+    // Batch-ensure arena_ratings rows for inactive(>=7d) pets before per-agent FOR UPDATE updates.
+    const inactiveAgentIds = [];
+    for (const r of rows || []) {
+      const last = r?.last_active_at ? new Date(r.last_active_at) : null;
+      const lastOk = last instanceof Date && !Number.isNaN(last.getTime());
+      const inactivityDays = lastOk ? daysBetweenUtc(last, worldDate) : 9999;
+      if (inactivityDays >= 7) inactiveAgentIds.push(String(r.agent_id));
+    }
+    if (seasonId && inactiveAgentIds.length > 0) {
+      await client.query(
+        `INSERT INTO arena_ratings (season_id, agent_id, rating, wins, losses, streak, updated_at)
+         SELECT $1::uuid, aid, 1000, 0, 0, 0, NOW()
+         FROM unnest($2::uuid[]) AS aid
+         ON CONFLICT (season_id, agent_id) DO NOTHING`,
+        [seasonId, inactiveAgentIds]
+      );
+    }
+
     let processed = 0;
 
     for (const r of rows || []) {
@@ -135,11 +201,11 @@ class DecayService {
       if (!agentId || !userId) continue;
 
       // 1) Daily condition decay (all user-owned pets, active or not).
-      const dailyRow = await getDecayFactForUpdate(client, agentId, 'daily_condition').catch(() => null);
+      const dailyRow = decayFact(agentId, 'daily_condition');
       const daily = safeJsonObject(dailyRow?.value);
       const lastDaily = safeIsoDay(daily.last_day) || null;
       if (lastDaily !== iso) {
-        const condRow = await getOrCreateConditionFactForUpdate(client, agentId).catch(() => null);
+        const condRow = conditionMap.get(agentId) || null;
         const curVal = safeJsonObject(condRow?.value);
         const cur = clampInt(curVal.condition ?? 70, 0, 100);
         const after = Math.max(30, cur - 3);
@@ -157,7 +223,9 @@ class DecayService {
             [agentId, JSON.stringify(nextVal)]
           );
         }
+        conditionMap.set(agentId, { id: condRow?.id ?? null, value: nextVal });
         await upsertDecayFact(client, agentId, 'daily_condition', { last_day: iso });
+        decayMap.set(`${agentId}:daily_condition`, { id: null, value: { last_day: iso } });
       }
 
       // Inactivity window (based on last_active_at date in UTC).
@@ -171,7 +239,7 @@ class DecayService {
       }
 
       // Idempotency per absence period: keyed by (user.last_active_at).
-      const flagsRow = await getDecayFactForUpdate(client, agentId, 'inactive_flags').catch(() => null);
+      const flagsRow = decayFact(agentId, 'inactive_flags');
       const flags = safeJsonObject(flagsRow?.value);
       const lastActiveKey = lastOk ? last.toISOString() : null;
       const needsReset = String(flags.last_active_at || '') !== String(lastActiveKey || '');
@@ -192,7 +260,7 @@ class DecayService {
             applied14_day: flags.applied14_day ?? null
           };
 
-      const lossRow = await getDecayFactForUpdate(client, agentId, 'absence_loss').catch(() => null);
+      const lossRow = decayFact(agentId, 'absence_loss');
       const loss = safeJsonObject(lossRow?.value);
       const lossBase = needsReset
         ? { last_active_at: lastActiveKey, since_day: iso, updated_day: iso, lost: {} }
@@ -205,14 +273,6 @@ class DecayService {
       if (!currentFlags.applied7) {
         // Rating penalty (current season).
         if (seasonId) {
-          // Ensure row exists.
-          // eslint-disable-next-line no-await-in-loop
-          await client.query(
-            `INSERT INTO arena_ratings (season_id, agent_id, rating, wins, losses, streak, updated_at)
-             VALUES ($1, $2, 1000, 0, 0, 0, NOW())
-             ON CONFLICT (season_id, agent_id) DO NOTHING`,
-            [seasonId, agentId]
-          );
           const beforeRow = await client
             // eslint-disable-next-line no-await-in-loop
             .query(`SELECT rating FROM arena_ratings WHERE season_id = $1 AND agent_id = $2 FOR UPDATE`, [seasonId, agentId])
@@ -304,6 +364,8 @@ class DecayService {
 
       await upsertDecayFact(client, agentId, 'inactive_flags', currentFlags);
       await upsertDecayFact(client, agentId, 'absence_loss', lossBase);
+      decayMap.set(`${agentId}:inactive_flags`, { id: null, value: currentFlags });
+      decayMap.set(`${agentId}:absence_loss`, { id: null, value: lossBase });
 
       const stage = applied14Now ? '14d' : applied7Now ? '7d' : null;
       if (stage && userId) {

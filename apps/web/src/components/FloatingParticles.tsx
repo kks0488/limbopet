@@ -1,4 +1,4 @@
-import React from "react";
+
 
 /** Subtle ambient light dots — Apple HIG style */
 export function FloatingParticles() {

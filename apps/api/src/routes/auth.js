@@ -60,6 +60,9 @@ router.post('/google', asyncHandler(async (req, res) => {
  * Local dev fallback when OAuth is not set up.
  */
 router.post('/dev', asyncHandler(async (req, res) => {
+  if (config.isProduction || config.google?.clientId) {
+    throw new BadRequestError('Dev login is disabled');
+  }
   const email = String(req.body?.email ?? '').trim();
   if (!email) throw new BadRequestError('email is required');
 

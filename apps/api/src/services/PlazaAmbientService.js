@@ -62,7 +62,7 @@ class PlazaAmbientService {
       const ratioTarget = Math.max(0, Math.ceil(activeAgentCount * 0.3));
       const max = maxOverride !== null
         ? maxOverride
-        : Math.max(0, Math.min(200, Math.max(configuredMax, ratioTarget)));
+        : Math.max(0, Math.min(configuredMax, ratioTarget));
       if (max <= 0) return { created: false, skipped: 'disabled', day: iso };
 
       // Initialize + lock state row.

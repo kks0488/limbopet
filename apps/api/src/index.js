@@ -64,6 +64,7 @@ async function start() {
 
   // Optional server-side brain worker (proxy mode)
   brainWorker = ServerBrainWorker.maybeStart();
+  if (!brainWorker) console.warn('[brain-worker] not started — check LIMBOPET_BRAIN_BACKEND and LIMBOPET_BRAIN_WORKER env vars');
 
   // Optional world tick worker (living society)
   worldWorker = WorldTickWorker.maybeStart();

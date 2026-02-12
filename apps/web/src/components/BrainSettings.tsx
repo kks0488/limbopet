@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
 import type { UserBrainProfile } from "../lib/api";
 
-type ProviderKey = "google" | "openai" | "anthropic" | "xai" | "custom";
+export type ProviderKey = "google" | "openai" | "anthropic" | "xai" | "custom";
 
 const PROVIDERS: Array<{
   key: ProviderKey;
@@ -42,27 +42,27 @@ const PROVIDER_MODELS: Record<string, Array<{ value: string; label: string; desc
 const PROVIDER_GUIDE: Record<string, { url: string; urlLabel: string; keyPrefix: string; steps: string[] }> = {
   google: {
     url: "https://aistudio.google.com/apikey",
-    urlLabel: "aistudio.google.com/apikey",
+    urlLabel: "Google AI Studio",
     keyPrefix: "AI",
-    steps: ["위 링크에서 'Create API Key' 클릭", "프로젝트 선택 후 키 복사", "아래에 붙여넣기"],
+    steps: ["'Create API Key' 클릭", "프로젝트 선택 후 키 복사", "아래 칸에 붙여넣기"],
   },
   openai: {
     url: "https://platform.openai.com/api-keys",
-    urlLabel: "platform.openai.com",
+    urlLabel: "OpenAI Platform",
     keyPrefix: "sk-",
-    steps: ["위 링크에서 'Create new secret key' 클릭", "키 이름 입력 후 생성", "키를 복사해서 아래에 붙여넣기"],
+    steps: ["'Create new secret key' 클릭", "키 이름 입력 후 생성", "복사해서 아래에 붙여넣기"],
   },
   anthropic: {
     url: "https://console.anthropic.com/settings/keys",
-    urlLabel: "console.anthropic.com",
+    urlLabel: "Anthropic Console",
     keyPrefix: "sk-ant-",
-    steps: ["위 링크에서 'Create Key' 클릭", "키 이름 입력 후 생성", "키를 복사해서 아래에 붙여넣기"],
+    steps: ["'Create Key' 클릭", "키 이름 입력 후 생성", "복사해서 아래에 붙여넣기"],
   },
   xai: {
     url: "https://console.x.ai",
-    urlLabel: "console.x.ai",
+    urlLabel: "xAI Console",
     keyPrefix: "xai-",
-    steps: ["위 링크에서 API Keys 메뉴로 이동", "새 키 생성 후 복사", "아래에 붙여넣기"],
+    steps: ["API Keys 메뉴로 이동", "새 키 생성 후 복사", "아래에 붙여넣기"],
   },
 };
 
@@ -78,13 +78,15 @@ interface BrainSettingsProps {
   onByokApiKeyChange: (v: string) => void;
   onSaveByok: () => void;
   onDeleteByok: () => void;
-  onGeminiOauthConnect: () => void;
   busy: boolean;
+  /** Hide the top-level heading (useful when embedded in onboarding) */
+  showTitle?: boolean;
+  /** Pre-select a provider and skip the grid (useful when embedded in onboarding) */
+  initialProvider?: ProviderKey;
 }
 
 export function BrainSettings({
   brainProfile,
-  byokProvider,
   byokModel,
   byokBaseUrl,
   byokApiKey,
@@ -94,11 +96,24 @@ export function BrainSettings({
   onByokApiKeyChange,
   onSaveByok,
   onDeleteByok,
-  onGeminiOauthConnect,
   busy,
+  showTitle = true,
+  initialProvider,
 }: BrainSettingsProps) {
-  const [selectedProvider, setSelectedProvider] = useState<ProviderKey | null>(null);
-  const [showSetupForm, setShowSetupForm] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<ProviderKey | null>(initialProvider ?? null);
+  const [showSetupForm, setShowSetupForm] = useState(!!initialProvider);
+
+  // When initialProvider is set, auto-configure provider/model
+  useEffect(() => {
+    if (initialProvider) {
+      const providerMap: Record<ProviderKey, string> = {
+        google: "google", openai: "openai", anthropic: "anthropic", xai: "xai", custom: "openai_compatible",
+      };
+      onByokProviderChange(providerMap[initialProvider]);
+      const models = PROVIDER_MODELS[initialProvider];
+      if (models?.[0]) onByokModelChange(models[0].value);
+    }
+  }, [initialProvider]);
 
   const isConnected = Boolean(brainProfile?.connected || brainProfile?.provider);
   const hasError = Boolean(brainProfile?.last_error);
@@ -154,14 +169,14 @@ export function BrainSettings({
     return (
       <div className="brainCard">
         <div className="brainHeader">
-          <h2 style={{ margin: 0 }}>
+          <h2 className="brain-heading">
             🧠 AI 두뇌: {hasError ? "오류" : "연결됨"} {hasError ? "⚠️" : "✅"}
           </h2>
         </div>
 
         <div className="brainStatusGrid">
           <div className="brainStatusRow">
-            <span className="brainStatusLabel">프로바이더</span>
+            <span className="brainStatusLabel">제공자</span>
             <span className="brainStatusValue">
               {providerLabel}
               {isOauth ? " (OAuth)" : " (API Key)"}
@@ -188,12 +203,12 @@ export function BrainSettings({
         </div>
 
         {hasError && brainProfile?.last_error ? (
-          <div className="toast warn" style={{ marginTop: 12 }}>
+          <div className="toast warn brain-toast-gap">
             {String(brainProfile.last_error)}
           </div>
         ) : null}
 
-        <div className="row" style={{ marginTop: 16, flexWrap: "wrap", gap: 8 }}>
+        <div className="row brain-actions">
           <button
             className="btn"
             type="button"
@@ -205,7 +220,7 @@ export function BrainSettings({
           >
             {hasError ? "키 다시 입력" : "모델 변경"}
           </button>
-          <button className="btn danger" type="button" onClick={onDeleteByok} disabled={busy}>
+          <button className="btn danger" type="button" onClick={() => { if (window.confirm("두뇌 연결을 해제할까요?")) onDeleteByok(); }} disabled={busy}>
             연결 해제
           </button>
           {hasError ? (
@@ -218,7 +233,7 @@ export function BrainSettings({
               }}
               disabled={busy}
             >
-              다른 프로바이더
+              다른 AI 서비스
             </button>
           ) : null}
         </div>
@@ -233,7 +248,6 @@ export function BrainSettings({
     const guide = PROVIDER_GUIDE[selectedProvider];
     const isGoogle = selectedProvider === "google";
     const isCustom = selectedProvider === "custom";
-    const needsBaseUrl = isCustom || selectedProvider === "xai";
 
     return (
       <div className="brainCard">
@@ -241,73 +255,47 @@ export function BrainSettings({
           <button className="btn btnSmall" type="button" onClick={goBack} disabled={busy}>
             ← 뒤로
           </button>
-          <h2 style={{ margin: 0 }}>
+          <h2 className="brain-heading">
             {provider.icon} {provider.name} {provider.sub} 연결
           </h2>
         </div>
-
-        {/* Google: OAuth option first */}
-        {isGoogle ? (
-          <>
-            <div className="brainOauthCard">
-              <div className="brainOauthStar">⭐ 구글로 바로 연결 (추천)</div>
-              <div className="muted" style={{ fontSize: "var(--font-subhead)", marginTop: 4 }}>
-                API 키 없이 구글 계정만으로!
-              </div>
-              <button
-                className="btn primary"
-                type="button"
-                onClick={onGeminiOauthConnect}
-                disabled={busy}
-                style={{ marginTop: 12 }}
-              >
-                🟢 구글로 연결하기
-              </button>
-            </div>
-
-            <div className="brainDivider">
-              <span className="brainDividerLine" />
-              <span className="brainDividerText">또는</span>
-              <span className="brainDividerLine" />
-            </div>
-          </>
-        ) : null}
 
         {/* API Key Section */}
         <div className="brainApiSection">
           <div className="brainApiTitle">🔑 API 키로 연결</div>
 
-          {/* Guide steps */}
+          {/* Guide: link first, then steps */}
           {guide ? (
             <div className="brainGuide">
-              {guide.steps.map((step, i) => (
-                <div key={i} className="brainGuideStep">
-                  <span className="brainGuideNum">{i + 1}</span>
-                  <span>{step}</span>
-                </div>
-              ))}
               <a
                 href={guide.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="btn brainGuideLink"
-                style={{ marginTop: 8 }}
+                className="btn primary brainGuideLink"
               >
-                키 발급 페이지 열기 ↗
+                {guide.urlLabel} — 키 발급 페이지 열기 ↗
               </a>
+              <div className="brainGuideSteps">
+                {guide.steps.map((step, i) => (
+                  <div key={i} className="brainGuideStep">
+                    <span className="brainGuideNum">{i + 1}</span>
+                    <span>{step}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
 
           {/* Custom: Base URL */}
           {isCustom ? (
-            <div className="field" style={{ marginTop: 12 }}>
-              <label>Base URL</label>
+            <div className="field brain-field-gap">
+              <label>서버 주소</label>
               <input
                 value={byokBaseUrl}
                 onChange={(e) => onByokBaseUrlChange(e.target.value)}
                 placeholder="https://openrouter.ai/api/v1"
               />
-              <div className="muted" style={{ fontSize: "var(--font-caption)", marginTop: 4 }}>
+              <div className="muted brain-hint">
                 OpenRouter, Together AI, Groq, LM Studio, Ollama 등
               </div>
             </div>
@@ -315,8 +303,8 @@ export function BrainSettings({
 
           {/* xAI: Base URL */}
           {selectedProvider === "xai" ? (
-            <div className="field" style={{ marginTop: 12 }}>
-              <label>Base URL (선택)</label>
+            <div className="field brain-field-gap">
+              <label>서버 주소 (선택)</label>
               <input
                 value={byokBaseUrl}
                 onChange={(e) => onByokBaseUrlChange(e.target.value)}
@@ -326,8 +314,8 @@ export function BrainSettings({
           ) : null}
 
           {/* API Key */}
-          <div className="field" style={{ marginTop: 12 }}>
-            <label>API Key</label>
+          <div className="field brain-field-gap">
+            <label>API 키</label>
             <input
               value={byokApiKey}
               onChange={(e) => onByokApiKeyChange(e.target.value)}
@@ -337,7 +325,7 @@ export function BrainSettings({
           </div>
 
           {/* Model */}
-          <div className="field" style={{ marginTop: 12 }}>
+          <div className="field brain-field-gap">
             <label>모델</label>
             {models.length > 0 ? (
               <select
@@ -361,13 +349,13 @@ export function BrainSettings({
 
           {/* Tip */}
           {models.length > 0 && !isCustom ? (
-            <div className="muted" style={{ fontSize: "var(--font-caption)", marginTop: 8 }}>
+            <div className="muted brain-tip">
               💡 {models[0].label} {models[0].desc}
             </div>
           ) : null}
 
           {/* Save */}
-          <div className="row" style={{ marginTop: 16, gap: 8 }}>
+          <div className="row brain-actions">
             <button className="btn primary" type="button" onClick={onSaveByok} disabled={busy}>
               연결하기
             </button>
@@ -391,7 +379,7 @@ export function BrainSettings({
             ← 뒤로
           </button>
         ) : null}
-        <h2 style={{ margin: 0 }}>🧠 AI 두뇌 연결</h2>
+        {showTitle ? <h2 className="brain-heading">🧠 AI 두뇌 연결</h2> : null}
       </div>
       {/* 불필요 메시지 제거 */}
 
@@ -403,14 +391,12 @@ export function BrainSettings({
             type="button"
             onClick={() => selectProvider(p.key)}
             disabled={busy}
+            style={{ "--provider-color": p.color } as React.CSSProperties}
           >
-            <span className="providerDot" style={{ background: p.color }} />
+            <span className="providerDot brain-provider-dot" />
             <div className="brainProviderName">{p.name}</div>
             <div className="brainProviderSub">{p.sub}</div>
-            <div
-              className="brainProviderTag"
-              style={{ borderColor: p.color, color: p.color }}
-            >
+            <div className="brainProviderTag">
               {p.tag}
             </div>
           </button>

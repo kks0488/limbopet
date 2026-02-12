@@ -1,4 +1,4 @@
-import React from "react";
+
 import { uiTrophy } from "../assets/index";
 
 interface ArenaCardProps {
@@ -71,6 +71,7 @@ export function ArenaCard({
           placeholder="예) 침착하게, 공부해서 퍼즐/수학은 꼭 이겨."
           className="arenaCoachInput"
           disabled={busy}
+          aria-label="코치 프롬프트"
         />
         <div className="row" style={{ marginTop: 8, flexWrap: "wrap", gap: 8 }}>
           <button className="btn" type="button" onClick={() => onCoachNoteChange("")} disabled={busy}>초기화</button>

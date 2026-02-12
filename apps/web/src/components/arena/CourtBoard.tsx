@@ -1,4 +1,4 @@
-import React from "react";
+
 
 interface CourtBoardProps {
   meta: any;
@@ -11,7 +11,7 @@ interface CourtBoardProps {
   voteResult?: { fair_count: number; unfair_count: number } | null;
 }
 
-export function CourtBoard({ meta, aName, bName, status, matchId, onVote, userVote, voteResult }: CourtBoardProps) {
+export function CourtBoard({ meta, aName, bName, status, onVote, userVote, voteResult }: CourtBoardProps) {
   // resolved → court_trial, live → court_preview
   const ct = meta?.court_trial ?? meta?.court_preview ?? null;
   if (!ct) return null;
@@ -41,7 +41,7 @@ export function CourtBoard({ meta, aName, bName, status, matchId, onVote, userVo
       {/* 실제 판례 면책조항 — 항상 표시 */}
       {isRealCase ? (
         <div className="courtDisclaimer" style={{ marginBottom: 12 }}>
-          실제 판례 기반 교육 콘텐츠입니다. 법률 자문을 대체하지 않습니다.
+          실제 판례 기반 교육 콘텐츠예요. 법률 자문을 대체하지 않아요.
         </div>
       ) : null}
 
@@ -161,7 +161,7 @@ export function CourtBoard({ meta, aName, bName, status, matchId, onVote, userVo
 
         </>
       ) : !isResolved ? (
-        <div className="gameBoardPending">양측이 판결을 준비 중입니다...</div>
+        <div className="gameBoardPending">양측이 판결을 준비 중이에요...</div>
       ) : null}
     </div>
   );

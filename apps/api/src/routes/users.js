@@ -80,6 +80,60 @@ function addDaysISODate(isoDay, days) {
   return dt.toISOString().slice(0, 10);
 }
 
+function safeIsoDay(v) {
+  const s = String(v || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  return s;
+}
+
+async function countEpisodesByDay(day) {
+  const iso = safeIsoDay(day);
+  if (!iso) return 0;
+  const row = await queryOne(
+    `SELECT COUNT(*)::int AS n
+     FROM events
+     WHERE event_type = 'SHOWRUNNER_EPISODE'
+       AND (payload ? 'day')
+       AND payload->>'day' = $1`,
+    [iso]
+  ).catch(() => null);
+  return Number(row?.n ?? 0) || 0;
+}
+
+async function findLatestEpisodeDay() {
+  const row = await queryOne(
+    `SELECT payload->>'day' AS day
+     FROM events
+     WHERE event_type = 'SHOWRUNNER_EPISODE'
+       AND (payload ? 'day')
+       AND (payload->>'day') ~ '^\\d{4}-\\d{2}-\\d{2}$'
+     ORDER BY (payload->>'day')::date DESC, created_at DESC
+     LIMIT 1`,
+    []
+  ).catch(() => null);
+  return safeIsoDay(row?.day);
+}
+
+async function resolveWorldTodayDayForUser(explicitDay) {
+  const dayFromQuery = safeIsoDay(explicitDay);
+  const systemDay = WorldDayService.todayISODate();
+  const ssotDay = dayFromQuery || (await WorldDayService.getCurrentDay({ fallbackDay: systemDay }).catch(() => null)) || systemDay;
+
+  const episodesOnSsot = await countEpisodesByDay(ssotDay);
+  if (dayFromQuery || episodesOnSsot > 0) {
+    return { ssotDay, day: ssotDay, fallbackApplied: false };
+  }
+
+  const latestDay = await findLatestEpisodeDay();
+  if (!latestDay) return { ssotDay, day: ssotDay, fallbackApplied: false };
+
+  return {
+    ssotDay,
+    day: latestDay,
+    fallbackApplied: latestDay !== ssotDay
+  };
+}
+
 async function getParticipationForAgent(agentId) {
   const societyRow = await queryOne(
     `SELECT id, name, purpose
@@ -586,6 +640,9 @@ router.post('/me/brain', requireUserAuth, asyncHandler(async (req, res) => {
   const model = String(req.body?.model ?? '').trim();
   const apiKey = String(req.body?.api_key ?? req.body?.apiKey ?? '').trim();
   const baseUrl = req.body?.base_url ?? req.body?.baseUrl ?? null;
+  if (!provider) throw new BadRequestError('provider is required');
+  if (!model) throw new BadRequestError('model is required');
+  if (!apiKey) throw new BadRequestError('api_key is required');
 
   // Validate credentials before saving.
   try {
@@ -656,8 +713,35 @@ const PROXY_PROVIDER_MAP = {
   qwen: 'qwen-auth-url',
   iflow: 'iflow-auth-url'
 };
-const PROXY_BASE = String(config.limbopet?.proxyBaseUrl || process.env.CLIPROXY_BASE_URL || 'http://127.0.0.1:8317').replace(/\/+$/, '');
-const PROXY_MGMT_KEY = String(config.limbopet?.proxyMgmtKey || process.env.CLIPROXY_MGMT_KEY || 'limbopet-mgmt-dev');
+function proxyMgmtBaseUrl() {
+  // Support both:
+  // - LIMBOPET_PROXY_BASE_URL = http://host:8317/v1 (OpenAI-compatible)
+  // - CLIPROXY_BASE_URL      = http://host:8317     (management base)
+  const raw =
+    config.limbopet?.proxyMgmtBaseUrl ||
+    config.limbopet?.proxyBaseUrl ||
+    config.limbopet?.proxy?.baseUrl ||
+    process.env.LIMBOPET_PROXY_BASE_URL ||
+    process.env.CLIPROXY_BASE_URL ||
+    'http://127.0.0.1:8317';
+  const trimmed = String(raw || '').trim().replace(/\/+$/, '');
+  return trimmed.replace(/\/v1$/i, '');
+}
+
+const PROXY_BASE = proxyMgmtBaseUrl();
+const PROXY_MGMT_KEY = String(
+  config.limbopet?.proxyMgmtKey ||
+  process.env.LIMBOPET_PROXY_MGMT_KEY ||
+  process.env.CLIPROXY_MGMT_KEY ||
+  'limbopet-mgmt-dev'
+);
+const PROXY_API_KEY = String(
+  config.limbopet?.proxy?.apiKey ||
+  config.limbopet?.proxyApiKey ||
+  process.env.LIMBOPET_PROXY_API_KEY ||
+  process.env.CLIPROXY_API_KEY ||
+  'limbopet-proxy-dev-key'
+);
 
 router.post('/me/brain/proxy/connect/:provider', requireUserAuth, asyncHandler(async (req, res) => {
   const provRaw = String(req.params.provider ?? '').trim().toLowerCase();
@@ -715,7 +799,7 @@ router.post('/me/brain/proxy/complete', requireUserAuth, asyncHandler(async (req
  */
 router.get('/me/brain/proxy/models', requireUserAuth, asyncHandler(async (req, res) => {
   const resp = await fetch(`${PROXY_BASE}/v1/models`, {
-    headers: { 'Authorization': `Bearer ${String(config.limbopet?.proxyApiKey || process.env.CLIPROXY_API_KEY || 'limbopet-proxy-dev-key')}` }
+    headers: { 'Authorization': `Bearer ${PROXY_API_KEY}` }
   });
   const data = await resp.json().catch(() => null);
   success(res, { models: data?.data || [] });
@@ -804,10 +888,8 @@ router.post('/me/brain/jobs/:id/retry', requireUserAuth, asyncHandler(async (req
  * General feed for the signed-in user (requires a pet).
  */
 router.get('/me/feed', requireUserAuth, asyncHandler(async (req, res) => {
-  // Keep the world alive: ensure today's episode exists (at most once/day).
-  const world = await ShowrunnerService.ensureDailyEpisode();
-  // Keep the plaza alive too (free-form posts, BYOK-first).
-  await PlazaAmbientService.tick({ day: world?.day || null }).catch(() => null);
+  // World episode generation moved to WorldTickWorker only — avoid double-trigger from feed reads.
+  const world = { day: new Date().toISOString().slice(0, 10) };
 
   const { sort = 'new', limit = 25, offset = 0, submolt = 'general' } = req.query;
 
@@ -1309,6 +1391,8 @@ router.post('/me/plaza/posts/:id/comments', requireUserAuth, postLimiter, asyncH
 router.get('/me/world/arena/matches/:id', requireUserAuth, asyncHandler(async (req, res) => {
   const matchId = String(req.params?.id ?? '').trim();
   if (!matchId) throw new BadRequestError('match id is required');
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidPattern.test(matchId)) throw new BadRequestError('Invalid match ID format');
 
   const result = await transaction(async (client) => {
     // If this match is live and its window has ended, resolving it here makes the
@@ -1349,7 +1433,7 @@ router.get('/me/world/arena/matches/:id', requireUserAuth, asyncHandler(async (r
  * - one vote per user per match
  * - only resolved matches can be voted
  */
-router.post('/me/arena/matches/:matchId/vote', requireUserAuth, asyncHandler(async (req, res) => {
+router.post('/me/world/arena/matches/:matchId/vote', requireUserAuth, asyncHandler(async (req, res) => {
   await UserService.touchActivity(req.user.id, { reason: 'arena_vote' }).catch(() => null);
 
   const matchId = String(req.params?.matchId ?? '').trim();
@@ -1800,7 +1884,7 @@ router.post('/me/world/arena/rematch', requireUserAuth, asyncHandler(async (req,
  * 유저가 특정 모드로 즉시 매치 요청
  *
  * Body:
- * - { mode: 'COURT_TRIAL' | 'DEBATE_CLASH' | 'PUZZLE_SPRINT' | 'MATH_RACE' | 'PROMPT_BATTLE' | 'AUCTION_DUEL' }
+ * - { mode: 'COURT_TRIAL' | 'DEBATE_CLASH' }
  */
 router.post('/me/world/arena/challenge', requireUserAuth, asyncHandler(async (req, res) => {
   await UserService.touchActivity(req.user.id, { reason: 'arena_challenge' }).catch(() => null);
@@ -1808,7 +1892,7 @@ router.post('/me/world/arena/challenge', requireUserAuth, asyncHandler(async (re
   if (!petRow) throw new NotFoundError('Pet');
 
   const mode = String(req.body?.mode ?? '').trim().toUpperCase();
-  const validModes = new Set(['AUCTION_DUEL', 'DEBATE_CLASH', 'PUZZLE_SPRINT', 'MATH_RACE', 'COURT_TRIAL', 'PROMPT_BATTLE']);
+  const validModes = new Set(['DEBATE_CLASH', 'COURT_TRIAL']);
   if (!validModes.has(mode)) throw new BadRequestError('Invalid mode');
 
   const result = await transaction(async (client) => {
@@ -1890,9 +1974,21 @@ router.get('/me/world/today', requireUserAuth, asyncHandler(async (req, res) => 
     ? true
     : !['0', 'false', 'no', 'n'].includes(String(ensureEpisodeRaw).trim().toLowerCase());
 
+  const resolved = await resolveWorldTodayDayForUser(day);
   const petRow = await AgentService.findByOwnerUserId(req.user.id).catch(() => null);
-  const bundle = await WorldContextService.getBundle({ day, includeOpenRumors: true, ensureEpisode, viewerAgentId: petRow?.id ?? null });
-  success(res, bundle);
+  const bundle = await WorldContextService.getBundle({
+    day: resolved.day,
+    includeOpenRumors: true,
+    ensureEpisode,
+    viewerAgentId: petRow?.id ?? null
+  });
+  success(res, {
+    ...bundle,
+    requested_day: safeIsoDay(day),
+    ssot_day: resolved.ssotDay,
+    resolved_day: resolved.day,
+    fallback_applied: Boolean(resolved.fallbackApplied)
+  });
 }));
 
 /**

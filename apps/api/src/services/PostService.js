@@ -5,6 +5,7 @@
 
 const { queryOne, queryAll, transaction } = require('../config/database');
 const { BadRequestError, NotFoundError, ForbiddenError } = require('../utils/errors');
+const { escapeILike } = require('../utils/sql');
 
 function buildFeedWhereClause(
   { submolt = null, q = null, postTypes = null, excludePostTypes = [], onlyUserAuthors = false } = {},
@@ -22,8 +23,8 @@ function buildFeedWhereClause(
 
   const qTerm = typeof q === 'string' ? String(q).trim() : '';
   if (qTerm && qTerm.length >= 2) {
-    whereClause += ` AND (p.title ILIKE $${paramIndex} OR p.content ILIKE $${paramIndex})`;
-    params.push(`%${qTerm}%`);
+    whereClause += ` AND (p.title ILIKE $${paramIndex} ESCAPE '\\' OR p.content ILIKE $${paramIndex} ESCAPE '\\')`;
+    params.push(`%${escapeILike(qTerm)}%`);
     paramIndex++;
   }
 

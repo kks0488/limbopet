@@ -1,4 +1,4 @@
-import React from "react";
+
 import { bgHero } from "../assets/index";
 
 interface NewsCardProps {

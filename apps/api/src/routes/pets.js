@@ -22,9 +22,9 @@ const router = Router();
  * POST /pets/register
  * Create a new pet identity (returns API key)
  */
-router.post('/register', asyncHandler(async (req, res) => {
+router.post('/register', requireUserAuth, asyncHandler(async (req, res) => {
   const { name, description } = req.body;
-  const result = await AgentService.register({ name, description });
+  const result = await AgentService.register({ name, description, ownerUserId: req.user.id });
   created(res, result);
 }));
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   arenaMatchDetail,
   arenaIntervene,
@@ -8,13 +8,9 @@ import {
   type ArenaMatchDetail,
   type ArenaMatchMeta,
 } from "../lib/api";
+import { friendlyError } from "../lib/errorMessages";
 import { DebateBoard } from "./arena/DebateBoard";
 import { CourtBoard } from "./arena/CourtBoard";
-import { AuctionBoard } from "./arena/AuctionBoard";
-import { MathBoard } from "./arena/MathBoard";
-import { PuzzleBoard } from "./arena/PuzzleBoard";
-import { PromptBoard } from "./arena/PromptBoard";
-import { StrategyBriefing } from "./arena/StrategyBriefing";
 
 export function ArenaWatchModal({
   token,
@@ -40,6 +36,29 @@ export function ArenaWatchModal({
   const [courtVote, setCourtVote] = useState<string | null>(null);
   const [courtVoteResult, setCourtVoteResult] = useState<{ fair_count: number; unfair_count: number } | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [revealedRound, setRevealedRound] = useState(0);
+  const [skipReveal, setSkipReveal] = useState(false);
+  const [verdictRevealed, setVerdictRevealed] = useState(false);
+  const matchRef = useRef<ArenaMatchDetail | null>(null);
+  const revealBottomRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  useEffect(() => {
+    matchRef.current = match;
+  }, [match]);
+
+  const isLiveForPolling = (() => {
+    const current = match;
+    if (!current) return false;
+    const meta = current?.meta && typeof current.meta === "object" ? (current.meta as any) : {};
+    const live = meta?.live && typeof meta.live === "object" ? (meta.live as any) : null;
+    const endsAtMs = live?.ends_at ? Date.parse(String(live.ends_at)) : NaN;
+    return String(current?.status ?? "").trim().toLowerCase() === "live" && Number.isFinite(endsAtMs);
+  })();
 
   useEffect(() => {
     let cancelled = false;
@@ -57,7 +76,7 @@ export function ArenaWatchModal({
       })
       .catch((e) => {
         if (cancelled) return;
-        setError(String((e as any)?.message ?? e));
+        setError(friendlyError(e));
       })
       .finally(() => {
         if (cancelled) return;
@@ -69,20 +88,17 @@ export function ArenaWatchModal({
   }, [token, matchId]);
 
   useEffect(() => {
+    if (!isLiveForPolling) return;
     const t = window.setInterval(() => setNowMs(Date.now()), 250);
     return () => window.clearInterval(t);
-  }, []);
+  }, [isLiveForPolling]);
 
   useEffect(() => {
-    if (!match) return;
-    const meta = match?.meta && typeof match.meta === "object" ? (match.meta as any) : {};
-    const live = meta?.live && typeof meta.live === "object" ? (meta.live as any) : null;
-    const endsAtMs = live?.ends_at ? Date.parse(String(live.ends_at)) : NaN;
-    const isLive = String(match?.status ?? "").trim().toLowerCase() === "live" && Number.isFinite(endsAtMs);
-    if (!isLive) return;
+    if (!isLiveForPolling) return;
 
     let cancelled = false;
     const tick = async () => {
+      if (!matchRef.current) return;
       try {
         const res = await arenaMatchDetail(token, matchId);
         if (cancelled) return;
@@ -96,7 +112,7 @@ export function ArenaWatchModal({
       cancelled = true;
       window.clearInterval(h);
     };
-  }, [match, token, matchId]);
+  }, [token, matchId, isLiveForPolling]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -105,6 +121,35 @@ export function ArenaWatchModal({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
+
+  // Sequential round reveal for resolved matches; instant for live/pending
+  useEffect(() => {
+    if (!match || loading) return;
+    const r = Array.isArray((match?.meta as any)?.rounds) ? ((match.meta as any).rounds as any[]) : [];
+    const st = String(match?.status ?? "").trim().toLowerCase();
+
+    if (st !== "resolved" || r.length === 0) {
+      // In-progress or no rounds: show everything immediately
+      setSkipReveal(true);
+      setVerdictRevealed(true);
+      setRevealedRound(r.length);
+      return;
+    }
+
+    // Resolved: sequential reveal animation
+    setSkipReveal(false);
+    setVerdictRevealed(false);
+    setRevealedRound(0);
+
+    const timers: number[] = [];
+    r.forEach((_: any, idx: number) => {
+      timers.push(window.setTimeout(() => setRevealedRound(idx + 1), (idx + 1) * 800));
+    });
+    // 1.5s after last round -> reveal verdict
+    timers.push(window.setTimeout(() => setVerdictRevealed(true), r.length * 800 + 1500));
+
+    return () => timers.forEach(t => window.clearTimeout(t));
+  }, [match, loading]);
 
   const meta = match?.meta && typeof match.meta === "object" ? (match.meta as ArenaMatchMeta) : {};
   const modeLabel = String(meta?.mode_label ?? match?.mode ?? "").trim();
@@ -149,12 +194,6 @@ export function ArenaWatchModal({
   const trainingInfluence = meta?.training_influence && typeof meta.training_influence === "object"
     ? (meta.training_influence as any)
     : {};
-  const recentMemoryInfluence = meta?.recent_memory_influence && typeof meta.recent_memory_influence === "object"
-    ? (meta.recent_memory_influence as any)
-    : {};
-  const promptProfile = meta?.prompt_profile && typeof meta.prompt_profile === "object"
-    ? (meta.prompt_profile as any)
-    : {};
 
   const viewerId = viewerAgentId ? String(viewerAgentId) : "";
   const canIntervene =
@@ -167,6 +206,16 @@ export function ArenaWatchModal({
   const canCheer = canPredict;
   const mode = String(match?.mode ?? "").trim();
 
+  // T1: Round reveal logic
+  const effectiveReveal = skipReveal ? rounds.length : revealedRound;
+  const allRoundsRevealed = status === "resolved" && rounds.length > 0 && effectiveReveal >= rounds.length;
+
+  useEffect(() => {
+    if (revealedRound > 0 && revealBottomRef.current) {
+      revealBottomRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [revealedRound]);
+
   const handleIntervene = async (action: string) => {
     setInterveneBusy(true);
     setInterveneMsg(null);
@@ -176,22 +225,7 @@ export function ArenaWatchModal({
       const res = await arenaMatchDetail(token, matchId);
       setMatch(res.match);
     } catch (e: any) {
-      setInterveneMsg(String(e?.message ?? e));
-    } finally {
-      setInterveneBusy(false);
-    }
-  };
-
-  const handleModeIntervene = async (action: string, _boosts: Record<string, number>) => {
-    setInterveneBusy(true);
-    setInterveneMsg(null);
-    try {
-      await arenaIntervene(token, matchId, action as any);
-      setInterveneMsg(`전략: ${action}`);
-      const res = await arenaMatchDetail(token, matchId);
-      setMatch(res.match);
-    } catch (e: any) {
-      setInterveneMsg(String(e?.message ?? e));
+      setInterveneMsg(friendlyError(e));
     } finally {
       setInterveneBusy(false);
     }
@@ -209,7 +243,7 @@ export function ArenaWatchModal({
       <div className="modal">
         <div className="modalHeader">
           <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>경기 관전</div>
+            <div className="awm-title">경기 관전</div>
             <div className="row" style={{ gap: 8 }}>
               <span className="kbdHint">ESC</span>
               <button className="btn" type="button" onClick={onClose}>
@@ -220,8 +254,6 @@ export function ArenaWatchModal({
 
           {match ? (
             <div className="row" style={{ marginTop: 10, flexWrap: "wrap" }}>
-              {match.day ? <span className="badge">{match.day}</span> : null}
-              {match.slot ? <span className="badge">#{match.slot}</span> : null}
               {modeLabel ? <span className="badge">{modeLabel}</span> : null}
               {status ? <span className="badge">{status === "live" ? "진행 중" : status}</span> : null}
               {status === "live" && remainingMs !== null ? (
@@ -241,16 +273,40 @@ export function ArenaWatchModal({
           {interveneMsg ? <div className="toast warn">{interveneMsg}</div> : null}
 
           {loading ? (
-            <div className="empty">가져오는 중...</div>
+            <div className="arenaLoadingSkeleton">
+              <div className="skeletonLine skeletonWide" />
+              <div className="skeletonLine skeletonMedium" />
+              <div className="skeletonLine skeletonShort" />
+              <div className="skeletonBlock" />
+            </div>
           ) : !match ? (
-            <div className="empty">경기를 찾지 못했어요.</div>
+            <div className="emptyStateBox">
+              <div className="emptyStateEmoji">{"\uD83D\uDD0D"}</div>
+              <div className="emptyStateDesc">경기를 찾지 못했어요.</div>
+            </div>
           ) : (
             <>
               {headline ? <div style={{ fontWeight: 800, marginBottom: 12 }}>{headline}</div> : null}
 
+              {/* 판결 카운트다운 */}
+              {(() => {
+                if (status !== "resolved" || verdictRevealed) return null;
+                if (!allRoundsRevealed) return null;
+                return (
+                  <div className="verdictCountdown">
+                    <div className="verdictCountdownText">판결 중...</div>
+                    <div className="verdictCountdownDots">
+                      <span className="verdictDot verdictDot1" />
+                      <span className="verdictDot verdictDot2" />
+                      <span className="verdictDot verdictDot3" />
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* 승패 감정 연출 — viewer가 참가자일 때만 */}
               {(() => {
-                if (status !== "resolved" || !viewerId) return null;
+                if (status !== "resolved" || !viewerId || !verdictRevealed) return null;
                 const result = (meta as any)?.result && typeof (meta as any).result === "object" ? ((meta as any).result as any) : {};
                 const winnerId = String(result?.winnerId ?? result?.winner_id ?? "").trim();
                 const loserId = String(result?.loserId ?? result?.loser_id ?? "").trim();
@@ -280,123 +336,108 @@ export function ArenaWatchModal({
                 }
                 if (isLoser) {
                   const penalty = Number(stake?.loss_penalty_coins ?? 0) || 0;
+                  const encouragements = [
+                    "다음엔 더 강해질 거야. 코칭을 계속하면 달라져!",
+                    "지금의 경험이 내일의 승리를 만들어.",
+                    "아까웠어! 한 끗 차이였는데...",
+                    "이 패배가 성장의 시작이야.",
+                  ];
+                  const encouragement = encouragements[Math.floor(Math.abs(ratingDelta) % encouragements.length)];
                   return (
                     <div className="arenaResultBanner arenaResultLose">
+                      <div className="arenaResultLoseIcon">{"\uD83D\uDCAA"}</div>
                       <div className="arenaResultTitle">아쉬워...</div>
                       <div className="arenaResultDetail">
                         -{penalty} 코인 · 레이팅 {ratingDelta >= 0 ? "+" : ""}{ratingDelta}
                       </div>
-                      <div className="arenaResultGrowth">다음엔 더 강해질 거야. 코칭을 계속하면 달라져!</div>
+                      <div className="arenaResultGrowth">{encouragement}</div>
                     </div>
                   );
                 }
                 return null;
               })()}
 
-              {/* 코칭 영향 서사 */}
+              {/* 공유 카드 */}
               {(() => {
-                if (status !== "resolved") return null;
+                if (status !== "resolved" || !verdictRevealed) return null;
+                const result = (meta as any)?.result && typeof (meta as any).result === "object" ? ((meta as any).result as any) : {};
+                const winnerId = String(result?.winnerId ?? result?.winner_id ?? "").trim();
+                const winnerName = winnerId === castAId ? aName : winnerId === castBId ? bName : "?";
+                const loserName = winnerId === castAId ? bName : winnerId === castBId ? aName : "?";
+                const ct = (meta as any)?.court_trial ?? {};
+                const caseTitle = String(ct?.case_title ?? ct?.title ?? headline ?? "").trim();
+                const modeIcon = mode === "COURT_TRIAL" ? "\u2696\uFE0F" : "\u2694\uFE0F";
+                const modeName = mode === "COURT_TRIAL" ? "\uBAA8\uC758\uC7AC\uD310" : "\uC124\uC804";
+
+                const shareText = `${modeIcon} \uB9BC\uBCF4\uD3AB ${modeName}\n\n${caseTitle ? `"${caseTitle}"\n\n` : ""}${winnerName} vs ${loserName}\n\uD310\uACB0: ${winnerName} \uC2B9\uB9AC!\n\nlimbopet.com`;
+
+                const handleShare = async () => {
+                  if (navigator.share) {
+                    try {
+                      await navigator.share({ text: shareText });
+                    } catch { /* user cancelled */ }
+                  } else {
+                    try {
+                      await navigator.clipboard.writeText(shareText);
+                      const el = document.querySelector('.shareCardCopied');
+                      if (el) { el.classList.add('shareCardCopied--show'); setTimeout(() => el.classList.remove('shareCardCopied--show'), 2000); }
+                    } catch { /* fallback */ }
+                  }
+                };
+
+                return (
+                  <div className="shareCard">
+                    <div className="shareCardInner">
+                      <div className="shareCardIcon">{modeIcon}</div>
+                      <div className="shareCardTitle">{"\uB9BC\uBCF4\uD3AB"} {modeName}</div>
+                      {caseTitle ? <div className="shareCardCase">{caseTitle}</div> : null}
+                      <div className="shareCardVs">
+                        <span className={winnerId === castAId ? "shareCardWinner" : "shareCardLoser"}>{aName}</span>
+                        <span className="shareCardVsText">vs</span>
+                        <span className={winnerId === castBId ? "shareCardWinner" : "shareCardLoser"}>{bName}</span>
+                      </div>
+                      <div className="shareCardResult">{winnerName} {"\uC2B9\uB9AC!"}</div>
+                    </div>
+                    <button className="btn primary shareCardBtn" type="button" onClick={handleShare}>
+                      {"\uD83D\uDCE4"} {"\uACB0\uACFC \uACF5\uC720\uD558\uAE30"}
+                    </button>
+                    <div className="shareCardCopied">{"\uBCF5\uC0AC\uB428!"}</div>
+                  </div>
+                );
+              })()}
+
+              {/* 코칭 영향 서사 — 1줄 축소 */}
+              {(() => {
+                if (status !== "resolved" || !verdictRevealed) return null;
                 const mySide = viewerId === castAId ? "a" : viewerId === castBId ? "b" : null;
                 if (!mySide) return null;
                 const t = trainingInfluence?.[mySide];
                 const narrative = String(t?.coaching_narrative ?? (meta as any)?.coaching_narrative ?? "").trim();
                 if (!narrative) return null;
                 return (
-                  <div className="arenaCoachingNarrative">
-                    <span className="arenaCoachingIcon">&#x1F3AF;</span> {narrative}
-                  </div>
+                  <div className="arenaCoachingNarrativeCompact">{narrative}</div>
                 );
               })()}
 
-              {nearMiss || tags.length ? (
-                <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-                  {nearMiss ? <span className="badge">니어미스 {nearMiss}</span> : null}
-                  {tags.slice(0, 8).map((t) => (
+              {nearMiss ? (
+                <div className="nearMissCard">
+                  <div className="nearMissCard__icon">&#x26A1;</div>
+                  <div className="nearMissCard__body">
+                    <div className="nearMissCard__title">아슬아슬!</div>
+                    <div className="nearMissCard__text">{nearMiss}</div>
+                  </div>
+                </div>
+              ) : null}
+
+              {tags.length ? (
+                <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                  {tags.slice(0, 3).map((t) => (
                     <span key={t} className="badge">
                       {t}
                     </span>
                   ))}
                 </div>
               ) : null}
-
-              {(() => {
-                const renderInfluenceCard = (
-                  sideName: string,
-                  t: any,
-                  m: any,
-                  p: any,
-                ) => {
-                  const weights = t?.weights && typeof t.weights === "object" ? (t.weights as any) : {};
-                  const dominant = Array.isArray(weights?.dominant)
-                    ? (weights.dominant as any[]).map((x) => String(x ?? "").trim()).filter(Boolean).slice(0, 2)
-                    : [];
-                  const memoryScore = Number(m?.score ?? 0) || 0;
-                  const memoryCount = Number(m?.count ?? 0) || 0;
-                  const refs = Array.isArray(m?.refs) ? (m.refs as any[]).slice(0, 2) : [];
-                  const promptEnabled = Boolean(p?.enabled);
-                  const promptCustom = Boolean(p?.has_custom);
-                  const promptVersion = Number(p?.version ?? 0) || 0;
-                  const intervention = String(t?.intervention ?? "").trim();
-                  const coachingNarrative = String(t?.coaching_narrative ?? "").trim();
-
-                  return (
-                    <div key={sideName} className="event" style={{ minWidth: 260 }}>
-                      <div className="row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                        <div style={{ fontWeight: 700 }}>{sideName}</div>
-                        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                          {dominant.length ? <span className="badge">훈련 {dominant.join("·")}</span> : null}
-                          <span className="badge">메모리 {memoryCount}개</span>
-                          <span className="badge">점수 {memoryScore.toFixed(2)}</span>
-                        </div>
-                      </div>
-                      {coachingNarrative ? (
-                        <div className="arenaCoachingNarrative" style={{ marginTop: 8 }}>
-                          <span className="arenaCoachingIcon">&#x1F3AF;</span> {coachingNarrative}
-                        </div>
-                      ) : (
-                        <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-                          <span className="badge">프롬프트 {promptEnabled ? "ON" : "OFF"}</span>
-                          <span className="badge">{promptCustom ? "커스텀" : "기본"}</span>
-                          {promptVersion > 0 ? <span className="badge">v{promptVersion}</span> : null}
-                          {intervention ? <span className="badge">개입 {intervention}</span> : null}
-                        </div>
-                      )}
-                      {refs.length ? (
-                        <div style={{ marginTop: 8, display: "grid", gap: 4 }}>
-                          {refs.map((r, idx) => {
-                            const kind = String(r?.kind ?? "").trim();
-                            const text = String(r?.text ?? "").trim();
-                            if (!text) return null;
-                            return (
-                              <div key={`${sideName}:${idx}`} className="muted" style={{ fontSize: 12 }}>
-                                {kind ? `[${kind}] ` : ""}{text}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                };
-
-                const hasAny =
-                  trainingInfluence?.a ||
-                  trainingInfluence?.b ||
-                  recentMemoryInfluence?.a ||
-                  recentMemoryInfluence?.b ||
-                  promptProfile?.a ||
-                  promptProfile?.b;
-                if (!hasAny) return null;
-                return (
-                  <div style={{ marginBottom: 12 }}>
-                    <h3 style={{ margin: 0, fontSize: 14 }}>코칭/메모리 영향도</h3>
-                    <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
-                      {renderInfluenceCard(aName, trainingInfluence?.a, recentMemoryInfluence?.a, promptProfile?.a)}
-                      {renderInfluenceCard(bName, trainingInfluence?.b, recentMemoryInfluence?.b, promptProfile?.b)}
-                    </div>
-                  </div>
-                );
-              })()}
 
               {/* Win Probability */}
               {(() => {
@@ -423,7 +464,7 @@ export function ArenaWatchModal({
               {/* Prediction */}
               {canPredict ? (
                 <div className="event" style={{ marginBottom: 12 }}>
-                  <div className="muted" style={{ fontSize: 12 }}>
+                  <div className="muted awm-muted">
                     관중 예측(간단): 이길 쪽을 찍으면, 맞춘 사람끼리 코인을 나눠 가져요.
                   </div>
                   <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
@@ -444,7 +485,7 @@ export function ArenaWatchModal({
                             setMyPick(pick as any);
                             setInterveneMsg(`예측: ${name}`);
                           } catch (e: any) {
-                            setInterveneMsg(String(e?.message ?? e));
+                            setInterveneMsg(friendlyError(e));
                           } finally {
                             setPredictBusy(false);
                           }
@@ -461,10 +502,10 @@ export function ArenaWatchModal({
               {canCheer ? (
                 <div className="event" style={{ marginBottom: 12 }}>
                   <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-                    <div className="muted" style={{ fontSize: 12 }}>
+                    <div className="muted awm-muted">
                       응원 버프(상한 3%): 응원 수가 승률에 아주 미세하게 반영돼요.
                     </div>
-                    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                       <span className="badge">A {cheerA}</span>
                       <span className="badge">B {cheerB}</span>
                       {cheerDeltaA ? <span className="badge">ΔA {(cheerDeltaA * 100).toFixed(1)}%</span> : null}
@@ -483,7 +524,7 @@ export function ArenaWatchModal({
                           const res = await arenaMatchDetail(token, matchId);
                           setMatch(res.match);
                         } catch (e: any) {
-                          setInterveneMsg(String(e?.message ?? e));
+                          setInterveneMsg(friendlyError(e));
                         } finally {
                           setCheerBusy(false);
                         }
@@ -503,7 +544,7 @@ export function ArenaWatchModal({
                           const res = await arenaMatchDetail(token, matchId);
                           setMatch(res.match);
                         } catch (e: any) {
-                          setInterveneMsg(String(e?.message ?? e));
+                          setInterveneMsg(friendlyError(e));
                         } finally {
                           setCheerBusy(false);
                         }
@@ -518,7 +559,7 @@ export function ArenaWatchModal({
               {/* Generic Intervention */}
               {canIntervene ? (
                 <div className="event" style={{ marginBottom: 12 }}>
-                  <div className="muted" style={{ fontSize: 12 }}>
+                  <div className="muted awm-muted">
                     개입 창(30초): 내 펫의 힌트를 살짝 바꿀 수 있어요.
                   </div>
                   <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
@@ -544,30 +585,19 @@ export function ArenaWatchModal({
                 </div>
               ) : null}
 
-              {/* Strategy Briefing — 라이브 매치 전략 선택 (핵심 개입 UI) */}
-              {canIntervene && mode ? (
-                <StrategyBriefing
-                  mode={mode}
-                  meta={meta}
-                  remainingMs={remainingMs}
-                  busy={interveneBusy}
-                  onSelectStrategy={(action) => handleModeIntervene(action, {})}
-                />
-              ) : null}
-
               {/* Prediction Results */}
               {status === "resolved" && predict ? (
                 <div className="event" style={{ marginBottom: 12 }}>
                   <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
                     <div style={{ fontWeight: 700 }}>예측 결과</div>
-                    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                    <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                       {typeof predict.total === "number" ? <span className="badge">참여 {Number(predict.total) || 0}</span> : null}
                       {typeof predict.winners === "number" ? <span className="badge">정답 {Number(predict.winners) || 0}</span> : null}
                       {typeof predict.pot === "number" ? <span className="badge">팟 {Number(predict.pot) || 0}</span> : null}
                     </div>
                   </div>
                   {typeof predict.per_winner === "number" ? (
-                    <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
+                    <div className="muted awm-muted" style={{ marginTop: 8 }}>
                       정답자 1인당 약 {Number(predict.per_winner) || 0} 코인
                     </div>
                   ) : null}
@@ -577,9 +607,27 @@ export function ArenaWatchModal({
               {/* Turn Timeline */}
               {status === "resolved" && rounds.length ? (
                 <div style={{ marginBottom: 12 }}>
-                  <h3 style={{ margin: 0, fontSize: 14 }}>턴제 타임라인</h3>
-                  <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
-                    {rounds.slice(0, 10).map((r: any, idx: number) => {
+                  <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                    <h3 className="awm-section-title" style={{ marginBottom: 0 }}>턴제 타임라인</h3>
+                  </div>
+                  <div style={{ marginTop: 8, display: "grid", gap: mode === "COURT_TRIAL" ? 16 : 8 }}>
+                    {(() => {
+                      // 코칭 영향 라운드: 내 쪽 점수 델타가 가장 큰 라운드
+                      const mySide = viewerId === castAId ? "a" : viewerId === castBId ? "b" : null;
+                      const myCoachCount = Number(mySide ? trainingInfluence?.[mySide]?.coaching_fact_count : 0) || 0;
+                      let coachImpactIdx = -1;
+                      if (mySide && myCoachCount > 0) {
+                        let bestDelta = -Infinity;
+                        const key = mySide === "a" ? "a_score_delta" : "b_score_delta";
+                        for (let ri = 0; ri < rounds.length; ri++) {
+                          const d = Number((rounds[ri] as any)?.[key] ?? 0) || 0;
+                          if (d > bestDelta) { bestDelta = d; coachImpactIdx = ri; }
+                        }
+                      }
+
+                      let runA = 0, runB = 0;
+                      const visibleCount = Math.min(effectiveReveal, 10);
+                      return rounds.slice(0, visibleCount).map((r: any, idx: number) => {
                       const rn = Number(r?.round_num ?? idx + 1) || idx + 1;
                       const aAct = String(r?.a_action ?? "").trim();
                       const bAct = String(r?.b_action ?? "").trim();
@@ -591,80 +639,115 @@ export function ArenaWatchModal({
                       const hl = String(r?.highlight ?? "").trim();
                       const pctA = Math.max(0, Math.min(100, Math.round(pA * 100)));
                       const pctB = Math.max(0, Math.min(100, 100 - pctA));
-                      return (
-                        <div key={`r${rn}`} className="event">
-                          <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-                            <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                              <span className="badge">R{rn}</span>
-                              {ms ? <span className="badge">{ms}</span> : null}
-                              {hl ? <span className="badge">{hl}</span> : null}
+
+                      runA += aD; runB += bD;
+                      const aLeads = runA > runB;
+                      const bLeads = runB > runA;
+                      const showCoachBadge = idx === coachImpactIdx;
+
+                      const isLastRevealed = !skipReveal && idx === effectiveReveal - 1;
+
+                      if (mode === "COURT_TRIAL") {
+                        return (
+                          <div key={`r${rn}`} ref={isLastRevealed ? revealBottomRef : undefined} className={`courtTurnCard${isLastRevealed ? " roundRevealing" : ""}${ms ? " courtTurnReversal" : ""}`}>
+                            <div className="courtTurnHeader">
+                              <span className="courtTurnRound">R{rn}</span>
+                              <div className="courtTurnMeta">
+                                <span className="courtTurnScore">{aName} +{aD}</span>
+                                <span className="courtTurnScoreSep">·</span>
+                                <span className="courtTurnScore">{bName} +{bD}</span>
+                                {ms ? <span className="courtTurnMomentum">{ms}</span> : null}
+                                {showCoachBadge ? <span className="courtTurnCoachBadge">코칭 영향</span> : null}
+                              </div>
                             </div>
-                            <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                              <span className="badge">A +{aD}</span>
-                              <span className="badge">B +{bD}</span>
+                            {idx === visibleCount - 1 ? (
+                              <div className="courtCumulativeScore">
+                                <span className={`courtCumulativeVal${aLeads ? " courtCumulativeVal--lead" : ""}`}>{aName} {runA}</span>
+                                <span className="courtCumulativeVs">vs</span>
+                                <span className={`courtCumulativeVal${bLeads ? " courtCumulativeVal--lead" : ""}`}>{bName} {runB}</span>
+                              </div>
+                            ) : null}
+                            <div className="courtTurnArgs">
+                              {aAct ? (
+                                <div className="courtArgCard courtArgA">
+                                  <div className="courtArgSide">{aName}</div>
+                                  <div className="courtArgText">{aAct}</div>
+                                </div>
+                              ) : null}
+                              {bAct ? (
+                                <div className="courtArgCard courtArgB">
+                                  <div className="courtArgSide">{bName}</div>
+                                  <div className="courtArgText">{bAct}</div>
+                                </div>
+                              ) : null}
+                            </div>
+                            {hl ? <div className="courtTurnHighlight">{hl}</div> : null}
+                            <div className="turnProbBar" style={{ marginTop: 8 }}>
+                              <div className="turnProbFillA" style={{ width: `${pctA}%` }} />
+                              <div className="turnProbFillB" style={{ width: `${pctB}%` }} />
                             </div>
                           </div>
-                          <div style={{ marginTop: 8 }}>
-                            <div
-                              style={{
-                                height: 10,
-                                borderRadius: 999,
-                                overflow: "hidden",
-                                background: "rgba(255,255,255,0.08)",
-                                display: "flex",
-                              }}
-                            >
-                              <div style={{ width: `${pctA}%`, background: "rgba(80,180,255,0.85)" }} />
-                              <div style={{ width: `${pctB}%`, background: "rgba(255,120,120,0.75)" }} />
-                            </div>
-                            <div className="row" style={{ justifyContent: "space-between", marginTop: 6 }}>
-                              <div className="muted" style={{ fontSize: 12 }}>
-                                A {pctA}% · {aAct || "—"}
-                              </div>
-                              <div className="muted" style={{ fontSize: 12 }}>
-                                B {Math.round(pB * 100)}% · {bAct || "—"}
-                              </div>
-                            </div>
+                        );
+                      }
+
+                      return (
+                        <div key={`r${rn}`} className="event">
+                          <div style={{ fontWeight: 600, fontSize: "var(--font-body)" }}>
+                            R{rn}: {aName} +{aD} vs {bName} +{bD}
                           </div>
                         </div>
                       );
-                    })}
+                    });
+                    })()}
                   </div>
+
+                  {/* Court closing arguments */}
+                  {allRoundsRevealed && mode === "COURT_TRIAL" && (() => {
+                    const ct = (meta as any)?.court_trial ?? {};
+                    const aClosing = String(ct?.a_closing ?? "").trim();
+                    const bClosing = String(ct?.b_closing ?? "").trim();
+                    if (!aClosing && !bClosing) return null;
+                    return (
+                      <div className="courtClosingSection">
+                        <div className="courtClosingTitle">최종 변론</div>
+                        {aClosing ? (
+                          <div className="courtArgCard courtArgA">
+                            <div className="courtArgSide">{aName}</div>
+                            <div className="courtArgText">{aClosing}</div>
+                          </div>
+                        ) : null}
+                        {bClosing ? (
+                          <div className="courtArgCard courtArgB">
+                            <div className="courtArgSide">{bName}</div>
+                            <div className="courtArgText">{bClosing}</div>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : null}
 
-              {/* Participants */}
-              <div style={{ display: "grid", gap: 10 }}>
+              {/* Participants — 1줄 요약 */}
+              <div style={{ display: "grid", gap: 8 }}>
                 {[a, b].filter(Boolean).map((p: any, i: number) => {
                   const name = String(p?.agent?.displayName ?? p?.agent?.name ?? "").trim() || `P${i + 1}`;
                   const outcome = String(p?.outcome ?? "").trim();
                   const coinsNet = Number(p?.coinsNet ?? 0) || 0;
                   const ratingDelta = Number(p?.ratingDelta ?? 0) || 0;
-                  const wager = Number(p?.wager ?? 0) || 0;
-                  const feeBurned = Number(p?.feeBurned ?? 0) || 0;
                   return (
                     <div key={String(p?.agent?.id ?? `${name}:${i}`)} className="event">
                       <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-                        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                           <span style={{ fontWeight: 700 }}>{name}</span>
                           {outcome ? <span className="badge">{outcome}</span> : null}
                           {!outcome && status === "live" ? <span className="badge">대기 중</span> : null}
                         </div>
-                        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-                          {partsRaw.length >= 2 ? (
-                            <>
-                              <span className="badge">coin {coinsNet > 0 ? `+${coinsNet}` : coinsNet}</span>
-                              <span className="badge">rating {ratingDelta > 0 ? `+${ratingDelta}` : ratingDelta}</span>
-                              <span className="badge">wager {wager}</span>
-                              <span className="badge">fee {feeBurned}</span>
-                            </>
-                          ) : meta?.stake ? (
-                            <>
-                              <span className="badge">wager {Number(meta?.stake?.wager ?? 0) || 0}</span>
-                              <span className="badge">fee {Number(meta?.stake?.fee_burned ?? 0) || 0}</span>
-                            </>
-                          ) : null}
-                        </div>
+                        <span className="muted awm-muted">
+                          {coinsNet || ratingDelta
+                            ? `${coinsNet > 0 ? "+" : ""}${coinsNet} 코인 · 레이팅 ${ratingDelta > 0 ? "+" : ""}${ratingDelta}`
+                            : ""}
+                        </span>
                       </div>
                     </div>
                   );
@@ -684,19 +767,15 @@ export function ArenaWatchModal({
                     try {
                       const res = await petArenaVote(token, matchId, vote);
                       setCourtVote(vote);
-                      setCourtVoteResult({ fair_count: res.fair_count, unfair_count: res.unfair_count });
+                      setCourtVoteResult({ fair_count: res.vote_result.fair, unfair_count: res.vote_result.unfair });
                     } catch (e: any) {
-                      setInterveneMsg(String(e?.message ?? e));
+                      setInterveneMsg(friendlyError(e));
                     }
                   }}
                   userVote={courtVote}
                   voteResult={courtVoteResult}
                 />
               ) : null}
-              {mode === "AUCTION_DUEL" ? <AuctionBoard meta={meta} aName={aName} bName={bName} /> : null}
-              {mode === "MATH_RACE" ? <MathBoard meta={meta} aName={aName} bName={bName} /> : null}
-              {mode === "PUZZLE_SPRINT" ? <PuzzleBoard meta={meta} aName={aName} bName={bName} /> : null}
-              {mode === "PROMPT_BATTLE" ? <PromptBoard meta={meta} aName={aName} bName={bName} /> : null}
             </>
           )}
         </div>

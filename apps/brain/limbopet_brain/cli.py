@@ -13,8 +13,8 @@ from limbopet_brain.runner import build_runner
 def _add_run(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("run", help="Run local brain loop (poll jobs, submit results)")
     env_mode = os.environ.get("LIMBOPET_MODE", "mock")
-    default_mode = env_mode if env_mode in {"mock", "openai", "xai", "anthropic", "google"} else "mock"
-    p.add_argument("--mode", choices=["mock", "openai", "xai", "anthropic", "google"], default=default_mode)
+    default_mode = env_mode if env_mode in {"mock", "openai", "xai", "anthropic", "google", "proxy"} else "mock"
+    p.add_argument("--mode", choices=["mock", "openai", "xai", "anthropic", "google", "proxy"], default=default_mode)
     p.add_argument("--model", default=os.environ.get("LIMBOPET_MODEL", ""))
     # Legacy flag (kept for compatibility)
     p.add_argument("--openai-model", default=None)
@@ -27,7 +27,7 @@ def _add_onboard(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--email", default=os.environ.get("LIMBOPET_EMAIL", ""))
     p.add_argument("--pet-name", default=os.environ.get("LIMBOPET_PET_NAME", ""))
     p.add_argument("--pet-description", default=os.environ.get("LIMBOPET_PET_DESCRIPTION", ""))
-    p.add_argument("--mode", choices=["mock", "openai", "xai", "anthropic", "google"], default=os.environ.get("LIMBOPET_MODE", "mock"))
+    p.add_argument("--mode", choices=["mock", "openai", "xai", "anthropic", "google", "proxy"], default=os.environ.get("LIMBOPET_MODE", "mock"))
     p.add_argument("--model", default=os.environ.get("LIMBOPET_MODEL", ""))
     p.add_argument("--env-file", default=os.environ.get("LIMBOPET_ENV_FILE", ""))
 

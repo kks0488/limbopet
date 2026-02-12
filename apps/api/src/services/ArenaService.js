@@ -21,6 +21,7 @@ const EconomyTickService = require('./EconomyTickService');
 const NotificationService = require('./NotificationService');
 const NotificationTemplateService = require('./NotificationTemplateService');
 const ArenaPrefsService = require('./ArenaPrefsService');
+const ProxyBrainService = require('./ProxyBrainService');
 const { bestEffortInTransaction } = require('../utils/savepoint');
 const { postposition } = require('../utils/korean');
 
@@ -167,17 +168,31 @@ const MODE_WEIGHTS = {
 };
 
 function pickWeighted(rng, arr) {
-  const list = Array.isArray(arr) ? arr : [];
-  if (list.length === 0) return null;
-  if (list.length === 1) return list[0];
-  const weights = list.map((m) => MODE_WEIGHTS[m] || 1.0);
-  const total = weights.reduce((s, w) => s + w, 0);
-  let r = rng() * total;
-  for (let i = 0; i < list.length; i++) {
-    r -= weights[i];
-    if (r <= 0) return list[i];
+  const list0 = Array.isArray(arr) ? arr : [];
+  if (list0.length === 0) return null;
+  if (list0.length === 1) return list0[0];
+
+  const pool = [];
+  for (const raw of list0) {
+    const m = String(raw || '').trim();
+    if (!m) continue;
+    const hasWeight = Object.prototype.hasOwnProperty.call(MODE_WEIGHTS, m);
+    const wRaw = hasWeight ? Number(MODE_WEIGHTS[m]) : 1.0;
+    const w = Number.isFinite(wRaw) ? wRaw : 1.0;
+    if (w <= 0) continue; // allow "hard-disable" by setting weight 0
+    pool.push({ m, w });
   }
-  return list[list.length - 1];
+
+  const list = pool.length ? pool : list0.map((m) => ({ m, w: 1.0 }));
+  const total = list.reduce((s, x) => s + x.w, 0);
+  if (!(total > 0)) return list0[0];
+
+  let r = rng() * total;
+  for (const x of list) {
+    r -= x.w;
+    if (r <= 0) return x.m;
+  }
+  return list[list.length - 1].m;
 }
 
 function pairKey(aId, bId) {
@@ -200,9 +215,9 @@ function buildNudgeHints(nudges) {
   const reBudgetAction = /아끼|아껴|절약|낭비\s*하지|줄여|줄이/i;
   const reImpulseWords = /충동|지름|자료|충동구매/i;
   const reNo = /하지\s*마|하지\s*말|금지|말아|줄여|줄이/i;
-  const reStudy = /공부|문제|퀴즈|퍼즐|연구/i;
-  const reCalm = /침착|싸우지\s*마|차분|조용|화해/i;
-  const reAggro = /이겨|밀어붙|싸워|박살|압도/i;
+  const reStudy = /공부|문제|퀴즈|퍼즐|연구|분석|판례|증거|모순|논리|반박|전략|준비/i;
+  const reCalm = /침착|싸우지\s*마|차분|조용|화해|냉정|신중/i;
+  const reAggro = /이겨|밀어붙|싸워|박살|압도|공격|공세|감정.*호소|설득|강하게/i;
 
   for (const n of list) {
     const kindRaw = String(n?.kind || '').trim().toLowerCase();
@@ -346,7 +361,49 @@ function buildCoachingNarrative({
   const theme = coachingThemeLabel(topRef?.text, dominantHints);
   const verb = mode === 'DEBATE_CLASH' || mode === 'COURT_TRIAL' ? '변론' : '플레이';
   const prefix = ownerUserId ? '네가 가르친' : '코칭한';
-  return safeText(`${prefix} ${theme}이 ${roundNum}라운드 ${verb}에서 ${pivot}으로 이어졌어!`, 220);
+  const quote = (() => {
+    const t = String(topRef?.text || '').trim();
+    if (!t) return '';
+    const max = 16;
+
+    const exact = t.match(/(근거[·\s]*증거\s*\d+\s*개)/) || t.match(/(증거\s*\d+\s*개)/) || t.match(/(근거\s*\d+\s*개)/);
+    if (exact?.[1]) return safeText(String(exact[1]).trim(), max);
+
+    const countIdx = t.search(/\d+\s*개/);
+    if (countIdx >= 0) {
+      const start = Math.max(0, countIdx - 10);
+      const end = Math.min(t.length, countIdx + 6);
+      const chunk = t.slice(start, end).trim();
+      return safeText(chunk.replace(/^[-–—•\s]+/, ''), max);
+    }
+
+    const keywords = ['근거', '증거', '차분', '침착', '톤', '논점', '질문', '반박', '정리'];
+    for (const k of keywords) {
+      const idx = t.indexOf(k);
+      if (idx >= 0) {
+        const start = Math.max(0, idx);
+        const end = Math.min(t.length, idx + max);
+        const chunk = t.slice(start, end).trim();
+        return safeText(chunk.replace(/^[-–—•\s]+/, ''), max);
+      }
+    }
+
+    return safeText(t, max);
+  })();
+  const quotePart = quote ? ` "${quote}"대로 한` : '';
+  const pivotPostfix = (() => {
+    const s = String(pivot || '').trim();
+    if (!s) return '으로';
+    const last = s.slice(-1);
+    const code = last.charCodeAt(0);
+    if (code >= 0xac00 && code <= 0xd7a3) {
+      const jong = (code - 0xac00) % 28;
+      // '로' (no jong or ㄹ jong)
+      return jong === 0 || jong === 8 ? '로' : '으로';
+    }
+    return '으로';
+  })();
+  return safeText(`${prefix}${quotePart} ${theme}이 ${roundNum}라운드 ${verb}에서 ${pivot}${pivotPostfix} 이어졌어!`, 220);
 }
 
 function pickResultCoachingNarrative({ winnerId, aId, bId, bySide }) {
@@ -356,6 +413,161 @@ function pickResultCoachingNarrative({ winnerId, aId, bId, bySide }) {
   if (String(winnerId || '') === String(aId || '') && aText) return aText;
   if (String(winnerId || '') === String(bId || '') && bText) return bText;
   return aText || bText || null;
+}
+
+function buildCourtArgumentFallback({ courtTrial, rounds, aName, bName, aCoaching = [], bCoaching = [], winner = 'a' } = {}) {
+  const ct = courtTrial && typeof courtTrial === 'object' ? courtTrial : {};
+  const title = safeText(ct.title, 160) || '';
+  const charge = safeText(ct.charge, 80) || '';
+  const statute = safeText(ct.statute, 220) || '';
+  const facts = Array.isArray(ct.facts) ? ct.facts.map((x) => safeText(x, 160)).filter(Boolean).slice(0, 6) : [];
+  const rds = Array.isArray(rounds) ? rounds : [];
+
+  const kind = (() => {
+    const s = `${charge} ${statute}`.toLowerCase();
+    if (/헌법|탄핵|헌법재판소/.test(s)) return 'constitutional';
+    if (/민법|국가배상|손해배상|불법행위|취소소송|행정/.test(s)) return 'civil';
+    if (/형법|처벌|특례법|벌칙|공소|징역|벌금/.test(s)) return 'criminal';
+    return /법/.test(s) ? 'civil' : 'criminal';
+  })();
+
+  const askA = kind === 'constitutional' ? '인용' : kind === 'civil' ? '청구 인용' : '유죄';
+  const askB = kind === 'constitutional' ? '기각' : kind === 'civil' ? '청구 기각' : '무죄';
+
+  const quoteFrom = (arr) => {
+    const t = safeText(String((Array.isArray(arr) ? arr[0] : '') || ''), 120).trim();
+    if (!t) return '';
+    const m = t.match(/(근거[·\s]*증거\s*\d+\s*개)/) || t.match(/(증거\s*\d+\s*개)/) || t.match(/(근거\s*\d+\s*개)/);
+    if (m?.[1]) return safeText(String(m[1]).trim(), 14);
+    const keywords = ['근거', '증거', '차분', '침착', '톤', '논점', '질문', '반박', '정리'];
+    for (const k of keywords) {
+      const idx = t.indexOf(k);
+      if (idx >= 0) return safeText(t.slice(idx, idx + 14).trim(), 14);
+    }
+    return safeText(t, 14);
+  };
+
+  const qA = quoteFrom(aCoaching);
+  const qB = quoteFrom(bCoaching);
+  const qLine = (q) => (q ? `("${q}") ` : '');
+
+  const factLine = (idx) => (facts[idx] ? `#${idx + 1} ${facts[idx]}` : '');
+  const f1 = factLine(0);
+  const f2 = factLine(1);
+  const f3 = factLine(2);
+  const f4 = factLine(3);
+
+  const leadSideForRound = (r, i) => {
+    const aD = Number(r?.a_score_delta ?? 0) || 0;
+    const bD = Number(r?.b_score_delta ?? 0) || 0;
+    if (aD === bD) return i === 2 ? winner : null;
+    return aD >= bD ? 'a' : 'b';
+  };
+
+  const normalizeCourtArgumentLength = (text, { roundNo, ask, oppAsk, confident }) => {
+    const minLen = 240;
+    const maxLen = 420;
+    let out = safeText(text, maxLen);
+    if (out.length >= minLen) return out;
+
+    const fillers = roundNo === 1
+      ? [
+        statute ? `핵심은 ${statute}의 문언을 사실에 정확히 대입하는 것입니다.` : '핵심은 법리 문언을 사실에 정확히 대입하는 것입니다.',
+        confident ? '상대의 수사는 길지만, 입증 구조는 짧고 약합니다.' : '상대는 단어를 늘리지만, 입증의 연결고리는 비어 있습니다.',
+        `따라서 재판부는 ${ask} 결론을 향해 쟁점을 정리해야 합니다.`
+      ]
+      : roundNo === 2
+        ? [
+          '반대심문 단계에서는 모순 하나만 확인돼도 전체 신빙성이 흔들립니다.',
+          `상대가 요구하는 ${oppAsk} 결론은 요건 검토를 통과하지 못합니다.`,
+          confident ? `지금까지 제출된 자료만으로도 ${ask} 판단의 근거는 충분합니다.` : `남은 쟁점까지 보면 결국 ${ask} 결론만이 합리적입니다.`
+        ]
+        : [
+          statute ? `최종적으로 ${statute}의 요건 충족 여부를 기준으로 결론을 내려야 합니다.` : '최종적으로 법정 요건 충족 여부를 기준으로 결론을 내려야 합니다.',
+          '추정이나 인상비평이 아니라, 확인된 사실과 법리의 결합으로 판단해야 합니다.',
+          `그 기준을 따르면 이 사건의 귀결은 ${ask}입니다.`
+        ];
+
+    for (const f of fillers) {
+      const line = safeText(f, 140);
+      if (!line) continue;
+      if (out.includes(line)) continue;
+      const next = `${out} ${line}`.trim();
+      if (next.length > maxLen) break;
+      out = next;
+      if (out.length >= minLen) break;
+    }
+
+    if (out.length < minLen) {
+      const tail = safeText(`결론적으로 ${ask} 판단이 법리와 증거의 흐름에 부합합니다.`, 100);
+      const next = `${out} ${tail}`.trim();
+      out = safeText(next, maxLen);
+    }
+
+    return out;
+  };
+
+  const mk = (side, roundNo, leadSide) => {
+    const isA = side === 'a';
+    const quote = isA ? qA : qB;
+    const ask = isA ? askA : askB;
+    const oppAsk = isA ? askB : askA;
+    const confident = leadSide === side;
+
+    if (roundNo === 1) {
+      const lines = [
+        `${qLine(quote)}쟁점은 두 가지입니다.`,
+        `첫째, ${title || '사건'}의 핵심 사실입니다.`,
+        f1 ? `근거 1: ${f1}.` : '근거 1: 사실관계입니다.',
+        f2 ? `근거 2: ${f2}.` : '근거 2: 기록입니다.',
+        statute ? `법리는 ${statute}에 따라 판단합니다.` : '법리는 규칙에 따라 판단합니다.',
+        confident ? '재판부도 이미 방향을 잡았습니다.' : '상대는 쟁점을 흐리려 할 것입니다.'
+      ];
+      return normalizeCourtArgumentLength(safeText(lines.filter(Boolean).join(' '), 420), { roundNo, ask, oppAsk, confident });
+    }
+
+    if (roundNo === 2) {
+      const lines = [
+        '반대심문입니다. 허점은 한 곳입니다.',
+        f3 ? `#3은 상대 주장과 충돌합니다: ${f3}.` : '상대 주장은 증거로 뒷받침되지 않습니다.',
+        f4 ? `#4를 보면 인과가 끊깁니다: ${f4}.` : '신빙성에서 균열이 납니다.',
+        confident ? '재판장: 그 근거는? 바로 위 증거입니다.' : '재판장: 그럼 무엇이 부족합니까? 입증입니다.',
+        `결론은 간단합니다. ${oppAsk}의 여지가 큽니다.`,
+        isA ? `그러니 ${ask} 쪽으로 판단해 주십시오.` : `그러니 ${ask}로 결론 내리십시오.`
+      ];
+      return normalizeCourtArgumentLength(safeText(lines.filter(Boolean).join(' '), 420), { roundNo, ask, oppAsk, confident });
+    }
+
+    const lines = [
+      '최종변론입니다. 판단기준은 한 줄입니다.',
+      statute ? `기준은 ${statute}의 요건 충족입니다.` : '기준은 요건 충족 여부입니다.',
+      f1 ? `#1, ` : '',
+      f2 ? `#2, ` : '',
+      f3 ? `#3을 대입하면 결론은 분명합니다.` : '사실을 대입하면 결론은 분명합니다.',
+      confident ? '재판부는 흔들리지 않아야 합니다.' : '의심이 남으면 결론을 늦춰야 합니다.',
+      kind === 'criminal'
+        ? `피고인에 대하여 ${ask} 선고를 구합니다.`
+        : kind === 'constitutional'
+          ? `따라서 이 사건은 ${ask}돼야 합니다.`
+          : `따라서 원고의 청구는 ${isA ? '인용' : '기각'}돼야 합니다.`
+    ];
+    return normalizeCourtArgumentLength(safeText(lines.filter(Boolean).join(' '), 420), { roundNo, ask, oppAsk, confident });
+  };
+
+  const outRounds = [];
+  for (let i = 0; i < Math.max(3, rds.length); i += 1) {
+    const r = rds[i] || { a_score_delta: 0, b_score_delta: 0 };
+    const lead = leadSideForRound(r, i);
+    outRounds.push({
+      a_argument: mk('a', i + 1, lead),
+      b_argument: mk('b', i + 1, lead)
+    });
+  }
+
+  const aClosing = safeText(`${qLine(qA)}결정적 쟁점은 요건 충족입니다. #1·#2를 법리에 대입하면 결론은 ${askA}입니다.`, 300);
+  const bClosing = safeText(`${qLine(qB)}남는 의심은 치명적입니다. 증거의 연결이 끊기면 결론은 ${askB}입니다.`, 300);
+
+  return { rounds: outRounds.slice(0, 3), a_closing: aClosing, b_closing: bClosing };
 }
 
 function summarizePromptProfileMeta(profile) {
@@ -552,10 +764,10 @@ const ACTION_LABELS_BY_MODE = {
       '증인을 흔들어놓았다',
       '단정적으로 끊었다',
       '이의 있습니다! 거세게 반발한다',
-      '증거를 내던지며 분위기를 뒤집는다',
+      '증거목록을 제시하며 분위기를 뒤집는다',
       '반대 심문에서 빈틈을 파고든다',
       '재판장의 시선을 먼저 사로잡는다',
-      '감정에 호소하며 배심원을 흔든다'
+      '방청석이 술렁인다. 재판부가 집중한다'
     ],
     침착: [
       '조목조목 반박, 빈틈이 없다',
@@ -798,6 +1010,17 @@ const REVERSAL_HIGHLIGHTS = [
   '포기하지 않았다! 드라마틱한 역전!'
 ];
 
+const COURT_REVERSAL_HIGHLIGHTS = [
+  '반대신문 한 방! 흐름이 뒤집혔다',
+  '핵심 쟁점이 바뀌었다! 재판부 표정이 달라진다',
+  '증거 신빙성이 흔들린다! 판세가 뒤집힌다',
+  '요건사실 정리로 반격! 분위기가 바뀌었다',
+  '판사가 멈춰 세웠다. 지금부터가 승부다',
+  '결정적 질문! 답변이 판을 바꿨다',
+  '치명적 모순 포착! 역전의 순간',
+  '증거 한 방. 판이 돌아섰다'
+];
+
 const CLOSE_MATCH_HIGHLIGHTS = [
   '팽팽하다! 한 끗 차이!',
   '숨 막히는 접전! 누가 이겨도 이상하지 않다',
@@ -809,6 +1032,17 @@ const CLOSE_MATCH_HIGHLIGHTS = [
   '거의 동점! 집중력 싸움이다'
 ];
 
+const COURT_CLOSE_MATCH_HIGHLIGHTS = [
+  '접전이다. 쟁점 하나가 승부를 가른다',
+  '재판부도 고민한다. 한 줄이 부족하다',
+  '증거는 팽팽. 법리가 한 끗이다',
+  '서로 인정할 건 인정. 하지만 결론은 갈린다',
+  '한 문장에 걸렸다. 지금이 분기점',
+  '치열한 공방. 마지막까지 못 놓겠다',
+  '거의 동점. 신빙성 싸움이다',
+  '판단기준 한 줄이 승부다'
+];
+
 const DOMINATION_HIGHLIGHTS = [
   '압도적이다! 상대가 꼼짝 못 한다',
   '일방적인 전개! 격차가 벌어진다',
@@ -818,6 +1052,17 @@ const DOMINATION_HIGHLIGHTS = [
   '멈출 수가 없다! 독주 체제!',
   '실력 차이가 여실히 드러나고 있다',
   '기세가 꺾일 줄 모른다! 끝이 안 보여!'
+];
+
+const COURT_DOMINATION_HIGHLIGHTS = [
+  '논점이 정리됐다. 재판부가 고개를 끄덕인다',
+  '증거 연결이 완벽하다. 반박이 막힌다',
+  '입증책임이 무너진다. 흐름이 한쪽으로 쏠린다',
+  '요건사실이 딱 맞아떨어진다. 압도적이다',
+  '법리 프레임 장악. 상대가 끌려간다',
+  '신빙성에서 갈렸다. 반격이 안 된다',
+  '한 방이 아니라 연타다. 흐름을 잡았다',
+  '판사의 질문까지 선점했다. 격이 다르다'
 ];
 
 function buildRounds({ seed, mode, aTotal10, bTotal10, ratingA, ratingB, aHints, bHints, rounds = 3 }) {
@@ -854,10 +1099,14 @@ function buildRounds({ seed, mode, aTotal10, bTotal10, ratingA, ratingB, aHints,
             '팽팽한 유지';
 
     let highlight = null;
-    if (leadChanged) highlight = pick(rng, REVERSAL_HIGHLIGHTS) || '역전! 판이 뒤집혔다!';
-    else if (Math.abs(shift) >= 0.22) highlight = shift > 0 ? pick(rng, REVERSAL_HIGHLIGHTS) || '대역전의 기운이 온다!' : pick(rng, DOMINATION_HIGHLIGHTS) || '흐름이 무너진다!';
-    else if (Math.abs(aDelta - bDelta) >= 18) highlight = pick(rng, DOMINATION_HIGHLIGHTS) || '압도적이다!';
-    else if (Math.abs(aDelta - bDelta) <= 2 && rng() < 0.35) highlight = pick(rng, CLOSE_MATCH_HIGHLIGHTS) || '팽팽하다!';
+    const useCourt = String(mode || '').trim().toUpperCase() === 'COURT_TRIAL';
+    const reversalSet = useCourt ? COURT_REVERSAL_HIGHLIGHTS : REVERSAL_HIGHLIGHTS;
+    const closeSet = useCourt ? COURT_CLOSE_MATCH_HIGHLIGHTS : CLOSE_MATCH_HIGHLIGHTS;
+    const dominationSet = useCourt ? COURT_DOMINATION_HIGHLIGHTS : DOMINATION_HIGHLIGHTS;
+    if (leadChanged) highlight = pick(rng, reversalSet) || '역전! 판이 뒤집혔다!';
+    else if (Math.abs(shift) >= 0.22) highlight = shift > 0 ? pick(rng, reversalSet) || '대역전의 기운이 온다!' : pick(rng, dominationSet) || '흐름이 무너진다!';
+    else if (Math.abs(aDelta - bDelta) >= 18) highlight = pick(rng, dominationSet) || '압도적이다!';
+    else if (Math.abs(aDelta - bDelta) <= 2 && rng() < 0.35) highlight = pick(rng, closeSet) || '팽팽하다!';
     else if (rng() < 0.12) highlight = pick(rng, ['좋은 수!', '아슬아슬…', '작은 빈틈', '흔들리지 않는다']) || null;
 
     const a_action = actionLabelFor({ mode, side: 'a', hints: aHints, rng: mulberry32(hash32(`${seed}:r${i + 1}:a`)) });
@@ -1081,6 +1330,7 @@ function buildCourtTrialCase(rng) {
     return {
       title: '연구 데이터 조작 의혹',
       charge: '데이터 조작',
+      summary: '연구소 저장소의 수정 기록과 동기/목격 정황을 두고 데이터 조작 책임을 다투는 사건.',
       facts,
       statute: '증거가 2개 이상이면 유죄, 아니면 무죄',
       correct_verdict: evidence >= 2 ? '유죄' : '무죄'
@@ -1100,6 +1350,7 @@ function buildCourtTrialCase(rng) {
     return {
       title: '광장 비방/명예훼손 사건',
       charge: '명예훼손',
+      summary: '광장 저격 게시글의 원문 증거·반복성·사실성 여부를 중심으로 명예훼손 성립을 다투는 사건.',
       facts,
       statute: '원문 증거 + 반복성이 있으면 유죄, 단 사실이면 감경(무죄 쪽)',
       correct_verdict: evidence >= 2 ? '유죄' : '무죄'
@@ -1121,6 +1372,7 @@ function buildCourtTrialCase(rng) {
   return {
     title: `${item} 절도 사건`,
     charge: '절도',
+    summary: `${item} 분실 신고 이후 CCTV/구매 증거/반환 여부를 근거로 절도 성립을 판단하는 사건.`,
     facts,
     statute: '증거가 2개 이상이면 유죄, 아니면 무죄',
     correct_verdict: evidence >= 2 ? '유죄' : '무죄'
@@ -1156,15 +1408,49 @@ function perfCourtTrial({ seed, agentId, rating, stats, jobCode, hints, courtCas
   let timeMs = clampInt(base + jitter, 1200, 11000);
   if (!correct) timeMs = clampInt(timeMs + randInt(rng, 200, 1700), 1200, 11500);
 
-  const correctVerdict = String(courtCase?.correct_verdict || '').trim() || '무죄';
-  const verdict = correct ? correctVerdict : correctVerdict === '유죄' ? '무죄' : '유죄';
+  const normalizeVerdict = (v) => String(v || '').replace(/\s+/g, ' ').trim();
+  const correctVerdict = normalizeVerdict(courtCase?.correct_verdict) || '무죄';
+
+  const oppositeVerdict = (v) => {
+    const s = normalizeVerdict(v);
+    if (!s) return '기각';
+
+    // Sentencing-style criminal verdicts (real cases often store the sentence)
+    if (/(징역|벌금|집행유예|전자장치|추징|선고)/.test(s) && !/\b(인용|기각|승소|패소)\b/.test(s)) {
+      return s.includes('무죄') ? '유죄' : '무죄';
+    }
+
+    // Criminal (synthetic)
+    if (/\b유죄\b/.test(s)) return s.replace(/\b유죄\b/g, '무죄');
+    if (/\b무죄\b/.test(s)) return s.replace(/\b무죄\b/g, '유죄');
+
+    // Constitutional
+    if (s.includes('탄핵 인용')) return '탄핵 기각 (대통령 유지)';
+    if (s.includes('탄핵 기각')) return '탄핵 인용 (대통령 파면)';
+
+    // General opposites (civil/admin)
+    if (s.includes('원고 일부 승소')) return '원고 패소';
+    if (s.includes('원고 승소')) return '원고 패소';
+    if (s.includes('원고 패소')) return '원고 승소';
+    if (s.includes('피고 승소')) return '피고 패소';
+    if (s.includes('피고 패소')) return '피고 승소';
+
+    if (s.includes('인용')) return s.replace(/인용/g, '기각');
+    if (s.includes('기각')) return s.replace(/기각/g, '인용');
+
+    return '기각';
+  };
+
+  let verdict = correct ? correctVerdict : oppositeVerdict(correctVerdict);
+  if (!correct && normalizeVerdict(verdict) === correctVerdict) verdict = '기각';
+  const verdictCorrect = normalizeVerdict(verdict) === correctVerdict;
 
   const speed = clamp01((11000 - timeMs) / 11000) * 5.0; // 0..5
-  const score = Math.max(0, Math.min(10, (correct ? 5 : 0) + speed));
+  const score = Math.max(0, Math.min(10, (verdictCorrect ? 5 : 0) + speed));
 
   return {
     verdict,
-    correct,
+    correct: verdictCorrect,
     time_ms: timeMs,
     score
   };
@@ -1675,8 +1961,15 @@ async function enqueueArenaDebateJobsWithClient(
       return null;
     });
 
+    if (!inserted?.id) {
+      return {
+        jobId: null,
+        status: 'failed'
+      };
+    }
+
     return {
-      jobId: inserted?.id ? String(inserted.id) : null,
+      jobId: String(inserted.id),
       status: String(inserted?.status || 'pending').trim().toLowerCase() || 'pending'
     };
   };
@@ -2290,7 +2583,7 @@ class ArenaService {
     const { rows } = await client.query(
       `SELECT p.match_id, p.score, p.outcome, p.wager, p.fee_burned, p.coins_net,
               p.rating_before, p.rating_after, p.rating_delta,
-              m.day, m.slot, m.mode, m.meta,
+              m.day, m.slot, m.mode, m.status, m.meta,
               rp.content AS recap_body
        FROM arena_match_participants p
        JOIN arena_matches m ON m.id = p.match_id
@@ -2327,11 +2620,28 @@ class ArenaService {
 
     return {
       history: (rows || []).map((r) => ({
+        id: r.match_id,
         matchId: r.match_id,
         day: formatIsoDayUTC(new Date(r.day)) || String(r.day || ''),
         slot: Number(r.slot ?? 1) || 1,
         mode: String(r.mode || '').trim(),
+        status: String(r.status || '').trim(),
         headline: typeof r.meta?.headline === 'string' ? String(r.meta.headline) : null,
+        meta: (() => {
+          const meta = r.meta && typeof r.meta === 'object' ? r.meta : {};
+          const headline = typeof meta.headline === 'string' ? String(meta.headline) : null;
+          const coachingNarrative = typeof meta.coaching_narrative === 'string' ? String(meta.coaching_narrative).trim() : null;
+          const nearMiss = typeof meta.near_miss === 'string' ? String(meta.near_miss).trim() : null;
+          const tags = Array.isArray(meta.tags) ? meta.tags.map((t) => String(t ?? '').trim()).filter(Boolean).slice(0, 12) : [];
+          const recapPostId = typeof meta.recap_post_id === 'string' ? String(meta.recap_post_id).trim() : null;
+          return {
+            headline,
+            coaching_narrative: coachingNarrative,
+            near_miss: nearMiss,
+            tags,
+            recap_post_id: recapPostId
+          };
+        })(),
         recapBody: typeof r.recap_body === 'string' ? r.recap_body : null,
         recap_body: typeof r.recap_body === 'string' ? r.recap_body : null,
         my: {
@@ -3861,7 +4171,15 @@ class ArenaService {
     let skipped = 0;
     let resolvedLive = 0;
 
-    for (let slot = 1; slot <= safeMatchesPerDay; slot += 1) {
+    // Include challenge-created matches that may have slot > safeMatchesPerDay
+    const { rows: maxSlotRows } = await client.query(
+      `SELECT COALESCE(MAX(slot), 0) AS max_slot FROM arena_matches WHERE season_id = $1 AND day = $2::date`,
+      [season.id, iso]
+    ).catch(() => ({ rows: [{ max_slot: 0 }] }));
+    const maxExistingSlot = clampInt(maxSlotRows?.[0]?.max_slot ?? 0, 0, 500);
+    const upperSlot = Math.max(safeMatchesPerDay, maxExistingSlot);
+
+    for (let slot = 1; slot <= upperSlot; slot += 1) {
       // eslint-disable-next-line no-await-in-loop
       const r = await bestEffortInTransaction(
         client,
@@ -4293,6 +4611,7 @@ class ArenaService {
       courtTrial = {
         title: courtCase.title,
         charge: courtCase.charge,
+        summary: safeText(courtCase.summary, 400) || '',
         facts: courtCase.facts,
         statute: courtCase.statute,
         correct_verdict: courtCase.correct_verdict,
@@ -4547,6 +4866,197 @@ class ArenaService {
       const pA = clamp01((Number(r.win_prob_a ?? 0.5) || 0.5) + cheerDelta);
       return { ...r, win_prob_a: Math.round(pA * 1000) / 1000, win_prob_b: Math.round((1 - pA) * 1000) / 1000 };
     });
+
+    // COURT_TRIAL: LLM으로 실제 법정 변론 생성 (fallback: 기존 하드코딩 라벨 유지)
+    if (mode === 'COURT_TRIAL' && courtTrial) {
+      // 펫 성격(profile) + 주인 기억(preference/coaching) 조회 → 변론 스타일에 반영
+      const [aProfileFacts, bProfileFacts, aOwnerMemFacts, bOwnerMemFacts] = await Promise.all([
+        safeQ(
+          () => client.query(
+            `SELECT key, value FROM facts WHERE agent_id = $1 AND kind = 'profile' ORDER BY confidence DESC LIMIT 5`,
+            [aId]
+          ).then(r => r.rows || []),
+          [], 'court_profile_a'
+        ),
+        safeQ(
+          () => client.query(
+            `SELECT key, value FROM facts WHERE agent_id = $1 AND kind = 'profile' ORDER BY confidence DESC LIMIT 5`,
+            [bId]
+          ).then(r => r.rows || []),
+          [], 'court_profile_b'
+        ),
+        safeQ(
+          () => client.query(
+            `SELECT key, value FROM facts WHERE agent_id = $1 AND kind IN ('preference', 'coaching') ORDER BY confidence DESC LIMIT 3`,
+            [aId]
+          ).then(r => r.rows || []),
+          [], 'court_owner_mem_a'
+        ),
+        safeQ(
+          () => client.query(
+            `SELECT key, value FROM facts WHERE agent_id = $1 AND kind IN ('preference', 'coaching') ORDER BY confidence DESC LIMIT 3`,
+            [bId]
+          ).then(r => r.rows || []),
+          [], 'court_owner_mem_b'
+        )
+      ]);
+      const extractFactText = (row) => {
+        if (!row?.value) return null;
+        if (typeof row.value === 'string') return row.value;
+        if (typeof row.value === 'object' && row.value.text) return String(row.value.text);
+        if (typeof row.value === 'object') return JSON.stringify(row.value);
+        return null;
+      };
+      const aPersonalityTraits = aProfileFacts.map(extractFactText).filter(Boolean);
+      const bPersonalityTraits = bProfileFacts.map(extractFactText).filter(Boolean);
+      const aOwnerMemories = aOwnerMemFacts.map(extractFactText).filter(Boolean);
+      const bOwnerMemories = bOwnerMemFacts.map(extractFactText).filter(Boolean);
+
+      try {
+        const courtArgs = await ProxyBrainService.generate('COURT_ARGUMENT', {
+          case: {
+            title: courtTrial.title,
+            charge: courtTrial.charge,
+            summary: courtTrial.summary || '',
+            facts: courtTrial.facts,
+            statute: courtTrial.statute,
+            actual_reasoning: courtTrial.actual_reasoning || ''
+          },
+          a: {
+            name: aName,
+            coaching: aMemoryRefs.map((r) => r.text).slice(0, 3),
+            personality_traits: aPersonalityTraits,
+            owner_memories: aOwnerMemories
+          },
+          b: {
+            name: bName,
+            coaching: bMemoryRefs.map((r) => r.text).slice(0, 3),
+            personality_traits: bPersonalityTraits,
+            owner_memories: bOwnerMemories
+          },
+          winner: winnerId === aId ? 'a' : 'b',
+          round_scores: rounds.map((r) => ({ a: r.a_score_delta, b: r.b_score_delta }))
+        });
+        if (Array.isArray(courtArgs?.rounds)) {
+          for (let i = 0; i < rounds.length && i < courtArgs.rounds.length; i += 1) {
+            const ca = courtArgs.rounds[i];
+            if (ca?.a_argument) rounds[i].a_action = String(ca.a_argument).slice(0, 600);
+            if (ca?.b_argument) rounds[i].b_action = String(ca.b_argument).slice(0, 600);
+          }
+        }
+        if (courtArgs?.a_closing) courtTrial.a_closing = String(courtArgs.a_closing).slice(0, 300);
+        if (courtArgs?.b_closing) courtTrial.b_closing = String(courtArgs.b_closing).slice(0, 300);
+        if (Array.isArray(courtArgs?.reference_cases)) {
+          courtTrial.reference_cases = courtArgs.reference_cases
+            .slice(0, 3)
+            .map((x) => {
+              const o = x && typeof x === 'object' ? x : {};
+              const caseNo = safeText(o.case_no ?? o.caseNo ?? '', 80);
+              const holding = safeText(o.holding ?? '', 220);
+              const relevance = safeText(o.relevance ?? '', 220);
+              if (!caseNo && !holding && !relevance) return null;
+              return {
+                case_no: caseNo || '판례번호 미상(입력 기준)',
+                holding: holding || '',
+                relevance: relevance || ''
+              };
+            })
+            .filter(Boolean);
+        }
+        if (courtArgs?.reasoning_summary && typeof courtArgs.reasoning_summary === 'object') {
+          const rs = courtArgs.reasoning_summary;
+          courtTrial.reasoning_summary = {
+            issue: safeText(rs.issue, 220),
+            rule: safeText(rs.rule, 220),
+            application: safeText(rs.application, 260),
+            conclusion: safeText(rs.conclusion, 220)
+          };
+        }
+        if (courtArgs?.verdict_analysis && typeof courtArgs.verdict_analysis === 'object') {
+          const va = courtArgs.verdict_analysis;
+          const a = va.a && typeof va.a === 'object' ? va.a : {};
+          const b = va.b && typeof va.b === 'object' ? va.b : {};
+          courtTrial.verdict_analysis = {
+            a: {
+              matched: safeText(a.matched, 260),
+              missed: safeText(a.missed, 260)
+            },
+            b: {
+              matched: safeText(b.matched, 260),
+              missed: safeText(b.missed, 260)
+            },
+            gap_with_actual: safeText(va.gap_with_actual ?? va.gapWithActual, 320)
+          };
+        }
+        if (courtArgs?.commentary && typeof courtArgs.commentary === 'object') {
+          const c = courtArgs.commentary;
+          const roundCommentary = Array.isArray(c.rounds)
+            ? c.rounds.map((x) => safeText(x, 160)).filter(Boolean).slice(0, 3)
+            : [];
+          for (let i = 0; i < rounds.length && i < roundCommentary.length; i += 1) {
+            const line = roundCommentary[i];
+            if (!line) continue;
+            const base = safeText(rounds[i]?.highlight, 140);
+            if (!base) {
+              rounds[i].highlight = line;
+            } else if (!base.includes(line)) {
+              rounds[i].highlight = safeText(`${base} · ${line}`, 220);
+            }
+          }
+          courtTrial.commentary = {
+            rounds: roundCommentary,
+            verdict: safeText(c.verdict, 600)
+          };
+        }
+        courtTrial.llm_arguments = true;
+      } catch (err) {
+        if (config.nodeEnv !== 'test') {
+          // eslint-disable-next-line no-console
+          console.warn('[COURT_TRIAL] LLM argument generation failed, using fallback:', err?.message || err);
+        }
+        courtTrial.llm_arguments = false;
+        try {
+          const fb = buildCourtArgumentFallback({
+            courtTrial,
+            rounds,
+            aName,
+            bName,
+            aCoaching: aMemoryRefs.map((r) => r.text).slice(0, 2),
+            bCoaching: bMemoryRefs.map((r) => r.text).slice(0, 2),
+            winner: winnerId === aId ? 'a' : 'b'
+          });
+          if (Array.isArray(fb?.rounds)) {
+            for (let i = 0; i < rounds.length && i < fb.rounds.length; i += 1) {
+              const ca = fb.rounds[i];
+              if (ca?.a_argument) rounds[i].a_action = String(ca.a_argument).slice(0, 500);
+              if (ca?.b_argument) rounds[i].b_action = String(ca.b_argument).slice(0, 500);
+            }
+          }
+          if (fb?.a_closing) courtTrial.a_closing = String(fb.a_closing).slice(0, 300);
+          if (fb?.b_closing) courtTrial.b_closing = String(fb.b_closing).slice(0, 300);
+        } catch { /* keep existing labels */ }
+      }
+
+      // Backward-compat alias keys expected by some reports/tools.
+      const openingA =
+        safeText(rounds?.[0]?.a_action ?? '', 500) ||
+        safeText(courtTrial.a_closing, 300) ||
+        safeText(courtTrial.title, 240);
+      const openingB =
+        safeText(rounds?.[0]?.b_action ?? '', 500) ||
+        safeText(courtTrial.b_closing, 300) ||
+        safeText(courtTrial.title, 240);
+      const verdictAlias =
+        safeText(courtTrial.verdict, 200) ||
+        safeText(courtTrial.correct_verdict, 200) ||
+        safeText(courtTrial.actual_verdict, 200) ||
+        safeText(courtTrial?.a?.verdict, 200) ||
+        safeText(courtTrial?.b?.verdict, 200);
+      if (!safeText(courtTrial.opening_a, 500) && openingA) courtTrial.opening_a = openingA;
+      if (!safeText(courtTrial.opening_b, 500) && openingB) courtTrial.opening_b = openingB;
+      if (!safeText(courtTrial.verdict, 200) && verdictAlias) courtTrial.verdict = verdictAlias;
+    }
+
     const coachingNarrativeBySide = {
       a: buildCoachingNarrative({
         mode,
@@ -4620,6 +5130,40 @@ class ArenaService {
         ]
       ),
       null, 'resolve_condition'
+    );
+
+    // Match result fact: store last match outcome for each agent so the pet
+    // can reference it in the next conversation (e.g. "I won!" / "I lost...").
+    const winnerOpponentName = winnerId === aId ? bName : aName;
+    const loserOpponentName = loserId === aId ? bName : aName;
+    await safeQ(
+      () => client.query(
+        `INSERT INTO facts (agent_id, kind, key, value, confidence, updated_at)
+         VALUES
+           ($1, 'arena', 'last_match_result', $2::jsonb, 1.0, NOW()),
+           ($3, 'arena', 'last_match_result', $4::jsonb, 1.0, NOW())
+         ON CONFLICT (agent_id, kind, key)
+         DO UPDATE SET value = EXCLUDED.value, confidence = 1.0, updated_at = NOW()`,
+        [
+          winnerId,
+          JSON.stringify({
+            result: 'win',
+            mode,
+            opponent: winnerOpponentName,
+            match_id: String(match.id),
+            timestamp: new Date().toISOString()
+          }),
+          loserId,
+          JSON.stringify({
+            result: 'loss',
+            mode,
+            opponent: loserOpponentName,
+            match_id: String(match.id),
+            timestamp: new Date().toISOString()
+          })
+        ]
+      ),
+      null, 'resolve_match_result_fact'
     );
 
     // Stake penalties (P1.3): user-owned pet loss => coin burn + XP penalty.
@@ -5217,5 +5761,10 @@ class ArenaService {
     return { resolved: true, matchId: match.id };
   }
 }
+
+ArenaService.__test = {
+  buildCoachingNarrative,
+  buildCourtArgumentFallback
+};
 
 module.exports = ArenaService;

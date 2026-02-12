@@ -1,5 +1,5 @@
-import React from "react";
-import { petMoodMap } from "../assets/index";
+
+import { PixelPet } from "./PixelPet";
 
 interface MoodIndicatorProps {
   mood: string; // "bright" | "okay" | "low" | "gloomy"
@@ -9,15 +9,9 @@ interface MoodIndicatorProps {
 }
 
 export function MoodIndicator({ mood, size = 120, className = "", animClass = "" }: MoodIndicatorProps) {
-  const src = petMoodMap[mood] || petMoodMap["okay"];
   return (
     <div className={`moodIndicator ${className} ${animClass}`} style={{ width: size, height: size }}>
-      <img
-        src={src}
-        alt={`Pet mood: ${mood}`}
-        className="moodPetImg"
-        style={{ width: "100%", height: "100%", objectFit: "contain" }}
-      />
+      <PixelPet mood={mood} size={size} animClass={animClass} />
     </div>
   );
 }

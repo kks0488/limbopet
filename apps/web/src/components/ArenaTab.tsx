@@ -1,199 +1,130 @@
-import React from "react";
 
-const MODE_INFO: Record<string, { icon: string; name: string; desc: string; mechanic: string; difficulty: number; tips: string }> = {
-  DEBATE_CLASH: {
-    icon: '⚔️',
-    name: '설전',
-    desc: '뜨거운 주제로 AI끼리 논리 배틀! 논리·침착·임팩트 3축 평가.',
-    mechanic: '주제 공개 → 입장 배정 → 주장 3개 → 최종변론',
-    difficulty: 2,
-    tips: '"논리 공격"으로 상대 허점을 찌르거나, "카운터"로 반격하세요.',
-  },
-  AUCTION_DUEL: {
-    icon: '💰',
-    name: '경매전',
-    desc: '한정판 아이템을 두고 벌이는 입찰 심리전!',
-    mechanic: '경매품 공개 → 전략 선택 → 입찰 → 낙찰 결정',
-    difficulty: 2,
-    tips: '"스나이핑"으로 마지막에 치고 들어가거나, "블러프"로 상대를 흔드세요.',
-  },
-  COURT_TRIAL: {
-    icon: '🏛️',
-    name: '모의재판',
-    desc: '실제 한국 판례 기반! AI 펫이 검사/변호사가 되어 공방을 벌여요.',
-    mechanic: '증거 분석 → 전략 지시 → 3라운드 공방 → 판결 비교',
-    difficulty: 3,
-    tips: '"증거 집중"과 "판례 인용"이 승률에 가장 큰 영향을 줘요.',
-  },
-  /* MATH_RACE, PUZZLE_SPRINT, PROMPT_BATTLE — 비활성 */
+
+const MODE_LABEL: Record<string, { icon: string; name: string }> = {
+  COURT_TRIAL: { icon: '\uD83C\uDFDB\uFE0F', name: '\uBAA8\uC758\uC7AC\uD310' },
+  DEBATE_CLASH: { icon: '\u2694\uFE0F', name: '\uC124\uC804' },
 };
 
 interface ArenaTabProps {
   pet: { id: string; name: string; display_name?: string | null } | null;
-  arenaToday: any;
-  arenaMatches: any[];
   arenaLeaderboard: any;
   arenaHistory: any[];
   arenaMy: any;
-  arenaSeasonCode: string;
   myArenaMatchToday: any;
-  arenaBest: any;
-  arenaModeChoices: Array<{ code: string; label: string; short: string }>;
-  effectiveArenaModes: () => string[];
-  toggleArenaMode: (code: string) => void;
-  arenaCoachDraft: string;
-  onArenaCoachDraftChange: (v: string) => void;
-  onSaveArenaPrefs: () => void;
-  arenaPrefsBusy: boolean;
   onRefreshArena: () => void;
   onLoadArenaLeaderboard: () => void;
   onOpenMatch: (matchId: string) => void;
-  onOpenPost: (postId: string) => void;
-  modeStats: Record<string, { total: number; wins: number; losses: number; winRate: number }>;
   onChallenge: (mode: string) => void;
   challengeBusy: boolean;
   busy: boolean;
-  uiMode: string;
-  petAdvanced: boolean;
-  showAdvanced?: boolean;
 }
 
 export function ArenaTab({
   pet,
-  arenaToday,
-  arenaMatches,
   arenaLeaderboard,
   arenaHistory,
   arenaMy,
-  arenaSeasonCode,
   myArenaMatchToday,
-  arenaBest,
-  arenaModeChoices,
-  effectiveArenaModes,
-  toggleArenaMode,
-  arenaCoachDraft,
-  onArenaCoachDraftChange,
-  onSaveArenaPrefs,
-  arenaPrefsBusy,
   onRefreshArena,
   onLoadArenaLeaderboard,
   onOpenMatch,
-  onOpenPost,
-  modeStats,
   onChallenge,
   challengeBusy,
   busy,
-  uiMode,
-  petAdvanced,
-  showAdvanced = false,
 }: ArenaTabProps) {
-  const world = arenaToday;
-  const dayLabel = String((world as any)?.day ?? "");
-  const matchCount = arenaMatches.length;
-  const resolvedCount = arenaMatches.filter(
-    (m: any) => String(m?.status ?? "").toLowerCase() === "resolved",
-  ).length;
-  const liveCount = arenaMatches.filter(
-    (m: any) => String(m?.status ?? "").toLowerCase() === "live",
-  ).length;
-
   return (
     <div className="arenaTab">
-      {/* Header */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="row" style={{ justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
-          <h2 style={{ margin: 0 }}>⚔️ 오늘의 아레나</h2>
-          <div className="row" style={{ gap: 8 }}>
+      {/* ── Header: Title + Refresh + Leaderboard ── */}
+      <div className="card arena-tab-card">
+        <div className="row arena-tab-header">
+          <h2 className="arena-tab-title">&#x2694;&#xFE0F; &#xC624;&#xB298;&#xC758; &#xC544;&#xB808;&#xB098;</h2>
+          <div className="row arena-tab-actions">
             <button className="btn" type="button" onClick={onRefreshArena} disabled={busy}>
-              새로고침
+              &#xC0C8;&#xB85C;&#xACE0;&#xCE68;
             </button>
             <button className="btn" type="button" onClick={onLoadArenaLeaderboard} disabled={busy}>
-              리더보드
+              &#xB9AC;&#xB354;&#xBCF4;&#xB4DC;
             </button>
           </div>
         </div>
-        <div className="row" style={{ marginTop: 8, flexWrap: "wrap", gap: 6 }}>
-          {arenaSeasonCode ? <span className="badge">{arenaSeasonCode}</span> : null}
-          {arenaMy ? <span className="badge">내 레이팅 {Number((arenaMy as any)?.rating ?? 1000)}</span> : null}
-          <span className="badge">경기 {matchCount}</span>
-          {liveCount > 0 ? <span className="badge" style={{ borderColor: "var(--system-red)" }}>LIVE {liveCount}</span> : null}
-        </div>
       </div>
 
-      {/* Section A: My Match Highlight */}
-      {myArenaMatchToday ? (
-        <div className="arenaSection">
-          <div className="arenaSectionTitle">🏆 내 매치 (오늘)</div>
-          <div className="myMatchCard">
-            <div style={{ fontWeight: 700 }}>
-              {String((myArenaMatchToday as any)?.headline ?? (myArenaMatchToday as any)?.meta?.headline ?? "경기")}
-            </div>
-            {(() => {
-              const parts = Array.isArray((myArenaMatchToday as any)?.participants) ? (myArenaMatchToday as any).participants : [];
-              const a = parts[0];
-              const b = parts[1];
-              if (a && b) {
-                const aName = String(a?.agent?.displayName ?? a?.agent?.name ?? "").trim() || "A";
-                const bName = String(b?.agent?.displayName ?? b?.agent?.name ?? "").trim() || "B";
-                const aProb = Number((myArenaMatchToday as any)?.meta?.win_prob_a ?? 50);
-                const bProb = 100 - aProb;
-                return (
-                  <div className="winProbBar">
-                    <span className="winProbLabel">{aName}</span>
-                    <div className="winProbTrack">
-                      <div className="winProbFillA" style={{ width: `${aProb}%` }} />
-                      <div className="winProbFillB" style={{ width: `${bProb}%` }} />
-                    </div>
-                    <span className="winProbLabel">{bName}</span>
-                  </div>
-                );
-              }
-              return null;
-            })()}
-            {(() => {
-              const meta = ((myArenaMatchToday as any)?.meta && typeof (myArenaMatchToday as any).meta === "object")
-                ? (myArenaMatchToday as any).meta
-                : {};
-              const cast = (meta?.cast && typeof meta.cast === "object") ? meta.cast : {};
-              const aId = String(cast?.aId ?? cast?.a_id ?? "").trim();
-              const bId = String(cast?.bId ?? cast?.b_id ?? "").trim();
-              const meId = String(pet?.id ?? "").trim();
-              const side = meId && meId === aId ? "a" : meId && meId === bId ? "b" : null;
-              if (!side) return null;
-
-              const t = (meta?.training_influence && typeof meta.training_influence === "object")
-                ? (meta.training_influence as any)?.[side]
-                : null;
-              const m = (meta?.recent_memory_influence && typeof meta.recent_memory_influence === "object")
-                ? (meta.recent_memory_influence as any)?.[side]
-                : null;
-              const p = (meta?.prompt_profile && typeof meta.prompt_profile === "object")
-                ? (meta.prompt_profile as any)?.[side]
-                : null;
-
-              const dominant = Array.isArray(t?.weights?.dominant)
-                ? (t.weights.dominant as any[]).map((x) => String(x ?? "").trim()).filter(Boolean).slice(0, 2)
-                : [];
-              const memoryScore = Number(m?.score ?? 0) || 0;
-              const memoryCount = Number(m?.count ?? 0) || 0;
-              const promptEnabled = Boolean(p?.enabled);
-              const promptCustom = Boolean(p?.has_custom);
-
-              if (!dominant.length && !memoryCount && !promptCustom) return null;
+      {/* ── Leaderboard ── */}
+      {arenaLeaderboard?.leaderboard?.length > 0 ? (
+        <div className="card arena-tab-card--spaced">
+          <h2 className="arena-tab-title">{"\uD83C\uDFC5"} &#xB9AC;&#xB354;&#xBCF4;&#xB4DC;</h2>
+          <div className="arena-leaderboard">
+            {(arenaLeaderboard.leaderboard as any[]).slice(0, 10).map((entry: any, idx: number) => {
+              const name = String(entry?.agent?.displayName ?? entry?.agent?.name ?? "?");
+              const rating = Number(entry?.rating ?? 0);
+              const wins = Number(entry?.wins ?? 0);
+              const losses = Number(entry?.losses ?? 0);
+              const medal = idx === 0 ? "\uD83E\uDD47" : idx === 1 ? "\uD83E\uDD48" : idx === 2 ? "\uD83E\uDD49" : `${idx + 1}`;
               return (
-                <div className="row" style={{ marginTop: 8, flexWrap: "wrap", gap: 6 }}>
-                  {dominant.length ? <span className="badge">훈련 {dominant.join("·")}</span> : null}
-                  <span className="badge">메모리 {memoryCount}개 / {memoryScore.toFixed(2)}</span>
-                  <span className="badge">프롬프트 {promptEnabled ? "ON" : "OFF"} · {promptCustom ? "커스텀" : "기본"}</span>
+                <div key={entry?.agent?.id ?? idx} className="arena-leaderboard-row">
+                  <span className="arena-leaderboard-rank">{medal}</span>
+                  <span className="arena-leaderboard-name">{name}</span>
+                  <span className="arena-leaderboard-rating">{rating}</span>
+                  <span className="arena-leaderboard-record muted">{wins}&#xC2B9; {losses}&#xD328;</span>
                 </div>
               );
-            })()}
-            <div className="row" style={{ marginTop: 10, gap: 8, flexWrap: "wrap" }}>
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── Loading skeleton ── */}
+      {busy && !arenaMy ? (
+        <div className="card arena-tab-card">
+          <div className="arenaLoadingSkeleton">
+            <div className="skeletonLine skeletonWide" />
+            <div className="skeletonLine skeletonMedium" />
+            <div className="skeletonBlock" />
+            <div className="skeletonLine skeletonShort" />
+          </div>
+        </div>
+      ) : (
+      <>
+      {/* ── Challenge Buttons ── */}
+      {pet ? (
+        <div className="card arena-tab-card--spaced">
+          <h2 className="arena-tab-title">&#xB3C4;&#xC804;&#xD558;&#xAE30;</h2>
+          <div className="muted arena-tab-subtitle">&#xC0C1;&#xB300;&#xB97C; &#xACE8;&#xB77C;&#xC11C; &#xBC14;&#xB85C; &#xACBD;&#xAE30;&#xB97C; &#xC2DC;&#xC791;&#xD574;&#xC694;.</div>
+          <div className="row arena-tab-challenge-row">
+            {(["COURT_TRIAL", "DEBATE_CLASH"] as const).map((mode) => {
+              const label = MODE_LABEL[mode];
+              if (!label) return null;
+              return (
+                <button
+                  key={mode}
+                  className="btn primary arena-tab-challenge-btn"
+                  type="button"
+                  onClick={() => onChallenge(mode)}
+                  disabled={busy || challengeBusy}
+                >
+                  {label.icon} {label.name} &#xB3C4;&#xC804;
+                </button>
+              );
+            })}
+          </div>
+          {challengeBusy ? <div className="arenaMatchingPulse">{"\u2694\ufe0f"} &#xC0C1;&#xB300;&#xB97C; &#xCC3E;&#xACE0; &#xC788;&#xC5B4;&#xC694;...</div> : null}
+        </div>
+      ) : null}
+
+      {/* ── My Match ── */}
+      {myArenaMatchToday ? (
+        <div className="arenaSection">
+          <div className="arenaSectionTitle">&#x1F3C6; &#xB0B4; &#xB9E4;&#xCE58; (&#xC624;&#xB298;)</div>
+          <div className="myMatchCard">
+            <div className="arena-tab-match-headline">
+              {String((myArenaMatchToday as any)?.headline ?? (myArenaMatchToday as any)?.meta?.headline ?? "\uACBD\uAE30")}
+            </div>
+            <div className="row arena-tab-match-actions">
               {String((myArenaMatchToday as any)?.status ?? "").toLowerCase() === "live" ? (
                 <span className="matchTag live">LIVE</span>
               ) : null}
               {String((myArenaMatchToday as any)?.status ?? "").toLowerCase() === "resolved" ? (
-                <span className="badge">완료</span>
+                <span className="badge">&#xC644;&#xB8CC;</span>
               ) : null}
               <button
                 className="btn primary"
@@ -204,46 +135,67 @@ export function ArenaTab({
                 }}
                 disabled={busy || !(myArenaMatchToday as any)?.id}
               >
-                관전하기
+                &#xAD00;&#xC804;&#xD558;&#xAE30;
               </button>
             </div>
           </div>
         </div>
       ) : arenaMy ? (
         <div className="arenaSection">
-          <div className="arenaSectionTitle">🏆 내 매치</div>
-          <div className="empty">오늘은 아직 경기가 안 잡혔어. 조금만 기다려봐.</div>
+          <div className="arenaSectionTitle">&#x1F3C6; &#xB0B4; &#xB9E4;&#xCE58;</div>
+          <div className="emptyStateBox arena-tab-empty--compact">
+            <div className="emptyStateEmoji">{"\u23F3"}</div>
+            <div className="emptyStateDesc">&#xC624;&#xB298;&#xC740; &#xC544;&#xC9C1; &#xACBD;&#xAE30;&#xAC00; &#xC5C6;&#xC5B4;&#xC694;. &#xC870;&#xAE08;&#xB9CC; &#xAE30;&#xB2E4;&#xB824; &#xBD10;&#xC694;!</div>
+          </div>
         </div>
       ) : null}
 
-      {/* 참여 종목 선택 */}
-      {pet ? (
-        <div className="card" style={{ marginTop: 16 }}>
-          <h2 style={{ margin: 0 }}>참여 종목</h2>
-          <div className="row" style={{ marginTop: 10, flexWrap: "wrap", gap: 6 }}>
-            {arenaModeChoices.map((m) => {
-              const on = effectiveArenaModes().includes(m.code);
+      {/* ── Recent Matches ── */}
+      {arenaHistory.length > 0 ? (
+        <div className="card arena-tab-card--spaced">
+          <h2 className="arena-tab-title">&#xCD5C;&#xADFC; &#xACBD;&#xAE30;</h2>
+          <div className="arena-tab-history-list">
+            {arenaHistory.slice(0, 10).map((m: any) => {
+              const meta = m?.meta && typeof m.meta === "object" ? m.meta : {};
+              const headline = String(meta?.headline ?? m?.headline ?? "\uACBD\uAE30");
+              const status = String(m?.status ?? "").toLowerCase();
+              const label = MODE_LABEL[String(m?.mode ?? "")] ?? null;
               return (
-                <button
-                  key={m.code}
-                  className={`btn ${on ? "primary" : ""}`}
-                  type="button"
-                  onClick={() => toggleArenaMode(m.code)}
-                  disabled={busy}
-                >
-                  {on ? "✅ " : ""}{m.short}
-                </button>
+                <div key={m.id} className="arena-tab-history-item">
+                  <div className="row arena-tab-history-header">
+                    <span className="arena-tab-history-headline">
+                      {label ? `${label.icon} ` : ""}{headline}
+                    </span>
+                    {status === "resolved" ? <span className="badge">&#xC644;&#xB8CC;</span> : <span className="badge arena-tab-badge--live">LIVE</span>}
+                  </div>
+                  <button className="btn btnSmall arena-tab-detail-btn" type="button" onClick={() => onOpenMatch(m.id)}>
+                    &#xC0C1;&#xC138;&#xBCF4;&#xAE30;
+                  </button>
+                </div>
               );
             })}
-            <button className="btn primary" type="button" onClick={onSaveArenaPrefs} disabled={busy || arenaPrefsBusy}>
-              {arenaPrefsBusy ? "저장 중…" : "저장"}
-            </button>
           </div>
         </div>
-      ) : (
-        <div className="card" style={{ marginTop: 16 }}>
-          <div className="muted">펫을 만들면 아레나에 참여할 수 있어요.</div>
+      ) : pet && arenaMy ? (
+        <div className="card arena-tab-card--spaced">
+          <h2 className="arena-tab-title">{"\u2694\uFE0F"} &#xCCAB; &#xACBD;&#xAE30;&#xB97C; &#xC2DC;&#xC791;&#xD574; &#xBCF4;&#xC138;&#xC694;!</h2>
+          <div className="muted arena-tab-subtitle" style={{ textAlign: "center" }}>
+            &#xC704;&#xC758; &#xB3C4;&#xC804;&#xD558;&#xAE30; &#xBC84;&#xD2BC;&#xC744; &#xB20C;&#xB7EC; &#xC2DC;&#xC791;&#xD574; &#xBCF4;&#xC138;&#xC694;.
+          </div>
         </div>
+      ) : null}
+
+      {/* ── No pet state ── */}
+      {!pet ? (
+        <div className="card arena-tab-card--spaced">
+          <div className="emptyStateBox">
+            <div className="emptyStateEmoji">{"\u2694\uFE0F"}</div>
+            <div className="emptyStateTitle">&#xC544;&#xB808;&#xB098;</div>
+            <div className="emptyStateDesc">&#xD3AB;&#xC744; &#xB9CC;&#xB4E4;&#xBA74; &#xC544;&#xB808;&#xB098;&#xC5D0; &#xCC38;&#xC5EC;&#xD560; &#xC218; &#xC788;&#xC5B4;&#xC694;. &#xD3AB; &#xD0ED;&#xC5D0;&#xC11C; &#xC2DC;&#xC791;&#xD574; &#xBD10;&#xC694;!</div>
+          </div>
+        </div>
+      ) : null}
+      </>
       )}
     </div>
   );

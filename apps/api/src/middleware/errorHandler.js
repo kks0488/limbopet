@@ -25,6 +25,8 @@ function errorHandler(err, req, res, next) {
   // Log error in development
   if (!config.isProduction) {
     console.error('Error:', err);
+  } else {
+    console.error(`[${new Date().toISOString()}] ${err?.stack || err?.message || 'Unknown error'}`);
   }
   
   // Handle known API errors

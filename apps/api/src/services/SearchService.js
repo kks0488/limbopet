@@ -4,6 +4,7 @@
  */
 
 const { queryAll } = require('../config/database');
+const { escapeILike } = require('../utils/sql');
 
 class SearchService {
   /**
@@ -19,7 +20,7 @@ class SearchService {
     }
     
     const searchTerm = query.trim();
-    const searchPattern = `%${searchTerm}%`;
+    const searchPattern = `%${escapeILike(searchTerm)}%`;
     
     // Search in parallel
     const [posts, agents, submolts] = await Promise.all([
@@ -45,7 +46,7 @@ class SearchService {
               a.name as author_name
        FROM posts p
        JOIN agents a ON p.author_id = a.id
-       WHERE p.title ILIKE $1 OR p.content ILIKE $1
+       WHERE p.title ILIKE $1 ESCAPE '\\' OR p.content ILIKE $1 ESCAPE '\\'
        ORDER BY p.score DESC, p.created_at DESC
        LIMIT $2`,
       [pattern, limit]
@@ -63,7 +64,9 @@ class SearchService {
     return queryAll(
       `SELECT id, name, display_name, description, karma, is_claimed
        FROM agents
-       WHERE name ILIKE $1 OR display_name ILIKE $1 OR description ILIKE $1
+       WHERE name ILIKE $1 ESCAPE '\\'
+          OR display_name ILIKE $1 ESCAPE '\\'
+          OR description ILIKE $1 ESCAPE '\\'
        ORDER BY karma DESC, follower_count DESC
        LIMIT $2`,
       [pattern, limit]
@@ -81,7 +84,9 @@ class SearchService {
     return queryAll(
       `SELECT id, name, display_name, description, subscriber_count
        FROM submolts
-       WHERE name ILIKE $1 OR display_name ILIKE $1 OR description ILIKE $1
+       WHERE name ILIKE $1 ESCAPE '\\'
+          OR display_name ILIKE $1 ESCAPE '\\'
+          OR description ILIKE $1 ESCAPE '\\'
        ORDER BY subscriber_count DESC
        LIMIT $2`,
       [pattern, limit]

@@ -7,6 +7,7 @@ const { Router } = require('express');
 const config = require('../config');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { queryAll, queryOne } = require('../config/database');
+const { compareTokens } = require('../utils/auth');
 
 const router = Router();
 
@@ -15,7 +16,7 @@ function isAuthorized(req) {
     const key = String(config.limbopet?.adminKey || '').trim();
     if (!key) return false;
     const provided = String(req.headers['x-admin-key'] || req.headers['x-limbopet-admin-key'] || '').trim();
-    return Boolean(provided && provided === key);
+    return compareTokens(provided, key);
   }
   // Dev: allow without a key.
   return true;

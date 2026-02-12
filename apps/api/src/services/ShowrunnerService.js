@@ -596,7 +596,7 @@ class ShowrunnerService {
         const targetCoverage = Math.ceil(actorCount * 0.5);
         const missingCoverage = Math.max(0, targetCoverage - coveredCount);
         const neededEpisodes = Math.ceil(missingCoverage / 2);
-        const coverageAllowed = neededEpisodes > 0 ? Math.min(120, countToday + neededEpisodes) : countToday;
+        const coverageAllowed = neededEpisodes > 0 ? Math.min(MAX_EPISODES_PER_DAY * 3, countToday + neededEpisodes) : countToday;
         allowed = Math.max(timeAllowed, coverageAllowed);
         coveragePlan = { actorCount, coveredCount, targetCoverage, neededEpisodes };
       }

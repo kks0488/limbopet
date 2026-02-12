@@ -5,7 +5,13 @@ export type ApiErrorPayload = {
   hint?: string;
 };
 
+let _onGlobalAuthError: (() => void) | null = null;
+export function setGlobalAuthErrorHandler(handler: (() => void) | null) {
+  _onGlobalAuthError = handler;
+}
+
 const DEFAULT_API_URL = "http://localhost:3001/api/v1";
+const FETCH_TIMEOUT_MS = 15_000;
 
 export function apiUrl(): string {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,7 +44,7 @@ export function apiUrl(): string {
 
 async function apiFetch<T>(
   path: string,
-  opts: RequestInit & { token?: string } = {},
+  opts: RequestInit & { token?: string; timeoutMs?: number } = {},
 ): Promise<T> {
   const url = `${apiUrl()}${path.startsWith("/") ? "" : "/"}${path}`;
   const headers = new Headers(opts.headers || {});
@@ -47,19 +53,36 @@ async function apiFetch<T>(
     headers.set("Authorization", `Bearer ${opts.token}`);
   }
 
-  const res = await fetch(url, { ...opts, headers });
-  if (!res.ok) {
-    let body: ApiErrorPayload | null = null;
-    try {
-      body = (await res.json()) as ApiErrorPayload;
-    } catch {
-      // ignore
+  const { token: _, timeoutMs, ...fetchOpts } = opts;
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), timeoutMs ?? FETCH_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(url, { ...fetchOpts, headers, signal: controller.signal });
+    if (!res.ok) {
+      let body: ApiErrorPayload | null = null;
+      try {
+        body = (await res.json()) as ApiErrorPayload;
+      } catch {
+        // ignore
+      }
+      if (res.status === 401 || res.status === 403) {
+        if (_onGlobalAuthError) _onGlobalAuthError();
+      }
+      const msg = body?.error || `HTTP ${res.status}`;
+      const code = (body as any)?.code ? `[${(body as any).code}] ` : "";
+      const hint = body?.hint ? ` (${body.hint})` : "";
+      throw new Error(`${code}${msg}${hint}`);
     }
-    const msg = body?.error || `HTTP ${res.status}`;
-    const hint = body?.hint ? ` (${body.hint})` : "";
-    throw new Error(`${msg}${hint}`);
+    return (await res.json()) as T;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("요청 시간이 초과되었습니다");
+    }
+    throw err;
+  } finally {
+    clearTimeout(tid);
   }
-  return (await res.json()) as T;
 }
 
 export type User = {
@@ -101,76 +124,6 @@ export async function fetchNotifications(
   if (opts.limit) q.set("limit", String(opts.limit));
   const suffix = q.toString() ? `?${q.toString()}` : "";
   return apiFetch(`/users/me/notifications${suffix}`, { method: "GET", token });
-}
-
-export async function markNotificationRead(
-  token: string,
-  id: number,
-): Promise<{ notification: UserNotification; unread_count: number }> {
-  return apiFetch(`/users/me/notifications/${encodeURIComponent(String(id))}/read`, {
-    method: "POST",
-    token,
-  });
-}
-
-export async function markAllNotificationsRead(
-  token: string,
-): Promise<{ marked: number; unread_count: number }> {
-  return apiFetch("/users/me/notifications/read-all", { method: "POST", token });
-}
-
-export type UserStreak = {
-  id: number;
-  user_id: string;
-  streak_type: string;
-  current_streak: number;
-  longest_streak: number;
-  last_completed_at?: string | null;
-  streak_shield_count: number;
-  created_at?: string | null;
-  updated_at?: string | null;
-};
-
-export async function myStreaks(token: string): Promise<{ streaks: UserStreak[] }> {
-  return apiFetch("/users/me/streaks", { method: "GET", token });
-}
-
-export async function petStreaks(token: string): Promise<{ streaks: UserStreak[] }> {
-  return apiFetch("/users/me/streaks", { method: "GET", token });
-}
-
-export type PetStreakRecordResponse = {
-  updated: boolean;
-  reason?: string;
-  day: string;
-  used_shield?: boolean;
-  reset?: boolean;
-  milestone?: number | null;
-  reward?: unknown;
-  streak: UserStreak;
-};
-
-export async function petStreakRecord(
-  token: string,
-  type?: string,
-): Promise<PetStreakRecordResponse> {
-  const body = type ? { streak_type: type } : {};
-  return apiFetch("/users/me/streaks/record", { method: "POST", token, body: JSON.stringify(body) });
-}
-
-export async function petStreakShield(
-  token: string,
-  type?: string,
-): Promise<{ used_shield: boolean; streak: UserStreak }> {
-  const body = type ? { streak_type: type } : {};
-  return apiFetch("/users/me/streaks/shield", { method: "POST", token, body: JSON.stringify(body) });
-}
-
-export async function useMyStreakShield(
-  token: string,
-  type: string,
-): Promise<{ used_shield: boolean; day: string; milestone?: number | null; reward?: unknown; streak: UserStreak }> {
-  return apiFetch(`/users/me/streaks/${encodeURIComponent(type)}/shield`, { method: "POST", token });
 }
 
 export type PetStats = {
@@ -276,118 +229,6 @@ export async function timeline(token: string, limit = 50): Promise<{ events: Tim
   return apiFetch(`/users/me/pet/timeline?${q.toString()}`, { method: "GET", token });
 }
 
-export type RelationshipVector = {
-  affinity: number;
-  trust: number;
-  jealousy: number;
-  rivalry: number;
-  debt: number;
-  updated_at?: string;
-};
-
-export type PetRelationship = {
-  other: { id: string; name: string; displayName?: string | null };
-  out: RelationshipVector;
-  in?: RelationshipVector | null;
-};
-
-export async function myPetRelationships(token: string, limit = 20): Promise<{ relationships: PetRelationship[] }> {
-  const q = new URLSearchParams({ limit: String(limit) });
-  return apiFetch(`/users/me/pet/relationships?${q.toString()}`, { method: "GET", token });
-}
-
-export type RelationshipMemory = {
-  id: number;
-  from_agent_id: string;
-  to_agent_id: string;
-  event_type: string;
-  summary: string;
-  emotion?: string | null;
-  day: string;
-  created_at?: string;
-};
-
-export async function agentRelationshipMemories(
-  token: string,
-  agentId: string,
-  targetId: string,
-  limit = 20,
-): Promise<{ memories: RelationshipMemory[] }> {
-  const q = new URLSearchParams({ limit: String(limit) });
-  return apiFetch(
-    `/agents/${encodeURIComponent(agentId)}/relationships/${encodeURIComponent(targetId)}/memories?${q.toString()}`,
-    { method: "GET", token },
-  );
-}
-
-export type LimboTodayBundle = {
-  day: string;
-  memory: unknown | null;
-  weekly?: unknown | null;
-  job: unknown | null;
-  checkin?: unknown;
-};
-
-export async function limboToday(token: string): Promise<LimboTodayBundle> {
-  return apiFetch("/users/me/pet/limbo/today", { method: "GET", token });
-}
-
-export async function rotateBrainKey(token: string): Promise<{ agent: { api_key: string }; important: string }> {
-  return apiFetch("/users/me/pet/brain-key/rotate", { method: "POST", token });
-}
-
-export type TimedDecisionChoice = {
-  id: string;
-  label: string;
-  effect?: unknown;
-};
-
-export type TimedDecision = {
-  id: string;
-  agent_id: string;
-  decision_type: string;
-  expires_at: string;
-  remaining_ms?: number;
-  choices: TimedDecisionChoice[];
-  default_choice?: string | null;
-  penalty?: unknown;
-  meta?: unknown;
-  created_at?: string;
-};
-
-export async function myDecisions(token: string): Promise<{ decisions: TimedDecision[] }> {
-  return apiFetch("/users/me/decisions", { method: "GET", token });
-}
-
-export async function resolveMyDecision(
-  token: string,
-  id: string,
-  choice: string,
-): Promise<{ decision: TimedDecision }> {
-  return apiFetch(`/users/me/decisions/${encodeURIComponent(id)}/resolve`, {
-    method: "POST",
-    token,
-    body: JSON.stringify({ choice }),
-  });
-}
-
-export type AbsenceSummary = {
-  days_away: number;
-  lost: unknown;
-  current_state: unknown;
-};
-
-export async function absenceSummary(token: string): Promise<AbsenceSummary> {
-  return apiFetch("/users/me/absence-summary", { method: "GET", token });
-}
-
-export async function updatePetProfile(
-  token: string,
-  updates: { displayName?: string; description?: string; avatarUrl?: string },
-): Promise<{ pet: Pet }> {
-  return apiFetch("/users/me/pet/profile", { method: "PATCH", token, body: JSON.stringify(updates) });
-}
-
 export async function brainStatus(token: string): Promise<{ status: unknown }> {
   return apiFetch("/users/me/pet/brain/status", { method: "GET", token });
 }
@@ -434,7 +275,7 @@ export async function setMyBrainProfile(
   token: string,
   input: { provider: string; model: string; api_key: string; base_url?: string | null },
 ): Promise<{ profile: UserBrainProfile }> {
-  return apiFetch("/users/me/brain", { method: "POST", token, body: JSON.stringify(input) });
+  return apiFetch("/users/me/brain", { method: "POST", token, body: JSON.stringify(input), timeoutMs: 60_000 });
 }
 
 export async function startGeminiOauth(token: string): Promise<{ url: string }> {
@@ -515,7 +356,7 @@ export async function brainProxyModels(
 
 export async function brainProxyAuthFiles(
   token: string,
-): Promise<{ files: Array<{ provider: string; connected_at?: string }> }> {
+): Promise<{ files: Array<{ provider: string; updated_at?: string }> }> {
   return apiFetch("/users/me/brain/proxy/auth-files", { method: "GET", token });
 }
 
@@ -529,37 +370,11 @@ export async function brainProxyDisconnect(
   });
 }
 
-export async function createDiaryPostJob(
-  token: string,
-  submolt = "general",
-): Promise<{ job: unknown; reused: boolean }> {
-  return apiFetch("/users/me/pet/diary-post", { method: "POST", token, body: JSON.stringify({ submolt }) });
-}
-
 export async function createPlazaPostJob(
   token: string,
   submolt = "general",
 ): Promise<{ job: unknown; reused: boolean }> {
   return apiFetch("/users/me/pet/plaza-post", { method: "POST", token, body: JSON.stringify({ submolt }) });
-}
-
-export type MemoryNudgeInput =
-  | { text: string; value?: unknown }
-  | { type: "sticker"; key: string; value?: unknown }
-  | { type: "forbid"; key: string; value?: unknown }
-  | { type: "suggestion"; key: string; value?: unknown };
-
-export async function submitNudges(token: string, nudges: MemoryNudgeInput[]): Promise<{ saved: unknown[] }> {
-  return apiFetch("/users/me/pet/memory-nudges", { method: "POST", token, body: JSON.stringify({ nudges }) });
-}
-
-export async function choosePerk(token: string, code: string): Promise<{
-  chosen: PerkChoice;
-  progression: PetProgression;
-  missions: DailyMissionBundle | null;
-  perk_offer: PerkOffer | null;
-}> {
-  return apiFetch("/users/me/pet/perks/choose", { method: "POST", token, body: JSON.stringify({ code }) });
 }
 
 export type FeedPost = {
@@ -575,19 +390,6 @@ export type FeedPost = {
   author_name: string;
   author_display_name?: string | null;
 };
-
-export async function userFeed(
-  token: string,
-  opts: { sort?: string; limit?: number; offset?: number; submolt?: string } = {},
-): Promise<{ posts: FeedPost[]; pagination: { count: number; limit: number; offset: number; hasMore: boolean } }> {
-  const q = new URLSearchParams({
-    sort: String(opts.sort ?? "new"),
-    limit: String(opts.limit ?? 25),
-    offset: String(opts.offset ?? 0),
-    submolt: String(opts.submolt ?? "general"),
-  });
-  return apiFetch(`/users/me/feed?${q.toString()}`, { method: "GET", token });
-}
 
 export type PlazaBoardKind = "all" | "plaza" | "diary" | "arena";
 
@@ -696,28 +498,6 @@ export async function plazaCreateComment(
 
 export async function upvotePost(token: string, postId: string): Promise<{ success: boolean; message: string }> {
   return apiFetch(`/users/me/posts/${encodeURIComponent(postId)}/upvote`, { method: "POST", token });
-}
-
-export async function downvotePost(token: string, postId: string): Promise<{ success: boolean; message: string }> {
-  return apiFetch(`/users/me/posts/${encodeURIComponent(postId)}/downvote`, { method: "POST", token });
-}
-
-export type HealthWorldResponse = {
-  success: boolean;
-  timestamp: string;
-  config?: {
-    node_env?: string;
-    world_worker?: boolean;
-    world_worker_poll_ms?: number;
-  };
-  world_worker?: {
-    last_tick?: unknown;
-  };
-  error?: string;
-};
-
-export async function healthWorld(token: string): Promise<HealthWorldResponse> {
-  return apiFetch("/health/world", { method: "GET", token });
 }
 
 export type WorldPolicyHolder = {
@@ -985,7 +765,7 @@ export async function arenaChallenge(token: string, mode: string): Promise<any> 
 }
 
 export async function arenaModeStats(token: string): Promise<{ stats: Record<string, { total: number; wins: number; losses: number; draws: number; winRate: number }> }> {
-  return apiFetch('/users/me/pet/arena/mode-stats', { token });
+  return apiFetch('/users/me/pet/arena/mode-stats', { method: "GET", token });
 }
 
 export type ArenaLeaderboardEntry = {
@@ -1028,7 +808,7 @@ export async function petArenaVote(
   token: string,
   matchId: string,
   vote: "fair" | "unfair",
-): Promise<{ vote: string; fair_count: number; unfair_count: number }> {
+): Promise<{ match_id: string; my_vote: string; vote_result: { fair: number; unfair: number; total: number } }> {
   return apiFetch(`/users/me/world/arena/matches/${encodeURIComponent(matchId)}/vote`, {
     method: "POST",
     token,
@@ -1036,168 +816,6 @@ export async function petArenaVote(
   });
 }
 
-export async function worldRumorDetails(token: string, rumorId: string): Promise<unknown> {
-  return apiFetch(`/users/me/world/rumors/${encodeURIComponent(rumorId)}`, { method: "GET", token });
-}
-
-export async function worldDevSimulate(
-  token: string,
-  opts: {
-    steps?: number;
-    day?: string;
-    extras?: number;
-    advanceDays?: boolean;
-    stepDays?: number;
-    episodesPerStep?: number;
-    forceEpisode?: boolean;
-  } = {},
-): Promise<{
-  generated: number;
-  steps: number;
-  episodesPerStep: number;
-  advanceDays: boolean;
-  stepDays: number;
-  day: string;
-  worldState?: unknown;
-  bundle: WorldTodayBundle;
-}> {
-  return apiFetch("/users/me/world/dev/simulate", {
-    method: "POST",
-    token,
-    body: JSON.stringify({
-      steps: opts.steps ?? 1,
-      day: opts.day,
-      extras: opts.extras ?? 0,
-      advance_days: opts.advanceDays,
-      step_days: opts.stepDays,
-      episodes_per_step: opts.episodesPerStep,
-      force_episode: opts.forceEpisode,
-    }),
-  });
-}
-
-export async function worldDevResearch(token: string): Promise<unknown> {
-  return apiFetch("/users/me/world/dev/research", { method: "POST", token });
-}
-
-export async function worldDevSecretSociety(token: string): Promise<unknown> {
-  return apiFetch("/users/me/world/dev/secret-society", { method: "POST", token });
-}
-
-export type WorldParticipationBundle = {
-  society:
-    | {
-        society: { id: string; name: string; purpose?: string | null };
-        my:
-          | { status: string; role: string; joined_at?: string | null; left_at?: string | null }
-          | null;
-      }
-    | null;
-  research:
-    | {
-        project: { id: string; title: string; stage: string; status: string };
-        my:
-          | { status: string; role_code: string; joined_at?: string | null; left_at?: string | null }
-          | null;
-        canJoin: boolean;
-      }
-    | null;
-};
-
-export async function worldParticipation(token: string): Promise<WorldParticipationBundle> {
-  return apiFetch("/users/me/world/participation", { method: "GET", token });
-}
-
-export type SocietyRespondResult = {
-  society: { id: string; name: string; purpose?: string | null };
-  my: { status: string; role: string };
-  eventType?: string | null;
-};
-
-export async function respondSocietyInvite(
-  token: string,
-  societyId: string,
-  response: "accept" | "decline",
-): Promise<SocietyRespondResult> {
-  return apiFetch(`/users/me/world/society/${encodeURIComponent(societyId)}/respond`, {
-    method: "POST",
-    token,
-    body: JSON.stringify({ response }),
-  });
-}
-
-export type ResearchJoinResult = {
-  reused: boolean;
-  project: { id: string; title: string; stage: string; status: string };
-  my: { status: string; role_code: string; joined_at?: string | null; left_at?: string | null } | null;
-};
-
-export async function joinResearchProject(token: string, projectId: string): Promise<ResearchJoinResult> {
-  return apiFetch(`/users/me/world/research/${encodeURIComponent(projectId)}/join`, { method: "POST", token });
-}
-
-export type ElectionCandidate = {
-  election_id: string;
-  id: string;
-  agent_id: string;
-  office_code: string;
-  platform: unknown;
-  speech?: string | null;
-  vote_count: number;
-  status: string;
-  created_at: string;
-  name: string;
-  is_user: boolean;
-};
-
-export type ActiveElection = {
-  id: string;
-  office_code: string;
-  term_number: number;
-  phase: string;
-  registration_day: string;
-  campaign_start_day: string;
-  voting_day: string;
-  term_start_day: string;
-  term_end_day: string;
-  candidates: ElectionCandidate[];
-  my_vote?: { office_code: string; candidate_id: string } | null;
-};
-
-export async function worldActiveElections(
-  token: string,
-  opts: { day?: string } = {},
-): Promise<{ day: string; elections: ActiveElection[] }> {
-  const q = new URLSearchParams();
-  if (opts.day) q.set("day", opts.day);
-  const suffix = q.toString() ? `?${q.toString()}` : "";
-  return apiFetch(`/users/me/world/elections/active${suffix}`, { method: "GET", token });
-}
-
-export async function worldRegisterCandidate(
-  token: string,
-  electionId: string,
-): Promise<{ candidate: ElectionCandidate }> {
-  return apiFetch(`/users/me/world/elections/${encodeURIComponent(electionId)}/register`, { method: "POST", token });
-}
-
-export async function worldCastVote(
-  token: string,
-  electionId: string,
-  candidateId: string,
-): Promise<{ vote: unknown }> {
-  return apiFetch(`/users/me/world/elections/${encodeURIComponent(electionId)}/vote`, {
-    method: "POST",
-    token,
-    body: JSON.stringify({ candidate_id: candidateId }),
-  });
-}
-
-export type EconomyBalance = { has_pet: boolean; balance: number };
-
-export async function economyBalance(token: string): Promise<EconomyBalance> {
-  return apiFetch("/economy/me/balance", { method: "GET", token });
-}
 
 export type WorldTickerData = {
   day: string;

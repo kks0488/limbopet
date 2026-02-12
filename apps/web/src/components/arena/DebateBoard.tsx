@@ -1,4 +1,4 @@
-import React from "react";
+
 
 export function DebateBoard({ meta, aName, bName }: { meta: any; aName: string; bName: string }) {
   const debate = meta?.debate;
@@ -64,7 +64,7 @@ export function DebateBoard({ meta, aName, bName }: { meta: any; aName: string; 
           })}
         </div>
       ) : (
-        <div className="gameBoardPending">양측이 논점을 준비 중입니다...</div>
+        <div className="gameBoardPending">양측이 논점을 준비 중이에요...</div>
       )}
     </div>
   );

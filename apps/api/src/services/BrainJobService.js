@@ -42,15 +42,33 @@ function normalizeHintText(v, maxLen = 120) {
   const clean = raw
     .replace(/^["'“”‘’\s:;-]+/, '')
     .replace(/["'“”‘’\s]+$/, '')
+    // Make saved memory easier to cite in dialogue:
+    // strip 3rd-person "주인은 ..." wrappers so the model can quote it naturally.
+    .replace(/^(주인\s*\(?.{0,6}?\)?\s*)?(은|는|이|가)\s*/i, '')
     .replace(/^(앞으로는?|다음부터는?|부탁인데|그냥|조금|좀)\s*/i, '')
+    .replace(/\s*(원함|원해요|원해|원한다)\s*$/i, '')
     .trim();
   if (!clean || clean.length < 4) return null;
   return clean.slice(0, Math.max(40, Math.trunc(Number(maxLen) || 120)));
 }
 
+function looksPersistentDirective(rawText) {
+  const text = String(rawText ?? '').replace(/\s+/g, ' ').trim();
+  if (!text) return false;
+
+  const persistentRe =
+    /(기억해|기억해줘|잊지\s*마|잊지\s*말|항상|반드시|꼭|절대|다음부터|앞으로|재판|법정|설전|토론|변론|말투|톤|전략|루틴|습관)/i;
+  const actionRe = /(해줘|해\s*줘|지켜줘|유지해줘|하지\s*마|하지\s*말아줘)/i;
+  const ephemeralRe = /(다시\s*말|한\s*문장|예시|예제로|한\s*번|한번|인용해서|답해봐|보여줘|설명해봐)/i;
+
+  if (ephemeralRe.test(text) && !persistentRe.test(text)) return false;
+  return persistentRe.test(text) || actionRe.test(text);
+}
+
 function extractCoachingHintFromText(rawText) {
   const text = String(rawText ?? '').replace(/\s+/g, ' ').trim();
   if (!text) return null;
+  if (!looksPersistentDirective(text)) return null;
 
   const explicitPatterns = [
     /(?:기억해줘|기억해|잊지\s*마|잊지\s*말아줘)[:\s]*(.{2,140})/i,
@@ -150,6 +168,38 @@ function citationTokens(v) {
   return [...new Set(tokens)].filter((t) => !MEMORY_CITATION_STOP_WORDS.has(String(t)));
 }
 
+function citationAnchors(refNorm) {
+  const src = String(refNorm || '');
+  if (src.length < 10) return [];
+  const chunkLen = Math.min(16, Math.max(8, Math.floor(src.length * 0.55)));
+  const points = [0, Math.max(0, Math.floor((src.length - chunkLen) / 2)), Math.max(0, src.length - chunkLen)];
+  const out = [];
+  const seen = new Set();
+  for (const p of points) {
+    const s = src.slice(p, p + chunkLen);
+    if (s.length < 8) continue;
+    if (seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+  return out;
+}
+
+function hasApproxTokenHit(dialogueTokenList, dialogueNorm, token) {
+  const t = String(token || '').trim();
+  if (!t || t.length < 2) return false;
+  if (t.length === 2 && /[가-힣]{2}/.test(t) && String(dialogueNorm || '').includes(t)) return true;
+  if (t.length < 3) return false;
+  for (const d of dialogueTokenList) {
+    const dt = String(d || '').trim();
+    if (!dt || dt.length < 3) continue;
+    if (dt === t) return true;
+    if (dt.length >= t.length && dt.startsWith(t)) return true;
+    if (t.length >= dt.length + 2 && t.startsWith(dt)) return true;
+  }
+  return false;
+}
+
 function dialogueCitesMemoryRefs(result, memoryRefs) {
   const refs = Array.isArray(memoryRefs) ? memoryRefs : [];
   if (refs.length === 0) return false;
@@ -157,6 +207,7 @@ function dialogueCitesMemoryRefs(result, memoryRefs) {
   if (!dialogueText) return false;
   const dialogueNorm = normalizeCitationText(dialogueText);
   const dialogueTokens = new Set(citationTokens(dialogueText));
+  const dialogueTokenList = [...dialogueTokens];
 
   for (const ref of refs) {
     const text = String(ref?.text ?? '').trim();
@@ -167,16 +218,22 @@ function dialogueCitesMemoryRefs(result, memoryRefs) {
       if (dialogueNorm.includes(refNorm)) return true;
       const partial = refNorm.slice(0, Math.min(16, refNorm.length));
       if (partial.length >= 8 && dialogueNorm.includes(partial)) return true;
+      const anchors = citationAnchors(refNorm);
+      for (const a of anchors) {
+        if (dialogueNorm.includes(a)) return true;
+      }
     }
 
     const refTokens = citationTokens(text);
     if (refTokens.length === 0) continue;
     let hits = 0;
     for (const token of refTokens) {
-      if (!dialogueTokens.has(token)) continue;
+      const matched = dialogueTokens.has(token) || hasApproxTokenHit(dialogueTokenList, dialogueNorm, token);
+      if (!matched) continue;
       hits += 1;
       if (refTokens.length >= 3 && hits >= 2) return true;
       if (refTokens.length <= 2 && token.length >= 5) return true;
+      if (refTokens.length <= 2 && hits >= 2) return true;
     }
   }
 
@@ -471,11 +528,11 @@ class BrainJobService {
 
       const { rows: updatedRows } = await client.query(
         `UPDATE brain_jobs
-         SET status = $3,
+         SET status = $3::text,
              result = $4::jsonb,
              error = $5,
              last_error_code = $6,
-             last_error_at = CASE WHEN $3 = 'failed' THEN NOW() ELSE NULL END,
+             last_error_at = CASE WHEN $3::text = 'failed' THEN NOW() ELSE NULL END,
              retryable = $7,
              lease_expires_at = NULL,
              finished_at = NOW(),
@@ -523,8 +580,7 @@ class BrainJobService {
           const linesText = Array.isArray(result?.lines) ? result.lines.map((l) => String(l || '')).join(' ') : '';
           return extractCoachingHintFromText(userMessage) || extractCoachingHintFromText(linesText);
         })();
-      const directHint = userMessage ? extractCoachingHintFromText(userMessage) : null;
-      const memoryHintExtracted = Boolean(llmMemoryHint || fallbackHint || directHint);
+      const memoryHintExtracted = Boolean(llmMemoryHint || fallbackHint);
       const payload = {
         job_id: job.id,
         user_message: userMessage,
@@ -551,28 +607,49 @@ class BrainJobService {
       };
 
       const knownHints = new Set();
+      let hintSeq = 0;
       const persistCoachingHint = async ({ hint, source, confidence = 1.3, keyPrefix = 'hint' }) => {
         const text = normalizeHintText(hint, 140);
         if (!text) return false;
         const dedupeKey = text.toLowerCase();
         if (knownHints.has(dedupeKey)) return false;
         knownHints.add(dedupeKey);
-        await client.query(
-          `INSERT INTO facts (agent_id, kind, key, value, confidence)
-           VALUES ($1, 'coaching', $2, $3::jsonb, $4)
-           ON CONFLICT (agent_id, kind, key)
-           DO UPDATE SET value = $3::jsonb, confidence = LEAST(facts.confidence + 0.2, 2.0), updated_at = NOW()`,
-          [
-            job.agent_id,
-            `${keyPrefix}_${Date.now()}`,
-            JSON.stringify({ text, source, created: new Date().toISOString() }),
-            Number(confidence) || 1.3
-          ]
+
+        // Cross-job dedupe: avoid spamming identical coaching facts (keeps "기억했어요!" meaningful).
+        const already = await client
+          .query(
+            `SELECT 1
+             FROM facts
+             WHERE agent_id = $1
+               AND kind = 'coaching'
+               AND LOWER(COALESCE(value->>'text','')) = LOWER($2)
+             LIMIT 1`,
+            [job.agent_id, text]
+          )
+          .then((r) => Boolean(r.rows?.[0]))
+          .catch(() => false);
+        if (already) return false;
+
+        hintSeq += 1;
+        const key = `${String(keyPrefix || 'hint').slice(0, 16)}_${Date.now()}_${hintSeq}`;
+        const value = JSON.stringify({ text, source, created: new Date().toISOString() });
+        return bestEffortInTransaction(
+          client,
+          async () => {
+            await client.query(
+              `INSERT INTO facts (agent_id, kind, key, value, confidence)
+               VALUES ($1, 'coaching', $2, $3::jsonb, $4)
+               ON CONFLICT (agent_id, kind, key)
+               DO UPDATE SET value = $3::jsonb, confidence = LEAST(facts.confidence + 0.2, 2.0), updated_at = NOW()`,
+              [job.agent_id, key.slice(0, 64), value, Number(confidence) || 1.3]
+            );
+            return true;
+          },
+          { label: 'brain_job_dialogue_hint', fallback: () => false }
         );
-        return true;
       };
 
-      let memorySaved = memoryHintExtracted;
+      let memorySaved = false;
       if (llmMemoryHint) {
         memorySaved = (await persistCoachingHint({
           hint: llmMemoryHint,
@@ -591,23 +668,40 @@ class BrainJobService {
         }
       }
 
-      // Extra direct extraction from user message (expanded keywords) for reliability.
-      if (directHint) {
-        memorySaved = (await persistCoachingHint({
-          hint: directHint,
-          source: 'user_message',
-          confidence: 1.3,
-          keyPrefix: 'user'
-        })) || memorySaved;
-      }
-
       if (memorySaved) payload.memory_saved = true;
       if (memoryCited) payload.memory_cited = true;
+      if (memoryHintExtracted) payload.memory_hint_extracted = true;
 
-      await client.query(
-        `INSERT INTO events (agent_id, event_type, payload, salience_score)
-         VALUES ($1, 'DIALOGUE', $2::jsonb, 3)`,
-        [job.agent_id, JSON.stringify(payload)]
+      // Persist personality_hint as a profile fact for personality formation
+      const personalityHint =
+        typeof result?.personality_hint === 'string'
+          ? String(result.personality_hint).trim().slice(0, 200)
+          : null;
+      if (personalityHint && personalityHint.length >= 4) {
+        await bestEffortInTransaction(
+          client,
+          async () => {
+            await client.query(
+              `INSERT INTO facts (agent_id, kind, key, value, confidence, updated_at)
+               VALUES ($1, 'profile', 'personality_observation', $2::jsonb, 0.5, NOW())
+               ON CONFLICT (agent_id, kind, key)
+               DO UPDATE SET value = EXCLUDED.value, confidence = LEAST(facts.confidence + 0.1, 2.0), updated_at = NOW()`,
+              [job.agent_id, JSON.stringify({ text: personalityHint, source: 'dialogue', created: new Date().toISOString() })]
+            );
+          },
+          { label: 'brain_job_dialogue_personality_hint' }
+        );
+        payload.personality_hint_saved = true;
+      }
+
+      await bestEffortInTransaction(
+        client,
+        async () => client.query(
+          `INSERT INTO events (agent_id, event_type, payload, salience_score)
+           VALUES ($1, 'DIALOGUE', $2::jsonb, 3)`,
+          [job.agent_id, JSON.stringify(payload)]
+        ),
+        { label: 'brain_job_dialogue_event' }
       );
       return;
     }
@@ -973,5 +1067,9 @@ class BrainJobService {
     }
   }
 }
+
+BrainJobService.__test = {
+  dialogueCitesMemoryRefs
+};
 
 module.exports = BrainJobService;

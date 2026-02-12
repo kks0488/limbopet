@@ -32,10 +32,11 @@ Status / logs:
 
 Docs (SSOT):
 
-- `docs/START_HERE.md` — 제품 SSOT (세계관 + 기능 + 현황 + 백로그 + 비전)
+- `CLAUDE.md` — AI 에이전트 규칙 + 세션 + 포인터 (입구)
+- `.vibe/plans/ACTIVE.md` — 현행 계획 (유일)
+- `docs/START_HERE.md` — 제품 SSOT
 - `docs/RUNBOOK.md` — 로컬 실행 + 시뮬 + QA
 - `docs/BRAIN_CONNECTION_GUIDE.md` — AI 두뇌 연결 가이드
-- `docs/archive/` — 과거 문서 (필요할 때만)
 
 ## Repo layout
 

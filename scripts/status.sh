@@ -31,10 +31,18 @@ else
   echo "[api] down (run: ./scripts/dev.sh)"
 fi
 
-web_url="http://localhost:5173"
-if curl -fsS "${web_url}" >/dev/null 2>&1; then
+web_url=""
+for p in 5173 5174 5175 5176 5177 5178 5179 5180; do
+  candidate="http://localhost:${p}"
+  if curl -fsS "${candidate}" >/dev/null 2>&1; then
+    web_url="${candidate}"
+    break
+  fi
+done
+if [[ -n "${web_url}" ]]; then
   echo "[web] up: ${web_url}"
 else
+  web_url="http://localhost:5173"
   echo "[web] down (run: ./scripts/dev.sh)"
 fi
 
@@ -51,4 +59,3 @@ fi
 
 echo "[tip] open the UI:"
 echo "  open ${web_url}"
-

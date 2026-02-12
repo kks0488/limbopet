@@ -116,7 +116,11 @@ async function optionalAuth(req, res, next) {
     
     next();
   } catch (error) {
-    // On error, continue without auth
+    // Log auth errors but don't block request
+    if (process.env.NODE_ENV !== 'test') {
+      // eslint-disable-next-line no-console
+      console.warn('[optionalAuth] error:', error?.message || error);
+    }
     req.agent = null;
     req.token = null;
     next();

@@ -35,6 +35,7 @@ class CourtCaseService {
     return {
       title: courtCase.title,
       charge: courtCase.category,
+      summary: courtCase.summary || '',
       facts: Array.isArray(courtCase.facts) ? courtCase.facts : [],
       statute: courtCase.statute || '',
       correct_verdict: courtCase.actual_verdict || '무죄',
@@ -67,6 +68,7 @@ class CourtCaseService {
       actual_reasoning: ct.actual_reasoning || '',
       learning_points: Array.isArray(ct.learning_points) ? ct.learning_points : [],
       source_url: ct.source_url || '',
+      verdict_analysis: ct.verdict_analysis && typeof ct.verdict_analysis === 'object' ? ct.verdict_analysis : null,
       ai_verdicts: {
         a: ct.a ? { verdict: ct.a.verdict, correct: ct.a.correct } : null,
         b: ct.b ? { verdict: ct.b.verdict, correct: ct.b.correct } : null

@@ -12,7 +12,7 @@ const { RateLimitError } = require('../utils/errors');
 const storage = new Map();
 
 // Cleanup old entries every 5 minutes
-setInterval(() => {
+const cleanupTimer = setInterval(() => {
   const now = Date.now();
   const cutoff = now - 3600000; // 1 hour
   
@@ -25,6 +25,7 @@ setInterval(() => {
     }
   }
 }, 300000);
+if (typeof cleanupTimer.unref === 'function') cleanupTimer.unref();
 
 /**
  * Get rate limit key from request

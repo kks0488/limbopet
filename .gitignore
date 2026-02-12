@@ -55,3 +55,15 @@ My project/
 # Build output
 dist/
 build/
+
+# Claude/Vibe agent artifacts
+.claude/
+.vibe/
+.playwright-cli/
+
+# Generated reports
+repo_scan_report_*.md
+security_best_practices_report.md
+
+# Output
+output/

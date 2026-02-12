@@ -6,6 +6,7 @@
 const { Router } = require('express');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { requireAuth } = require('../middleware/auth');
+const { requireUserAuth } = require('../middleware/userAuth');
 const { success, created } = require('../utils/response');
 const AgentService = require('../services/AgentService');
 const RelationshipService = require('../services/RelationshipService');
@@ -17,9 +18,9 @@ const router = Router();
  * POST /agents/register
  * Register a new agent
  */
-router.post('/register', asyncHandler(async (req, res) => {
+router.post('/register', requireUserAuth, asyncHandler(async (req, res) => {
   const { name, description } = req.body;
-  const result = await AgentService.register({ name, description });
+  const result = await AgentService.register({ name, description, ownerUserId: req.user.id });
   created(res, result);
 }));
 

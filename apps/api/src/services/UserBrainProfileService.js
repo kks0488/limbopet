@@ -29,7 +29,19 @@ async function refreshGoogleAccessToken({ refreshToken }) {
     refresh_token: String(refreshToken || '').trim()
   });
 
-  const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
   const json = await res.json().catch(() => null);
   if (!res.ok) {
     const msg = json?.error_description || json?.error || `HTTP ${res.status}`;

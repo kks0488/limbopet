@@ -1,6 +1,6 @@
-import React from "react";
-import { BrainSettings } from "./BrainSettings";
+import { useEffect } from "react";
 import { AiConnectPanel } from "./AiConnectPanel";
+import { BrainSettings } from "./BrainSettings";
 
 interface SettingsPanelProps {
   open: boolean;
@@ -36,11 +36,6 @@ interface SettingsPanelProps {
   failedJobs: Array<{ id: string; job_type: string; error?: string | null; last_error_code?: string | null }>;
   retryingJobId: string | null;
   onRetryJob: (id: string) => void;
-  // Advanced
-  petAdvanced: boolean;
-  onToggleAdvanced: () => void;
-  uiMode: string;
-  onToggleDebug: () => void;
   busy: boolean;
 }
 
@@ -74,12 +69,15 @@ export function SettingsPanel({
   failedJobs,
   retryingJobId,
   onRetryJob,
-  petAdvanced,
-  onToggleAdvanced,
-  uiMode,
-  onToggleDebug,
   busy,
 }: SettingsPanelProps) {
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = ''; };
+    }
+  }, [open]);
+
   return (
     <div className={`settingsOverlay ${open ? "open" : ""}`} onClick={onClose} aria-hidden={!open}>
       <div className="settingsPanel" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="설정">
@@ -91,7 +89,15 @@ export function SettingsPanel({
         </div>
 
         <div className="settingsList">
+          {/* 1순위: API 키 직접 입력 */}
           <div className="card">
+            <div className="settings-card__header">
+              <h2 className="settings-card__title">API 키로 연결하기</h2>
+              <span className="badge settings-badge--accent">추천</span>
+            </div>
+            <div className="muted settings-card__desc">
+              AI 서비스에서 API 키를 발급받아 입력해요
+            </div>
             <BrainSettings
               brainProfile={brainProfile}
               byokProvider={byokProvider}
@@ -104,30 +110,50 @@ export function SettingsPanel({
               onByokApiKeyChange={onByokApiKeyChange}
               onSaveByok={onSaveByok}
               onDeleteByok={onDeleteByok}
-              onGeminiOauthConnect={onGeminiOauthConnect}
               busy={busy}
             />
-
-            {userToken ? (
-              <>
-                <hr style={{ border: "none", borderTop: "1px solid var(--border)", margin: "16px 0" }} />
-                <AiConnectPanel
-                  token={userToken}
-                  brainProfile={brainProfile}
-                  onBrainProfileChange={onBrainProfileChange}
-                />
-              </>
-            ) : null}
           </div>
 
-          <div className="card">
-            <h2>대화 프롬프트 커스텀</h2>
-            <div className="muted" style={{ marginTop: 8, fontSize: "var(--font-caption)" }}>
-              내 펫 대화의 시스템 프롬프트를 직접 지정합니다. (버전 {promptVersion}
-              {promptUpdatedAt ? ` · ${new Date(promptUpdatedAt).toLocaleString()}` : ""})
+          {/* 구분선 */}
+          {userToken ? (
+            <div className="settings-divider">
+              <span className="settings-divider__line" />
+              <span className="settings-divider__text">또는</span>
+              <span className="settings-divider__line" />
             </div>
-            <div className="row" style={{ marginTop: 10, flexWrap: "wrap", gap: 8 }}>
-              <label style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          ) : null}
+
+          {/* 2순위: 구독으로 연결 (OAuth) — PC 전용 */}
+          {userToken ? (
+            <div className="card">
+              <div className="settings-card__header">
+                <h2 className="settings-card__title">내 구독으로 연결하기</h2>
+                <span className="badge settings-badge--muted">PC 전용</span>
+              </div>
+              <div className="muted settings-card__desc">
+                이 PC에서 구독 계정으로 바로 로그인해요 (모바일 미지원)
+              </div>
+              <AiConnectPanel
+                token={userToken}
+                brainProfile={brainProfile}
+                onBrainProfileChange={onBrainProfileChange}
+              />
+            </div>
+          ) : null}
+
+          <div className="card">
+            <div className="settings-card__header">
+              <h2 className="settings-card__title">대화 프롬프트 커스텀</h2>
+            </div>
+            <div className="muted settings-card__desc">
+              프롬프트가 AI의 말투와 성격을 결정해요. 버전 {promptVersion}
+              {promptUpdatedAt ? ` · ${new Date(promptUpdatedAt).toLocaleString()}` : ""}
+            </div>
+            <div className="settings-prompt__tip">
+              💡 팁: 말투, 성격, 답변 스타일을 구체적으로 쓸수록 효과가 좋아요.
+            </div>
+            <div className="row settings-row--wrap">
+              <label className="settings-checkbox-label">
                 <input
                   type="checkbox"
                   checked={promptEnabled}
@@ -140,37 +166,34 @@ export function SettingsPanel({
             <textarea
               value={promptText}
               onChange={(e) => onPromptTextChange(e.target.value)}
-              placeholder="예: 너는 논리적이고 차분한 법정 트레이너 톤으로 답해. 핵심을 먼저 말하고 근거를 2개 제시해."
-              style={{ width: "100%", minHeight: 140, marginTop: 10 }}
+              placeholder={"예시:\n• 차분하고 논리적인 법정 변호사 톤으로 말해\n• 핵심을 먼저 말하고 근거를 2개 제시해\n• 반말로 짧게 답해"}
+              className="settings-prompt__textarea"
               disabled={promptBusy}
+              aria-label="커스텀 프롬프트"
             />
-            <div className="row" style={{ marginTop: 10, flexWrap: "wrap", gap: 8 }}>
+            <div className="row settings-row--wrap">
               <button className="btn primary" type="button" onClick={onSavePrompt} disabled={promptBusy}>
                 {promptBusy ? "저장 중..." : "저장"}
               </button>
-              <button className="btn danger" type="button" onClick={onDeletePrompt} disabled={promptBusy}>
+              <button className="btn danger" type="button" onClick={() => { if (window.confirm("프롬프트를 초기화할까요?")) onDeletePrompt(); }} disabled={promptBusy}>
                 초기화
               </button>
             </div>
           </div>
 
-          <div className="card">
-            <h2>실패 작업 재시도</h2>
-            {failedJobs.length === 0 ? (
-              <div className="muted" style={{ marginTop: 8 }}>
-                현재 실패한 두뇌 작업이 없습니다.
-              </div>
-            ) : (
-              <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+          {failedJobs.length > 0 ? (
+            <div className="card">
+              <h2>실패 작업 재시도</h2>
+              <div className="settings-jobs__grid">
                 {failedJobs.map((j) => (
-                  <div key={j.id} className="row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                    <div style={{ minWidth: 220 }}>
+                  <div key={j.id} className="row settings-jobs__row">
+                    <div className="settings-jobs__info">
                       <div>
                         <strong>{j.job_type}</strong>
-                        {j.last_error_code ? <span className="badge" style={{ marginLeft: 6 }}>{j.last_error_code}</span> : null}
+                        {j.last_error_code ? <span className="badge settings-badge--ml">{j.last_error_code}</span> : null}
                       </div>
                       {j.error ? (
-                        <div className="muted" style={{ marginTop: 4, fontSize: "var(--font-caption)" }}>
+                        <div className="muted settings-jobs__error">
                           {String(j.error).slice(0, 140)}
                         </div>
                       ) : null}
@@ -186,19 +209,18 @@ export function SettingsPanel({
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          ) : null}
 
           <div className="card">
             <h2>계정</h2>
-            <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-              <button className="btn danger" type="button" onClick={onSignOut} disabled={busy}>
+            <div className="settings-account__actions">
+              <button className="btn danger" type="button" onClick={() => { if (window.confirm("로그아웃할까요?")) onSignOut(); }} disabled={busy}>
                 로그아웃
               </button>
             </div>
           </div>
 
-          {/* 고급 모드 토글 제거 — debug 토글은 uiMode === "debug"에서만 표시 */}
         </div>
       </div>
     </div>

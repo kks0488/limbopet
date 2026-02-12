@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
 API_URL="${API_URL:-http://localhost:3001/api/v1}"
-DB_URL="${DB_URL:-postgresql://postgres:postgres@localhost:${LIMBOPET_DB_PORT:-5433}/limbopet}"
+DB_URL="${DB_URL:-postgresql://postgres:postgres@localhost:${LIMBOPET_DB_PORT:-5432}/limbopet}"
 
 USERS="${USERS:-30}"
 DAYS="${DAYS:-10}"

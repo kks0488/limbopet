@@ -529,7 +529,7 @@ class PetStateService {
         // This keeps "no cooldown" UX but prevents job backlog explosion.
         const existingJob = await client
           .query(
-            `SELECT id, job_type, status, created_at
+            `SELECT id, job_type, status, created_at, input
              FROM brain_jobs
              WHERE agent_id = $1
                AND job_type = 'DIALOGUE'
@@ -542,6 +542,17 @@ class PetStateService {
           .then((r) => r.rows?.[0] ?? null)
           .catch(() => null);
         if (existingJob) {
+          const newMsg = safeText(payload?.message ?? payload?.text ?? '', 400) || null;
+          if (newMsg) {
+            const existingInput = existingJob.input && typeof existingJob.input === 'object' ? { ...existingJob.input } : {};
+            existingInput.user_message = newMsg;
+            await client.query(
+              `UPDATE brain_jobs
+               SET input = $1::jsonb, updated_at = NOW()
+               WHERE id = $2`,
+              [JSON.stringify(existingInput), existingJob.id]
+            );
+          }
           job = existingJob;
         }
       }
@@ -551,6 +562,7 @@ class PetStateService {
           `SELECT kind, key, value, confidence
            FROM facts
            WHERE agent_id = $1
+             AND kind IN ('profile', 'preference', 'forbidden', 'suggestion', 'coaching', 'arena')
            ORDER BY confidence DESC, updated_at DESC
            LIMIT 20`,
           [agentId]
@@ -610,8 +622,9 @@ class PetStateService {
           `SELECT event_type, payload, created_at
            FROM events
            WHERE agent_id = $1
+             AND event_type IN ('DIALOGUE', 'TALK', 'ARENA_MATCH', 'RELATIONSHIP_MILESTONE')
            ORDER BY created_at DESC
-           LIMIT 10`,
+           LIMIT 6`,
           [agentId]
         );
 
@@ -637,40 +650,58 @@ class PetStateService {
           ? await UserPromptProfileService.get(ownerUserId, client).catch(() => null)
           : null;
 
+        const MEMORY_REF_KINDS = new Set(['preference', 'forbidden', 'suggestion', 'coaching', 'arena']);
         const memoryRefsFromFacts = (factRows || [])
           .map((f) => {
             if (!f || typeof f !== 'object') return null;
             const kind = String(f.kind || '').trim();
+            if (!MEMORY_REF_KINDS.has(kind)) return null;
             const key = String(f.key || '').trim();
             const confidence = Number.isFinite(Number(f.confidence)) ? Number(f.confidence) : 1.0;
             const v = f.value && typeof f.value === 'object' ? f.value : null;
-            const text = safeText(
-              v?.text ??
-                v?.summary ??
-                v?.value ??
-                v?.vibe ??
-                v?.role ??
-                v?.company ??
-                key,
-              220
-            );
+            let text = '';
+            if (kind === 'arena') {
+              if (key === 'last_match_result') {
+                const resultRaw = String(v?.result ?? '').trim().toLowerCase();
+                const resultLabel =
+                  resultRaw === 'win'
+                    ? '승리'
+                    : (resultRaw === 'lose' || resultRaw === 'loss')
+                      ? '패배'
+                      : resultRaw === 'draw'
+                        ? '무승부'
+                        : '결과 미상';
+                const modeRaw = String(v?.mode ?? '').trim().toUpperCase();
+                const modeLabel =
+                  modeRaw === 'COURT_TRIAL'
+                    ? '재판'
+                    : modeRaw === 'DEBATE_CLASH'
+                      ? '설전'
+                      : '아레나';
+                const opponent = safeText(v?.opponent ?? '상대', 40) || '상대';
+                text = safeText(`${opponent}와의 ${modeLabel}에서 ${resultLabel}`, 220);
+              } else if (key === 'condition') {
+                return null;
+              } else if (key.startsWith('debate:')) {
+                text = safeText(v?.topic ?? v?.closer ?? '', 220);
+                if (!text) return null;
+              } else {
+                return null;
+              }
+            } else {
+              text = safeText(v?.text ?? v?.summary ?? v?.value ?? key, 220);
+            }
             if (!kind || !text) return null;
             return { kind, key, text, confidence };
           })
           .filter(Boolean)
           .slice(0, 8);
 
-        const memoryRefsFromWeekly = Array.isArray(weekly?.summary?.memory_5)
-          ? weekly.summary.memory_5
-            .map((line) => safeText(line, 220))
-            .filter(Boolean)
-            .slice(0, 2)
-            .map((text, idx) => ({ kind: 'weekly_memory', key: `weekly_${idx + 1}`, text, confidence: 1.0 }))
-          : [];
+        const memoryRefsFromWeekly = [];
 
         const memoryRefs = [...memoryRefsFromFacts, ...memoryRefsFromWeekly];
         const memoryRefInstruction = memoryRefs.length > 0
-          ? "memory_refs를 사용할 때는 1~2개만 골라 '지난번에 네가 ~라고 했잖아'처럼 자연 대화체로 인용해. 목록 나열/메타 설명 없이 현재 대화 맥락에 섞어."
+          ? "memory_refs를 사용할 때는 1~2개만 골라서, 대화체로 1줄 인용해(예: '지난번에 네가 \"...\"라고 했잖아'). 그리고 memory_refs.text에서 핵심 구절 6~14자를 그대로 포함해. 목록 나열/메타 설명 없이 현재 대화 맥락에 섞어."
           : null;
         const memoryScore = memoryRefs.length > 0
           ? Math.round(
@@ -703,6 +734,12 @@ class PetStateService {
               : { enabled: false, prompt_text: '', version: 0 },
           weekly_memory: weekly?.summary ?? null,
           world_context: worldContext
+            ? {
+              day: worldContext.day ?? null,
+              world_concept: worldContext.world_concept ?? null,
+              open_rumors: worldContext.open_rumors ?? []
+            }
+            : null
         };
 
         const { rows: jobRows } = await client.query(

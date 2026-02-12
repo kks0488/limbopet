@@ -1,5 +1,5 @@
 const { extractToken } = require('../utils/auth');
-const { UnauthorizedError } = require('../utils/errors');
+const { UnauthorizedError, NotFoundError } = require('../utils/errors');
 const { verifyUserToken } = require('../utils/jwt');
 const UserService = require('../services/UserService');
 
@@ -15,14 +15,27 @@ async function requireUserAuth(req, _res, next) {
       );
     }
 
-    const payload = verifyUserToken(token);
+    let payload = null;
+    try {
+      payload = verifyUserToken(token);
+    } catch {
+      throw new UnauthorizedError('Invalid token', 'Re-authenticate and try again');
+    }
     const userId = payload?.sub;
 
     if (!userId) {
       throw new UnauthorizedError('Invalid token', 'Re-authenticate and try again');
     }
 
-    const user = await UserService.findById(userId);
+    let user = null;
+    try {
+      user = await UserService.findById(userId);
+    } catch (err) {
+      if (err instanceof NotFoundError) {
+        throw new UnauthorizedError('Invalid token', 'Re-authenticate and try again');
+      }
+      throw err;
+    }
     req.user = user;
     req.userToken = token;
     next();
@@ -34,4 +47,3 @@ async function requireUserAuth(req, _res, next) {
 module.exports = {
   requireUserAuth
 };
-
