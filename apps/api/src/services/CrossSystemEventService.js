@@ -568,6 +568,7 @@ class CrossSystemEventService {
     for (const row of rows || []) {
       const type = safeText(row?.event_type, 40).toUpperCase();
       let applied = false;
+      let failed = false;
 
       try {
         if (type === 'ELECTION_WON' || type === 'ELECTION_CLOSED' || type === 'POLICY_CHANGED') {
@@ -588,7 +589,10 @@ class CrossSystemEventService {
         }
       } catch {
         errors += 1;
-      } finally {
+        failed = true;
+      }
+
+      if (!failed) {
         await client.query(
           `UPDATE events
            SET chain_processed = TRUE

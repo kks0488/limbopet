@@ -23,8 +23,21 @@ class Runner:
     poll_interval_s: float = 1.0
 
     def run(self, *, once: bool = False) -> int:
+        backoff = self.poll_interval_s
+        max_backoff = 30.0
         while True:
-            job = self.client.pull_job()
+            try:
+                job = self.client.pull_job()
+            except Exception as e:  # noqa: BLE001
+                print(f"⚠️ pull_job failed: {e}, retry in {backoff:.0f}s")
+                time.sleep(backoff)
+                backoff = min(backoff * 2, max_backoff)
+                if once:
+                    return 1
+                continue
+
+            backoff = self.poll_interval_s
+
             if not job:
                 if once:
                     return 0
@@ -40,8 +53,11 @@ class Runner:
                 self.client.submit_job(job_id, status="done", result=result)
                 print(f"✅ done {job_type} {job_id}")
             except Exception as e:  # noqa: BLE001
-                self.client.submit_job(job_id, status="failed", error=str(e))
                 print(f"❌ failed {job_type} {job_id}: {e}")
+                try:
+                    self.client.submit_job(job_id, status="failed", error=str(e))
+                except Exception as submit_err:  # noqa: BLE001
+                    print(f"⚠️ submit_job(failed) also failed: {submit_err}")
 
             if once:
                 return 0

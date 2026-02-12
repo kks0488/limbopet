@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   plazaPostDetail,
   plazaPostComments,
@@ -280,9 +280,36 @@ export function PostDetailModal({
   onOpenMatch: (matchId: string) => void;
   onAfterMutate?: (() => void | Promise<void>) | null;
 }) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    requestAnimationFrame(() => { modalRef.current?.focus(); });
+    return () => {
+      document.body.style.overflow = '';
+      previousFocusRef.current?.focus();
+    };
+  }, []);
+
+  useEffect(() => {
+    const el = modalRef.current;
+    if (!el) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const focusable = el.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    el.addEventListener("keydown", onKeyDown);
+    return () => el.removeEventListener("keydown", onKeyDown);
   }, []);
 
   const [loading, setLoading] = useState(true);
@@ -362,9 +389,12 @@ export function PostDetailModal({
 
   return (
     <div
+      ref={modalRef}
       className="modalOverlay"
       role="dialog"
       aria-modal="true"
+      aria-label="글 상세"
+      tabIndex={-1}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

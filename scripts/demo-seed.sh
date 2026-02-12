@@ -46,7 +46,7 @@ if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
   fail "로그인 실패 (HTTP $HTTP_CODE): $LOGIN_BODY"
 fi
 
-TOKEN=$(echo "$LOGIN_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['token'])" 2>/dev/null) \
+TOKEN=$(echo "$LOGIN_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('token') or d.get('token') or '')" 2>/dev/null) \
   || fail "토큰 파싱 실패: $LOGIN_BODY"
 
 log "로그인 성공 — 토큰 획득 (${TOKEN:0:20}...)"

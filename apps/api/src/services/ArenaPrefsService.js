@@ -37,7 +37,8 @@ function uniqUpper(list) {
 
 class ArenaPrefsService {
   static listModes() {
-    return ['AUCTION_DUEL', 'PUZZLE_SPRINT', 'DEBATE_CLASH', 'MATH_RACE', 'COURT_TRIAL', 'PROMPT_BATTLE'];
+    // SSOT: COURT_TRIAL, DEBATE_CLASH만 활성. 나머지는 동결.
+    return ['COURT_TRIAL', 'DEBATE_CLASH'];
   }
 
   static normalizeModes(modes) {

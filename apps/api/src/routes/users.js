@@ -782,10 +782,21 @@ router.get('/me/brain/proxy/status', requireUserAuth, asyncHandler(async (req, r
  */
 router.post('/me/brain/proxy/complete', requireUserAuth, asyncHandler(async (req, res) => {
   const provRaw = String(req.body?.provider ?? '').trim().toLowerCase();
+  const state = String(req.body?.state ?? '').trim();
   const normalizedProvider = provRaw === 'codex' ? 'openai'
     : provRaw === 'claude' ? 'anthropic'
     : provRaw === 'gemini' ? 'google'
     : provRaw;
+
+  if (state) {
+    const statusResp = await fetch(`${PROXY_BASE}/v0/management/get-auth-status?state=${encodeURIComponent(state)}`, {
+      headers: { 'X-Management-Key': PROXY_MGMT_KEY }
+    });
+    const statusData = await statusResp.json().catch(() => null);
+    if (!statusResp.ok || statusData?.status !== 'ok') {
+      throw new BadRequestError('OAuth 인증이 아직 완료되지 않았습니다', 'OAUTH_NOT_COMPLETE');
+    }
+  }
 
   const profile = await UserBrainProfileService.upsertProxy(req.user.id, {
     provider: normalizedProvider
@@ -814,14 +825,30 @@ router.get('/me/brain/proxy/auth-files', requireUserAuth, asyncHandler(async (re
     headers: { 'X-Management-Key': PROXY_MGMT_KEY }
   });
   const data = await resp.json().catch(() => null);
-  const files = (data?.files || []).map(f => ({
-    name: f.name,
-    provider: f.type || f.provider || 'unknown',
-    email: f.email || null,
-    status: f.status || 'active',
-    disabled: f.disabled || false,
-    updated_at: f.modtime || f.updated_at || null
-  }));
+  const userProfile = await UserBrainProfileService.get(req.user.id).catch(() => null);
+  const userProvider = String(userProfile?.provider ?? '').trim().toLowerCase();
+  const rawFiles = Array.isArray(data?.files) ? data.files : [];
+  const files = rawFiles
+    .filter((f) => {
+      const fp = String(f?.type || f?.provider || '').trim().toLowerCase();
+      return userProvider && fp === userProvider;
+    })
+    .map((f) => ({
+      provider: f.type || f.provider || 'unknown',
+      status: f.status || 'active',
+      disabled: Boolean(f.disabled),
+      email: f.email
+        ? f.email.replace(/^(.)(.*)(@.*)$/, (_, a, b, c) => a + '*'.repeat(Math.min(b.length, 5)) + c)
+        : null,
+    }));
+  if (rawFiles.length !== files.length) {
+    console.warn('[proxy-auth-files] filtered auth files by user provider', {
+      userId: req.user.id,
+      userProvider: userProvider || null,
+      total: rawFiles.length,
+      returned: files.length,
+    });
+  }
   success(res, { files });
 }));
 
@@ -832,6 +859,13 @@ router.get('/me/brain/proxy/auth-files', requireUserAuth, asyncHandler(async (re
 router.delete('/me/brain/proxy/auth-files/:provider', requireUserAuth, asyncHandler(async (req, res) => {
   const provider = String(req.params.provider ?? '').trim().toLowerCase();
   if (!provider) throw new BadRequestError('provider is required');
+
+  const userProfile = await UserBrainProfileService.get(req.user.id).catch(() => null);
+  const userProvider = String(userProfile?.provider ?? '').trim().toLowerCase();
+  if (!userProvider || userProvider !== provider) {
+    throw new BadRequestError('해당 AI 서비스 연결 정보가 없습니다', 'NOT_YOUR_CONNECTION');
+  }
+
   const resp = await fetch(`${PROXY_BASE}/v0/management/auth-files/${encodeURIComponent(provider)}`, {
     method: 'DELETE',
     headers: { 'X-Management-Key': PROXY_MGMT_KEY },
@@ -840,6 +874,7 @@ router.delete('/me/brain/proxy/auth-files/:provider', requireUserAuth, asyncHand
     const data = await resp.json().catch(() => null);
     throw new BadRequestError(data?.error || `연결 해제 실패 (HTTP ${resp.status})`, 'PROXY_DISCONNECT_FAIL');
   }
+  await UserBrainProfileService.delete(req.user.id).catch(() => null);
   success(res, { ok: true });
 }));
 

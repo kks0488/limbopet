@@ -15,13 +15,16 @@ const TABS = [
 
 export function TabBar({ tab, onChangeTab }: TabBarProps) {
   return (
-    <div className="tabbar">
+    <div className="tabbar" role="tablist" aria-label="메인 탭">
       {TABS.map((t) => (
         <button
           key={t.key}
           className={`tabBtn ${tab === t.key ? "active" : ""}`}
           onClick={() => onChangeTab(t.key)}
           type="button"
+          role="tab"
+          aria-selected={tab === t.key}
+          aria-label={t.label}
         >
           <div className="tabIcon">{t.icon}</div>
           <div className="tabLabel">{t.label}</div>

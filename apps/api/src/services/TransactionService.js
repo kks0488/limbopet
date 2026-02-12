@@ -186,15 +186,24 @@ class TransactionService {
   static async ensureInitialMint(agentId, amount, { memo = 'initial' } = {}, client = null) {
     const amt = normalizeAmount(amount);
     const run = async (c) => {
+      // INSERT with ON CONFLICT on partial unique index (idx_transactions_initial_unique)
       const { rows } = await c.query(
-        `SELECT id FROM transactions
-         WHERE tx_type = 'INITIAL' AND to_agent_id = $1
-         LIMIT 1`,
+        `INSERT INTO transactions (tx_type, from_agent_id, to_agent_id, amount, memo)
+         VALUES ('INITIAL', NULL, $1, $2, $3)
+         ON CONFLICT (to_agent_id) WHERE tx_type = 'INITIAL'
+         DO NOTHING
+         RETURNING id`,
+        [agentId, amt, memo]
+      );
+      if (rows[0]) {
+        await bumpCompanyBalanceCaches(c, { fromAgentId: null, toAgentId: agentId, amount: amt }).catch(() => null);
+        return { created: true, tx: rows[0] };
+      }
+      const existing = await c.query(
+        `SELECT id FROM transactions WHERE tx_type = 'INITIAL' AND to_agent_id = $1 LIMIT 1`,
         [agentId]
       );
-      if (rows[0]) return { created: false, existing: rows[0].id };
-      const tx = await TransactionService.transfer({ fromAgentId: null, toAgentId: agentId, amount: amt, txType: 'INITIAL', memo }, c);
-      return { created: true, tx };
+      return { created: false, existing: existing.rows?.[0]?.id };
     };
     if (client) return run(client);
     return transaction(run);
@@ -202,4 +211,3 @@ class TransactionService {
 }
 
 module.exports = TransactionService;
-

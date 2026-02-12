@@ -64,12 +64,37 @@ function normalizeProvider(p) {
 function normalizeBaseUrl(provider, baseUrl) {
   const raw = String(baseUrl || '').trim();
   if (!raw) return null;
-  if (!/^https?:\/\//i.test(raw)) {
-    throw new BadRequestError('base_url must start with http(s)://');
+  if (!/^https:\/\//i.test(raw)) {
+    throw new BadRequestError('base_url must use HTTPS');
   }
   const trimmed = raw.replace(/\/+$/, '');
   // Only allow overriding base_url for OpenAI-compatible family for now.
   if (provider === 'openai_compatible' || provider === 'openai' || provider === 'xai') {
+    // Block private/loopback/link-local/metadata hosts to reduce SSRF risk.
+    try {
+      const u = new URL(trimmed);
+      const host = u.hostname.toLowerCase();
+      const blocked = [
+        /^localhost$/i,
+        /^127\./,
+        /^10\./,
+        /^172\.(1[6-9]|2\d|3[01])\./,
+        /^192\.168\./,
+        /^169\.254\./,
+        /^0\./,
+        /^\[?::1\]?$/i,
+        /^\[?fe80:/i,
+        /^\[?fc/i,
+        /^\[?fd/i,
+        /^metadata\.google\.internal$/i
+      ];
+      if (blocked.some((re) => re.test(host))) {
+        throw new BadRequestError('base_url cannot point to private/internal addresses');
+      }
+    } catch (e) {
+      if (e instanceof BadRequestError) throw e;
+      throw new BadRequestError('Invalid base_url');
+    }
     return trimmed;
   }
   return null;

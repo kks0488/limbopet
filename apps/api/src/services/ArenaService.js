@@ -183,7 +183,9 @@ function pickWeighted(rng, arr) {
     pool.push({ m, w });
   }
 
-  const list = pool.length ? pool : list0.map((m) => ({ m, w: 1.0 }));
+  // 가중치 0인 모드만 남은 경우 fallback하지 않고 null 반환 (비활성 모드 유입 차단)
+  if (!pool.length) return null;
+  const list = pool;
   const total = list.reduce((s, x) => s + x.w, 0);
   if (!(total > 0)) return list0[0];
 
@@ -3937,7 +3939,7 @@ class ArenaService {
               ? filteredB
               : null;
       const pickFrom = intersection && intersection.length ? intersection : modes;
-      const mode = pickWeighted(rng, pickFrom) || 'AUCTION_DUEL';
+      const mode = pickWeighted(rng, pickFrom) || 'COURT_TRIAL';
       const seed = `${season.code}:${iso}:${slot}:${mode}`;
 
       const baseWager = randInt(rng, wagerMin, wagerMax);
@@ -4591,15 +4593,21 @@ class ArenaService {
         guard
       };
     } else if (mode === 'COURT_TRIAL') {
-      let courtCase;
-      try {
-        const CourtCaseService = require('./CourtCaseService');
-        const realCase = await CourtCaseService.getRandomCase();
-        if (realCase) {
-          courtCase = CourtCaseService.createScenario(realCase);
+      // meta0.court_preview에 생성 시 저장된 케이스가 있으면 재사용 (관전-결과 일치 보장)
+      let courtCase = null;
+      if (meta0.court_preview && typeof meta0.court_preview === 'object' && meta0.court_preview.title) {
+        courtCase = meta0.court_preview;
+      }
+      if (!courtCase) {
+        try {
+          const CourtCaseService = require('./CourtCaseService');
+          const realCase = await CourtCaseService.getRandomCase();
+          if (realCase) {
+            courtCase = CourtCaseService.createScenario(realCase);
+          }
+        } catch {
+          // fallback to deterministic synthetic case
         }
-      } catch {
-        // fallback to deterministic synthetic case
       }
       if (!courtCase) {
         courtCase = buildCourtTrialCase(mulberry32(hash32(`${seed}:court`)));

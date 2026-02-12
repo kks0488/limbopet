@@ -545,7 +545,14 @@ class PetStateService {
           const newMsg = safeText(payload?.message ?? payload?.text ?? '', 400) || null;
           if (newMsg) {
             const existingInput = existingJob.input && typeof existingJob.input === 'object' ? { ...existingJob.input } : {};
-            existingInput.user_message = newMsg;
+            // Preserve prior messages to avoid dropping earlier TALK inputs.
+            const prevMessages = Array.isArray(existingInput.user_messages)
+              ? existingInput.user_messages
+              : (existingInput.user_message ? [existingInput.user_message] : []);
+            prevMessages.push(newMsg);
+            if (prevMessages.length > 5) prevMessages.splice(0, prevMessages.length - 5);
+            existingInput.user_messages = prevMessages;
+            existingInput.user_message = prevMessages.join('\n');
             await client.query(
               `UPDATE brain_jobs
                SET input = $1::jsonb, updated_at = NOW()

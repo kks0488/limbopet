@@ -345,9 +345,9 @@ class PostService {
    */
   static async updateScore(postId, delta, isUpvote) {
     const voteField = isUpvote ? 'upvotes' : 'downvotes';
-    const voteChange = delta > 0 ? 1 : -1;
+    const voteChange = Math.sign(delta);
     const result = await queryOne(
-      `UPDATE posts SET score = score + $2, ${voteField} = ${voteField} + $3 WHERE id = $1 RETURNING score`,
+      `UPDATE posts SET score = score + $2, ${voteField} = GREATEST(0, ${voteField} + $3) WHERE id = $1 RETURNING score`,
       [postId, delta, voteChange]
     );
 

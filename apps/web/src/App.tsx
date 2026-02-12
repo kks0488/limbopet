@@ -12,7 +12,6 @@ import {
 import { ensureGoogleScriptLoaded } from "./lib/google-script";
 import { friendlyError } from "./lib/errorMessages";
 import { loadString, saveString } from "./lib/storage";
-import { useNow } from "./lib/useNow";
 import { TopBar } from "./components/TopBar";
 import { TabBar } from "./components/TabBar";
 import { ArenaTab } from "./components/ArenaTab";
@@ -165,7 +164,7 @@ export function App() {
     if (!userToken) { setNotifications([]); setNotificationsUnread(0); setNotificationsOpen(false); setNotificationsBellShake(false); notificationsBootedRef.current = false; notificationsPrevUnreadRef.current = 0; return; }
     let cancelled = false;
     void refreshNotifications(userToken, { silent: true });
-    const id = window.setInterval(() => { if (!cancelled) void refreshNotifications(userToken, { silent: true }); }, 10_000);
+    const id = window.setInterval(() => { if (!cancelled) void refreshNotifications(userToken, { silent: true }); }, 30_000);
     return () => { cancelled = true; window.clearInterval(id); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userToken]);
@@ -318,9 +317,8 @@ export function App() {
 
   useEffect(() => { if (chatOpen) chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatOpen, chatHistory, chatSending]);
 
-  const now = useNow(signedIn && Boolean(pet));
   const lastActionAt = useMemo(() => { const map = new Map<string, Date>(); for (const ev of events) { const t = String(ev?.event_type ?? "").toLowerCase(); if (["feed", "play", "sleep", "talk"].includes(t) && !map.has(t)) map.set(t, new Date(ev.created_at)); } return map; }, [events]);
-  const cooldownRemainingMs = useMemo(() => { const out: Record<string, number> = {}; for (const a of ["feed", "play", "sleep", "talk"]) { const la = lastActionAt.get(a); out[a] = la ? Math.max(0, (COOLDOWNS_MS[a] || 0) - (now.getTime() - la.getTime())) : 0; } return out; }, [lastActionAt, now]);
+  function getCooldownRemainingMs(action: string): number { const la = lastActionAt.get(action); return la ? Math.max(0, (COOLDOWNS_MS[action] || 0) - (Date.now() - la.getTime())) : 0; }
   const arenaMatches = useMemo(() => { const l = ((arenaToday as any)?.matches ?? (world as any)?.arena?.matches ?? []) as any[]; return Array.isArray(l) ? l : []; }, [arenaToday, world]);
   const arenaMy = (arenaToday as any)?.my ?? null;
   const myArenaMatchToday = useMemo(() => {
@@ -383,7 +381,8 @@ export function App() {
   async function onAction(action: "feed" | "play" | "sleep" | "talk", payloadOverride: Record<string, unknown> | null = null) {
     if (!userToken) return;
     // 기본 AI 제공: brainProfile 없어도 대화 가능 (서버에서 ProxyBrain 폴백)
-    if (action !== "talk" && cooldownRemainingMs[action] > 0) { showToast("warn", `쿨다운: ${formatRemaining(cooldownRemainingMs[action])}`); return; }
+    const cdMs = getCooldownRemainingMs(action);
+    if (action !== "talk" && cdMs > 0) { showToast("warn", `쿨다운: ${formatRemaining(cdMs)}`); return; }
     setBusy(true);
     const feedbackMap: Record<string, { anim: string; emoji: string; lines: string[] }> = {
       feed: { anim: "petEatAnim", emoji: "🍖", lines: ["맛있다!", "배부르다~", "냠냠!", "이거 좋아!", "더 줘!", "고마워!"] },
@@ -395,7 +394,7 @@ export function App() {
     if (fb) { setPetAnimClass(fb.anim); const line = fb.lines.length > 0 ? fb.lines[Math.floor(Math.random() * fb.lines.length)] : fb.emoji; setActionFeedback(`${fb.emoji} ${line}`); window.setTimeout(() => { setPetAnimClass(""); setActionFeedback(null); }, 2000); }
     try {
       await petAction(userToken, action, payloadOverride ?? (action === "feed" ? { food: "kibble" } : {}));
-      await refreshAll(userToken);
+      await refreshByTab(userToken);
       if (action === "talk") {
         chatPollAbortRef.current = false;
         for (const waitMs of [1200, 2500, 4500, 7000]) {
@@ -404,7 +403,7 @@ export function App() {
           if (chatPollAbortRef.current) break;
           try { const freshTl = await timeline(userToken, 5); if ((freshTl.events || []).find((e) => e?.event_type === "DIALOGUE" && new Date(e.created_at).getTime() > Date.now() - 30_000)) break; } catch { /* ignore */ }
         }
-        if (!chatPollAbortRef.current) await refreshAll(userToken).catch(() => null);
+        if (!chatPollAbortRef.current) await refreshByTab(userToken);
         try { const freshTl = await timeline(userToken, 5); if ((freshTl.events || []).find((e) => e?.event_type === "DIALOGUE" && (e as any)?.payload?.memory_saved)) showToast("good", "기억했어요!"); } catch { /* ignore */ }
       }
     } catch (e: any) { showToast("bad", friendlyError(e)); } finally { setBusy(false); }
@@ -425,7 +424,7 @@ export function App() {
         if (chatPollAbortRef.current) break;
         try { const freshTl = await timeline(userToken, 5); if ((freshTl.events || []).find((e) => e?.event_type === "DIALOGUE" && new Date(e.created_at).getTime() > Date.now() - 30_000)) { responded = true; break; } } catch { /* ignore */ }
       }
-      if (!chatPollAbortRef.current) await refreshAll(userToken).catch(() => null);
+      if (!chatPollAbortRef.current) await refreshByTab(userToken);
       if (!responded && !chatPollAbortRef.current) showToast("warn", "응답이 늦어지고 있어요. 잠시 후 다시 시도해 주세요.");
       try { const freshTl = await timeline(userToken, 5); if ((freshTl.events || []).find((e) => e?.event_type === "DIALOGUE" && (e as any)?.payload?.memory_saved)) showToast("good", "기억했어요!"); } catch { /* ignore */ }
     } catch (e: any) { showToast("bad", friendlyError(e)); setChatText(msg); } finally { setChatSending(false); setPendingChatMsg(null); }
@@ -447,7 +446,7 @@ export function App() {
     try {
       const res = await setMyArenaPrefs(userToken, { modes: selected.length === all.length ? null : selected, coach_note: arenaCoachDraft.trim() || null });
       setArenaPrefs(res.prefs); setArenaModesDraft(res.prefs?.modes ?? null); setArenaCoachDraft(String(res.prefs?.coach_note ?? ""));
-      showToast("good", "아레나 설정 저장"); await refreshAll(userToken, { silent: true });
+      showToast("good", "아레나 설정 저장"); await refreshByTab(userToken);
     } catch (e: any) { showToast("bad", friendlyError(e)); } finally { setArenaPrefsBusy(false); }
   }
 
@@ -461,7 +460,7 @@ export function App() {
 
   async function onUpvote(postId: string) {
     if (!userToken) return; setBusy(true);
-    try { await upvotePost(userToken, postId); await refreshAll(userToken, { silent: true }); }
+    try { await upvotePost(userToken, postId); await refreshByTab(userToken); }
     catch (e: any) { showToast("bad", friendlyError(e)); } finally { setBusy(false); }
   }
 
@@ -490,13 +489,13 @@ export function App() {
     if (!byokModel.trim()) { showToast("bad", "모델을 입력해 주세요."); return; }
     if (!byokApiKey.trim()) { showToast("bad", "API 키를 입력해 주세요."); return; }
     setBusy(true);
-    try { const res = await setMyBrainProfile(userToken, { provider: byokProvider, model: byokModel.trim(), api_key: byokApiKey.trim(), base_url: byokBaseUrl.trim() || null }); setBrainProfile(res.profile); setByokApiKey(""); showToast("good", "두뇌 연결 완료"); await refreshAll(userToken, { silent: true }); }
+    try { const res = await setMyBrainProfile(userToken, { provider: byokProvider, model: byokModel.trim(), api_key: byokApiKey.trim(), base_url: byokBaseUrl.trim() || null }); setBrainProfile(res.profile); setByokApiKey(""); showToast("good", "두뇌 연결 완료"); await refreshByTab(userToken); }
     catch (e: any) { showToast("bad", friendlyError(e)); } finally { setBusy(false); }
   }
 
   async function onDeleteByok() {
     if (!userToken) return; setBusy(true);
-    try { await deleteMyBrainProfile(userToken); setBrainProfile(null); showToast("good", "두뇌 분리 완료"); await refreshAll(userToken, { silent: true }); }
+    try { await deleteMyBrainProfile(userToken); setBrainProfile(null); showToast("good", "두뇌 분리 완료"); await refreshByTab(userToken); }
     catch (e: any) { showToast("bad", friendlyError(e)); } finally { setBusy(false); }
   }
 
@@ -514,7 +513,7 @@ export function App() {
 
   async function onRetryBrainJob(jobId: string) {
     if (!userToken) return; const id = String(jobId || "").trim(); if (!id) return; setRetryingJobId(id);
-    try { await retryMyBrainJob(userToken, id); showToast("good", "재시도 중이에요."); await refreshAll(userToken, { silent: true }); }
+    try { await retryMyBrainJob(userToken, id); showToast("good", "재시도 중이에요."); await refreshByTab(userToken); }
     catch (e: any) { showToast("bad", friendlyError(e)); } finally { setRetryingJobId(null); }
   }
 
@@ -528,7 +527,7 @@ export function App() {
         if (popup && popup.closed) { showToast("warn", "구글 연결 창이 닫혔어요. 다시 시도해 주세요."); return; }
         await new Promise(r => window.setTimeout(r, w));
         if (popup && popup.closed) break;
-        await refreshAll(userToken, { silent: true });
+        await refreshByTab(userToken);
       }
       try { const check = await getMyBrainProfile(userToken); if (!check?.profile) showToast("warn", "구글 연결이 아직 완료되지 않았어요. 팝업에서 연결을 완료해 주세요."); } catch { /* ignore */ }
     }

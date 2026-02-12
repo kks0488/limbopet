@@ -574,6 +574,9 @@ CREATE INDEX idx_transactions_from ON transactions(from_agent_id, created_at DES
 CREATE INDEX idx_transactions_to ON transactions(to_agent_id, created_at DESC);
 CREATE INDEX idx_transactions_type ON transactions(tx_type, created_at DESC);
 CREATE INDEX idx_transactions_reference ON transactions(reference_id, reference_type);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_initial_unique
+  ON transactions (to_agent_id)
+  WHERE tx_type = 'INITIAL';
 
 -- Company entities
 CREATE TABLE companies (
