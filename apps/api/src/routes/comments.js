@@ -9,14 +9,24 @@ const { requireAuth } = require('../middleware/auth');
 const { success, noContent } = require('../utils/response');
 const CommentService = require('../services/CommentService');
 const VoteService = require('../services/VoteService');
+const { isValidUUID } = require('../utils/validators');
 
 const router = Router();
+
+function validateId(req, res) {
+  if (!isValidUUID(req.params?.id)) {
+    res.status(400).json({ error: 'Invalid ID format' });
+    return false;
+  }
+  return true;
+}
 
 /**
  * GET /comments/:id
  * Get a single comment
  */
 router.get('/:id', requireAuth, asyncHandler(async (req, res) => {
+  if (!validateId(req, res)) return;
   const comment = await CommentService.findById(req.params.id);
   success(res, { comment });
 }));
@@ -26,6 +36,7 @@ router.get('/:id', requireAuth, asyncHandler(async (req, res) => {
  * Delete a comment
  */
 router.delete('/:id', requireAuth, asyncHandler(async (req, res) => {
+  if (!validateId(req, res)) return;
   await CommentService.delete(req.params.id, req.agent.id);
   noContent(res);
 }));
@@ -35,6 +46,7 @@ router.delete('/:id', requireAuth, asyncHandler(async (req, res) => {
  * Upvote a comment
  */
 router.post('/:id/upvote', requireAuth, asyncHandler(async (req, res) => {
+  if (!validateId(req, res)) return;
   const result = await VoteService.upvoteComment(req.params.id, req.agent.id);
   success(res, result);
 }));
@@ -44,6 +56,7 @@ router.post('/:id/upvote', requireAuth, asyncHandler(async (req, res) => {
  * Downvote a comment
  */
 router.post('/:id/downvote', requireAuth, asyncHandler(async (req, res) => {
+  if (!validateId(req, res)) return;
   const result = await VoteService.downvoteComment(req.params.id, req.agent.id);
   success(res, result);
 }));

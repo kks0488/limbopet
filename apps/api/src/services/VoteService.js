@@ -3,7 +3,7 @@
  * Handles upvotes, downvotes, and karma calculations
  */
 
-const { queryOne, transaction } = require('../config/database');
+const { queryOne, queryAll, transaction } = require('../config/database');
 const { BadRequestError, NotFoundError } = require('../utils/errors');
 const AgentService = require('./AgentService');
 const PostService = require('./PostService');

@@ -5,7 +5,7 @@
  * We reuse Moltbook "agents" as LIMBOPET "pets".
  */
 
-const { queryOne, queryAll, transaction } = require('../config/database');
+const { queryOne, queryAll, transaction, safeCatch } = require('../config/database');
 const { BadRequestError, NotFoundError } = require('../utils/errors');
 const JobService = require('./JobService');
 const MemoryRollupService = require('./MemoryRollupService');
@@ -242,23 +242,18 @@ class PetStateService {
 
       // Phase J1 backfill: ensure every pet has a structured job/zone row.
       // Keeps "society" features stable even for existing pets created before jobs were added.
-      const roleText = await client
-        .query(
-          `SELECT value
-           FROM facts
-           WHERE agent_id = $1 AND kind = 'profile' AND key = 'job_role'
-           LIMIT 1`,
+      const roleText = await safeCatch(client, async () => {
+        const r = await client.query(
+          `SELECT value FROM facts WHERE agent_id = $1 AND kind = 'profile' AND key = 'job_role' LIMIT 1`,
           [agentId]
-        )
-        .then((r) => {
-          const v = r.rows?.[0]?.value;
-          if (!v || typeof v !== 'object') return null;
-          return String(v.job_role || v.role || '').trim() || null;
-        })
-        .catch(() => null);
-      await JobService.ensureAssignedWithClient(client, agentId, { roleText }).catch(() => null);
+        );
+        const v = r.rows?.[0]?.value;
+        if (!v || typeof v !== 'object') return null;
+        return String(v.job_role || v.role || '').trim() || null;
+      });
+      await safeCatch(client, () => JobService.ensureAssignedWithClient(client, agentId, { roleText }));
 
-      const ownedPerks = await PerkService.listOwnedCodesWithClient(client, agentId).catch(() => []);
+      const ownedPerks = await safeCatch(client, () => PerkService.listOwnedCodesWithClient(client, agentId), []);
       const perkMods = PerkService.computeModsFromOwned(ownedPerks);
 
       const now = new Date();
@@ -376,18 +371,15 @@ class PetStateService {
 
       await client.query('UPDATE agents SET last_active = NOW() WHERE id = $1', [agentId]);
 
-      const isoDay = await WorldDayService.getCurrentDayWithClient(client).catch(() => WorldDayService.todayISODate());
-      const missions = await DailyMissionService.getBundleWithClient(client, agentId, { day: isoDay }).catch(() => null);
-      const progRow = await client
-        .query(
-          `SELECT xp, level, skill_points
-           FROM pet_stats
-           WHERE agent_id = $1
-           LIMIT 1`,
+      const isoDay = await safeCatch(client, () => WorldDayService.getCurrentDayWithClient(client), WorldDayService.todayISODate());
+      const missions = await safeCatch(client, () => DailyMissionService.getBundleWithClient(client, agentId, { day: isoDay }));
+      const progRow = await safeCatch(client, async () => {
+        const r = await client.query(
+          `SELECT xp, level, skill_points FROM pet_stats WHERE agent_id = $1 LIMIT 1`,
           [agentId]
-        )
-        .then((r) => r.rows?.[0] ?? null)
-        .catch(() => null);
+        );
+        return r.rows?.[0] ?? null;
+      });
 
       const level = Math.max(1, Math.trunc(Number(progRow?.level) || 1));
       const progression = {
@@ -509,18 +501,18 @@ class PetStateService {
       // XP grant (rate-limited per day by action).
       const xpByAction = { feed: 10, play: 15, sleep: 10, talk: 8 };
       const xpDelta = xpByAction[action] ?? 0;
-      await ProgressionService.grantXpWithClient(client, agentId, {
+      await safeCatch(client, () => ProgressionService.grantXpWithClient(client, agentId, {
         deltaXp: xpDelta,
         day: isoDay,
         source: { kind: 'action', code: action },
         meta: { action }
-      }).catch(() => null);
+      }));
 
       // Daily missions (LLM-free fun loop).
       if (['feed', 'play', 'sleep'].includes(action)) {
-        await DailyMissionService.completeWithClient(client, agentId, { day: isoDay, code: 'CARE_1', source: 'action' }).catch(() => null);
+        await safeCatch(client, () => DailyMissionService.completeWithClient(client, agentId, { day: isoDay, code: 'CARE_1', source: 'action' }));
       }
-      await DailyMissionService.completeWithClient(client, agentId, { day: isoDay, code: 'SAVE_1', source: 'action' }).catch(() => null);
+      await safeCatch(client, () => DailyMissionService.completeWithClient(client, agentId, { day: isoDay, code: 'SAVE_1', source: 'action' }));
 
       // Create a dialogue job on TALK for now (Phase 1 MVP).
       let job = null;
@@ -638,23 +630,20 @@ class PetStateService {
         const dayHint = typeof worldContext?.day === 'string' ? worldContext.day : null;
         const weekly =
           dayHint && /^\d{4}-\d{2}-\d{2}$/.test(dayHint)
-            ? (await MemoryRollupService.getWeeklyMemoryWithClient(client, agentId, dayHint).catch(() => null)) ||
-              (await MemoryRollupService.ensureWeeklyMemoryWithClient(client, agentId, dayHint).catch(() => null))
+            ? (await safeCatch(client, () => MemoryRollupService.getWeeklyMemoryWithClient(client, agentId, dayHint))) ||
+              (await safeCatch(client, () => MemoryRollupService.ensureWeeklyMemoryWithClient(client, agentId, dayHint)))
             : null;
 
-        const ownerUserId = await client
-          .query(
-            `SELECT owner_user_id
-             FROM agents
-             WHERE id = $1
-             LIMIT 1`,
+        const ownerUserId = await safeCatch(client, async () => {
+          const r = await client.query(
+            `SELECT owner_user_id FROM agents WHERE id = $1 LIMIT 1`,
             [agentId]
-          )
-          .then((r) => String(r.rows?.[0]?.owner_user_id || '').trim() || null)
-          .catch(() => null);
+          );
+          return String(r.rows?.[0]?.owner_user_id || '').trim() || null;
+        });
 
         const promptProfile = ownerUserId
-          ? await UserPromptProfileService.get(ownerUserId, client).catch(() => null)
+          ? await safeCatch(client, () => UserPromptProfileService.get(ownerUserId, client))
           : null;
 
         const MEMORY_REF_KINDS = new Set(['preference', 'forbidden', 'suggestion', 'coaching', 'arena']);
@@ -760,16 +749,13 @@ class PetStateService {
 
       await client.query('UPDATE agents SET last_active = NOW() WHERE id = $1', [agentId]);
 
-      const progRow = await client
-        .query(
-          `SELECT xp, level, skill_points
-           FROM pet_stats
-           WHERE agent_id = $1
-           LIMIT 1`,
+      const progRow = await safeCatch(client, async () => {
+        const r = await client.query(
+          `SELECT xp, level, skill_points FROM pet_stats WHERE agent_id = $1 LIMIT 1`,
           [agentId]
-        )
-        .then((r) => r.rows?.[0] ?? null)
-        .catch(() => null);
+        );
+        return r.rows?.[0] ?? null;
+      });
       const level = Math.max(1, Math.trunc(Number(progRow?.level) || 1));
       const progression = progRow
         ? {
@@ -780,7 +766,7 @@ class PetStateService {
           perks: ownedPerks
         }
         : null;
-      const missions = await DailyMissionService.getBundleWithClient(client, agentId, { day: isoDay }).catch(() => null);
+      const missions = await safeCatch(client, () => DailyMissionService.getBundleWithClient(client, agentId, { day: isoDay }));
 
       return { stats: updatedRows[0], event, job, progression, missions };
     });

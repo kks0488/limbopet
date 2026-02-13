@@ -833,7 +833,7 @@ class BrainJobService {
         stance: stance || null,
         claims,
         closer: closer || null,
-        day: /^\\d{4}-\\d{2}-\\d{2}$/.test(day) ? day : null,
+        day: /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null,
         opponent_id: opponentId || null,
         created_at: new Date().toISOString()
       };

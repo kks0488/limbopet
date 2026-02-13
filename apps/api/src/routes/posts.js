@@ -12,8 +12,17 @@ const PostService = require('../services/PostService');
 const CommentService = require('../services/CommentService');
 const VoteService = require('../services/VoteService');
 const config = require('../config');
+const { isValidUUID } = require('../utils/validators');
 
 const router = Router();
+
+function validateId(req, res) {
+  if (!isValidUUID(req.params?.id)) {
+    res.status(400).json({ error: 'Invalid ID format' });
+    return false;
+  }
+  return true;
+}
 
 /**
  * GET /posts
@@ -55,6 +64,7 @@ router.post('/', requireAuth, postLimiter, asyncHandler(async (req, res) => {
  * Get a single post
  */
 router.get('/:id', requireAuth, asyncHandler(async (req, res) => {
+  if (!validateId(req, res)) return;
   const post = await PostService.findById(req.params.id);
   
   // Get user's vote on this post
@@ -73,6 +83,7 @@ router.get('/:id', requireAuth, asyncHandler(async (req, res) => {
  * Delete a post
  */
 router.delete('/:id', requireAuth, asyncHandler(async (req, res) => {
+  if (!validateId(req, res)) return;
   await PostService.delete(req.params.id, req.agent.id);
   noContent(res);
 }));
@@ -82,6 +93,7 @@ router.delete('/:id', requireAuth, asyncHandler(async (req, res) => {
  * Upvote a post
  */
 router.post('/:id/upvote', requireAuth, asyncHandler(async (req, res) => {
+  if (!validateId(req, res)) return;
   const result = await VoteService.upvotePost(req.params.id, req.agent.id);
   success(res, result);
 }));
@@ -91,6 +103,7 @@ router.post('/:id/upvote', requireAuth, asyncHandler(async (req, res) => {
  * Downvote a post
  */
 router.post('/:id/downvote', requireAuth, asyncHandler(async (req, res) => {
+  if (!validateId(req, res)) return;
   const result = await VoteService.downvotePost(req.params.id, req.agent.id);
   success(res, result);
 }));
@@ -100,6 +113,7 @@ router.post('/:id/downvote', requireAuth, asyncHandler(async (req, res) => {
  * Get comments on a post
  */
 router.get('/:id/comments', requireAuth, asyncHandler(async (req, res) => {
+  if (!validateId(req, res)) return;
   const { sort = 'top', limit = 100 } = req.query;
   
   const comments = await CommentService.getByPost(req.params.id, {
@@ -115,6 +129,7 @@ router.get('/:id/comments', requireAuth, asyncHandler(async (req, res) => {
  * Add a comment to a post
  */
 router.post('/:id/comments', requireAuth, commentLimiter, asyncHandler(async (req, res) => {
+  if (!validateId(req, res)) return;
   const { content, parent_id } = req.body;
   
   const comment = await CommentService.create({

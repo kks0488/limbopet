@@ -11,6 +11,7 @@ const { success, created } = require('../utils/response');
 const AgentService = require('../services/AgentService');
 const RelationshipService = require('../services/RelationshipService');
 const { NotFoundError } = require('../utils/errors');
+const { isValidUUID } = require('../utils/validators');
 
 const router = Router();
 
@@ -102,6 +103,9 @@ router.get('/:id/relationships/:targetId/memories', requireAuth, asyncHandler(as
   const id = String(req.params?.id || '').trim();
   const targetId = String(req.params?.targetId || '').trim();
   const limit = Number(req.query?.limit ?? 20);
+  if (!isValidUUID(id) || !isValidUUID(targetId)) {
+    return res.status(400).json({ error: 'Invalid ID format' });
+  }
 
   const memories = await RelationshipService.getMemories(id, targetId, { limit });
   success(res, { memories });

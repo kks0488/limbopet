@@ -48,6 +48,7 @@ const DecisionService = require('../services/DecisionService');
 const StreakService = require('../services/StreakService');
 const NotificationService = require('../services/NotificationService');
 const { bestEffortInTransaction } = require('../utils/savepoint');
+const { isValidUUID, isValidPositiveInt, parseBool } = require('../utils/validators');
 
 const router = Router();
 
@@ -84,6 +85,14 @@ function safeIsoDay(v) {
   const s = String(v || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
   return s;
+}
+
+function ensureUuidId(id, label = 'ID') {
+  if (!isValidUUID(id)) throw new BadRequestError(`Invalid ${label} format`);
+}
+
+function ensurePositiveIntId(id, label = 'ID') {
+  if (!isValidPositiveInt(id)) throw new BadRequestError(`Invalid ${label} format`);
 }
 
 async function countEpisodesByDay(day) {
@@ -250,7 +259,7 @@ router.post('/me/streaks/:type/shield', requireUserAuth, asyncHandler(async (req
 }));
 
 router.get('/me/notifications', requireUserAuth, asyncHandler(async (req, res) => {
-  const unreadOnly = String(req.query?.unread ?? '').trim().toLowerCase() === 'true';
+  const unreadOnly = parseBool(req.query?.unread);
   const limit = Math.max(1, Math.min(100, Math.trunc(Number(req.query?.limit ?? 30) || 30)));
 
   const result = await transaction(async (client) => {
@@ -276,6 +285,7 @@ router.get('/me/notifications', requireUserAuth, asyncHandler(async (req, res) =
 
 router.post('/me/notifications/:id/read', requireUserAuth, asyncHandler(async (req, res) => {
   const notifId = Number(req.params?.id);
+  ensurePositiveIntId(notifId, 'notification ID');
   const result = await transaction(async (client) => {
     const notification = await NotificationService.markRead(client, req.user.id, notifId);
     const unread_count = await NotificationService.getCount(client, req.user.id);
@@ -913,6 +923,7 @@ router.post('/me/brain/jobs/:id/retry', requireUserAuth, asyncHandler(async (req
 
   const jobId = String(req.params?.id ?? '').trim();
   if (!jobId) throw new BadRequestError('job id is required', 'BRAIN_JOB_ID_REQUIRED');
+  ensureUuidId(jobId, 'job ID');
 
   const job = await BrainJobService.retryJobForAgent(petRow.id, jobId);
   success(res, { job });
@@ -1115,6 +1126,7 @@ router.get('/me/absence-summary', requireUserAuth, asyncHandler(async (req, res)
 router.post('/me/decisions/:id/resolve', requireUserAuth, asyncHandler(async (req, res) => {
   await UserService.touchActivity(req.user.id, { reason: 'decision' }).catch(() => null);
   const { id } = req.params;
+  ensureUuidId(id, 'decision ID');
   const choice = String(req.body?.choice || '').trim();
   if (!choice) throw new BadRequestError('choice is required');
 
@@ -1134,7 +1146,7 @@ router.post('/me/decisions/:id/resolve', requireUserAuth, asyncHandler(async (re
  * - limit, offset
  */
 router.get('/me/plaza/posts', requireUserAuth, asyncHandler(async (req, res) => {
-  const { sort = 'new', limit = 25, offset = 0, page = null, withTotal = '1', q = '', kind = 'all', submolt = 'general' } = req.query;
+  const { sort = 'new', limit = 25, offset = 0, page = null, withTotal, q = '', kind = 'all', submolt = 'general' } = req.query;
 
   const safeLimit = Math.min(parseInt(limit, 10) || 25, config.pagination.maxLimit);
   const safePageRaw = page === null || page === undefined ? null : parseInt(String(page), 10);
@@ -1144,7 +1156,7 @@ router.get('/me/plaza/posts', requireUserAuth, asyncHandler(async (req, res) => 
   const qTermSafe = qTerm.length >= 2 ? qTerm : '';
   const kindTerm = String(kind || 'all').trim().toLowerCase();
   const submoltTerm = String(submolt || 'general').trim().toLowerCase() || 'general';
-  const includeTotal = String(withTotal ?? '1').trim() !== '0';
+  const includeTotal = withTotal === undefined ? true : parseBool(withTotal);
 
   const userPetCount = await queryOne(
     `SELECT COUNT(*)::int AS n
@@ -1367,6 +1379,7 @@ router.get('/me/plaza/live', requireUserAuth, asyncHandler(async (req, res) => {
 router.get('/me/plaza/posts/:id', requireUserAuth, asyncHandler(async (req, res) => {
   const postId = String(req.params?.id ?? '').trim();
   if (!postId) throw new BadRequestError('Post id is required');
+  ensureUuidId(postId, 'post ID');
 
   const post = await PostService.findById(postId);
   const petRow = await AgentService.findByOwnerUserId(req.user.id).catch(() => null);
@@ -1384,6 +1397,7 @@ router.get('/me/plaza/posts/:id', requireUserAuth, asyncHandler(async (req, res)
 router.get('/me/plaza/posts/:id/comments', requireUserAuth, asyncHandler(async (req, res) => {
   const postId = String(req.params?.id ?? '').trim();
   if (!postId) throw new BadRequestError('Post id is required');
+  ensureUuidId(postId, 'post ID');
 
   const { sort = 'top', limit = 100 } = req.query;
   const safeLimit = Math.max(1, Math.min(500, parseInt(limit, 10) || 100));
@@ -1398,6 +1412,7 @@ router.get('/me/plaza/posts/:id/comments', requireUserAuth, asyncHandler(async (
 router.post('/me/plaza/posts/:id/comments', requireUserAuth, postLimiter, asyncHandler(async (req, res) => {
   const postId = String(req.params?.id ?? '').trim();
   if (!postId) throw new BadRequestError('Post id is required');
+  ensureUuidId(postId, 'post ID');
 
   const petRow = await AgentService.findByOwnerUserId(req.user.id);
   if (!petRow) throw new NotFoundError('Pet');
@@ -1426,8 +1441,7 @@ router.post('/me/plaza/posts/:id/comments', requireUserAuth, postLimiter, asyncH
 router.get('/me/world/arena/matches/:id', requireUserAuth, asyncHandler(async (req, res) => {
   const matchId = String(req.params?.id ?? '').trim();
   if (!matchId) throw new BadRequestError('match id is required');
-  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!uuidPattern.test(matchId)) throw new BadRequestError('Invalid match ID format');
+  ensureUuidId(matchId, 'match ID');
 
   const result = await transaction(async (client) => {
     // If this match is live and its window has ended, resolving it here makes the
@@ -1593,6 +1607,7 @@ router.post('/me/world/arena/matches/:id/intervene', requireUserAuth, asyncHandl
 
   const matchId = String(req.params?.id ?? '').trim();
   if (!matchId) throw new BadRequestError('match id is required');
+  ensureUuidId(matchId, 'match ID');
 
   const action = String(req.body?.action ?? '').trim().toLowerCase();
   const allow = new Set([...GENERIC_ACTIONS, ...Object.keys(MODE_STRATEGIES)]);
@@ -1676,6 +1691,7 @@ router.post('/me/world/arena/matches/:id/predict', requireUserAuth, asyncHandler
 
   const matchId = String(req.params?.id ?? '').trim();
   if (!matchId) throw new BadRequestError('match id is required');
+  ensureUuidId(matchId, 'match ID');
 
   const pickRaw = String(req.body?.pick ?? req.body?.side ?? '').trim().toLowerCase();
   if (!['a', 'b'].includes(pickRaw)) throw new BadRequestError('Invalid pick');
@@ -1764,6 +1780,7 @@ router.post('/me/world/arena/matches/:id/cheer', requireUserAuth, asyncHandler(a
 
   const matchId = String(req.params?.id ?? '').trim();
   if (!matchId) throw new BadRequestError('match id is required');
+  ensureUuidId(matchId, 'match ID');
 
   const side = String(req.body?.side ?? '').trim().toLowerCase();
   if (!['a', 'b'].includes(side)) throw new BadRequestError('Invalid side');
@@ -1859,6 +1876,7 @@ router.post('/me/world/arena/matches/:id/highlight', requireUserAuth, asyncHandl
 
   const matchId = String(req.params?.id ?? '').trim();
   if (!matchId) throw new BadRequestError('match id is required');
+  ensureUuidId(matchId, 'match ID');
   const commentId = String(req.body?.comment_id ?? req.body?.commentId ?? '').trim();
   if (!commentId) throw new BadRequestError('comment_id is required');
 
@@ -1977,7 +1995,9 @@ router.post('/me/posts/:id/upvote', requireUserAuth, asyncHandler(async (req, re
   const petRow = await AgentService.findByOwnerUserId(req.user.id);
   if (!petRow) throw new NotFoundError('Pet');
 
-  const result = await VoteService.upvotePost(req.params.id, petRow.id);
+  const postId = String(req.params?.id ?? '').trim();
+  ensureUuidId(postId, 'post ID');
+  const result = await VoteService.upvotePost(postId, petRow.id);
 
   // Mission: social 1 (best-effort).
   await transaction(async (client) => {
@@ -1991,7 +2011,9 @@ router.post('/me/posts/:id/downvote', requireUserAuth, asyncHandler(async (req, 
   const petRow = await AgentService.findByOwnerUserId(req.user.id);
   if (!petRow) throw new NotFoundError('Pet');
 
-  const result = await VoteService.downvotePost(req.params.id, petRow.id);
+  const postId = String(req.params?.id ?? '').trim();
+  ensureUuidId(postId, 'post ID');
+  const result = await VoteService.downvotePost(postId, petRow.id);
   success(res, result);
 }));
 
@@ -2007,7 +2029,7 @@ router.get('/me/world/today', requireUserAuth, asyncHandler(async (req, res) => 
   const ensureEpisodeRaw = req.query?.ensureEpisode ?? req.query?.ensure_episode ?? null;
   const ensureEpisode = ensureEpisodeRaw === null || ensureEpisodeRaw === undefined
     ? true
-    : !['0', 'false', 'no', 'n'].includes(String(ensureEpisodeRaw).trim().toLowerCase());
+    : parseBool(ensureEpisodeRaw);
 
   const resolved = await resolveWorldTodayDayForUser(day);
   const petRow = await AgentService.findByOwnerUserId(req.user.id).catch(() => null);
@@ -2250,6 +2272,7 @@ router.post('/me/world/societies/:id/join', requireUserAuth, asyncHandler(async 
 
   const societyId = String(req.params?.id ?? '').trim();
   if (!societyId) throw new BadRequestError('society id is required');
+  ensureUuidId(societyId, 'society ID');
 
   const result = await transaction(async (client) => {
     return SecretSocietyService.requestJoinWithClient(client, { societyId, agentId: petRow.id, feeCoins: 10 });
@@ -2274,6 +2297,7 @@ router.post('/me/world/societies/:id/report', requireUserAuth, asyncHandler(asyn
 
   const societyId = String(req.params?.id ?? '').trim();
   if (!societyId) throw new BadRequestError('society id is required');
+  ensureUuidId(societyId, 'society ID');
 
   const noteRaw = req.body?.note ?? req.body?.message ?? '';
   const note = typeof noteRaw === 'string' ? noteRaw.trim() : '';
@@ -2499,7 +2523,9 @@ router.post('/me/world/elections/:id/register', requireUserAuth, asyncHandler(as
   const petRow = await AgentService.findByOwnerUserId(req.user.id);
   if (!petRow) throw new NotFoundError('Pet');
 
-  const result = await ElectionService.registerCandidate(req.params.id, petRow.id);
+  const electionId = String(req.params?.id ?? '').trim();
+  ensureUuidId(electionId, 'election ID');
+  const result = await ElectionService.registerCandidate(electionId, petRow.id);
   created(res, result);
 }));
 
@@ -2514,10 +2540,12 @@ router.post('/me/world/elections/:id/vote', requireUserAuth, asyncHandler(async 
   const petRow = await AgentService.findByOwnerUserId(req.user.id);
   if (!petRow) throw new NotFoundError('Pet');
 
+  const electionId = String(req.params?.id ?? '').trim();
+  ensureUuidId(electionId, 'election ID');
   const candidateId = String(req.body?.candidate_id ?? req.body?.candidateId ?? '').trim();
   if (!candidateId) throw new BadRequestError('candidate_id is required');
 
-  const result = await ElectionService.castVote(req.params.id, petRow.id, candidateId);
+  const result = await ElectionService.castVote(electionId, petRow.id, candidateId);
   await transaction(async (client) => {
     const day = (await WorldDayService.getCurrentDayWithClient(client).catch(() => null)) || WorldDayService.todayISODate();
     await DailyMissionService.completeWithClient(client, petRow.id, { day, code: 'VOTE_1', source: 'vote' }).catch(() => null);
@@ -2534,6 +2562,8 @@ router.post('/me/world/elections/:id/influence', requireUserAuth, asyncHandler(a
   const petRow = await AgentService.findByOwnerUserId(req.user.id);
   if (!petRow) throw new NotFoundError('Pet');
 
+  const electionId = String(req.params?.id ?? '').trim();
+  ensureUuidId(electionId, 'election ID');
   const type = String(req.body?.type ?? '').trim().toLowerCase();
   const targetCandidateId = String(req.body?.target_candidate_id ?? req.body?.targetCandidateId ?? '').trim();
   const day = req.body?.day ? String(req.body.day).trim() : null;
@@ -2542,7 +2572,7 @@ router.post('/me/world/elections/:id/influence', requireUserAuth, asyncHandler(a
     throw new BadRequestError('Invalid day format (YYYY-MM-DD)');
   }
 
-  const result = await ElectionService.influence(req.params.id, petRow.id, {
+  const result = await ElectionService.influence(electionId, petRow.id, {
     type,
     targetCandidateId,
     day,
@@ -2575,7 +2605,9 @@ router.get('/me/world/rumors/open', requireUserAuth, asyncHandler(async (req, re
 }));
 
 router.get('/me/world/rumors/:id', requireUserAuth, asyncHandler(async (req, res) => {
-  const details = await WorldContextService.getRumorDetails(req.params.id);
+  const rumorId = String(req.params?.id ?? '').trim();
+  ensureUuidId(rumorId, 'rumor ID');
+  const details = await WorldContextService.getRumorDetails(rumorId);
   success(res, details);
 }));
 

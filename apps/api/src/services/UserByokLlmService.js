@@ -11,6 +11,7 @@
  */
 
 const { parseJsonLoose } = require('../utils/json');
+const DEFAULT_MAX_TOKENS = 800;
 
 function must(obj, key) {
   if (!obj || typeof obj !== 'object' || !(key in obj)) {
@@ -286,7 +287,8 @@ async function callOpenAICompatible({ baseUrl, apiKey, model }, jobType, jobInpu
       { role: 'system', content: system },
       { role: 'user', content: user }
     ],
-    temperature
+    temperature,
+    max_tokens: DEFAULT_MAX_TOKENS
   };
 
   const attempts = 2;

@@ -13,6 +13,7 @@
 const config = require('../config');
 const { queryOne } = require('../config/database');
 const { parseJsonLoose } = require('../utils/json');
+const DEFAULT_MAX_TOKENS = 800;
 
 function must(obj, key) {
   if (!obj || typeof obj !== 'object' || !(key in obj)) {
@@ -529,7 +530,8 @@ class ProxyBrainService {
             { role: 'system', content: strict ? strictSystem : system },
             { role: 'user', content: user }
           ],
-          temperature: strict ? 0 : temperature
+          temperature: strict ? 0 : temperature,
+          max_tokens: Math.max(1, Math.trunc(Number(config.limbopet?.proxy?.maxTokens ?? DEFAULT_MAX_TOKENS) || DEFAULT_MAX_TOKENS))
         };
 
         const timeoutMs = jobType === 'COURT_ARGUMENT' || jobType === 'ARENA_DEBATE' ? 90_000 : 45_000;

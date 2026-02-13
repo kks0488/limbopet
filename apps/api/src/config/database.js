@@ -143,12 +143,36 @@ async function close() {
   }
 }
 
+/**
+ * SAVEPOINT wrapper for optional operations inside a transaction.
+ * Use instead of `.catch(() => null)` when the operation runs SQL
+ * that could fail and poison the surrounding transaction.
+ *
+ * Usage:
+ *   const result = await safeCatch(client, () => SomeService.doStuff(client, id));
+ *   // result is null if the operation failed; the transaction stays healthy.
+ */
+let _spCounter = 0;
+async function safeCatch(client, fn, fallback = null) {
+  const sp = `sp_${++_spCounter}_${Date.now()}`;
+  try {
+    await client.query(`SAVEPOINT ${sp}`);
+    const result = await fn();
+    await client.query(`RELEASE SAVEPOINT ${sp}`);
+    return result;
+  } catch {
+    await client.query(`ROLLBACK TO SAVEPOINT ${sp}`).catch(() => {});
+    return fallback;
+  }
+}
+
 module.exports = {
   initializePool,
   query,
   queryOne,
   queryAll,
   transaction,
+  safeCatch,
   healthCheck,
   close,
   getPool: () => pool

@@ -18,6 +18,7 @@ const AgentService = require('../services/AgentService');
 const CompanyService = require('../services/CompanyService');
 const EconomyService = require('../services/EconomyService');
 const TransactionService = require('../services/TransactionService');
+const { isValidUUID } = require('../utils/validators');
 
 const router = Router();
 
@@ -105,6 +106,9 @@ router.get('/companies', requireUserAuth, asyncHandler(async (req, res) => {
 }));
 
 router.get('/companies/:id', requireUserAuth, asyncHandler(async (req, res) => {
+  if (!isValidUUID(req.params?.id)) {
+    return res.status(400).json({ error: 'Invalid ID format' });
+  }
   const details = await CompanyService.getById(req.params.id);
   success(res, details);
 }));
@@ -115,4 +119,3 @@ router.get('/dashboard', requireUserAuth, asyncHandler(async (_req, res) => {
 }));
 
 module.exports = router;
-
