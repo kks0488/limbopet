@@ -9,6 +9,8 @@
  * - facts(kind='arena_note', key='coach') value: { text: string }
  */
 
+const ALLOWED_ARENA_MODES = new Set(['COURT_TRIAL', 'DEBATE_CLASH']);
+
 function safeText(v, maxLen) {
   const s = String(v ?? '').trim();
   if (!s) return '';
@@ -37,14 +39,22 @@ function uniqUpper(list) {
 
 class ArenaPrefsService {
   static listModes() {
-    // SSOT: COURT_TRIAL, DEBATE_CLASH만 활성. 나머지는 동결.
-    return ['COURT_TRIAL', 'DEBATE_CLASH'];
+    return [...ALLOWED_ARENA_MODES];
+  }
+
+  static validateModes(modes) {
+    const requested = uniqUpper(modes);
+    const valid = [];
+    const invalid = [];
+    for (const mode of requested) {
+      if (ALLOWED_ARENA_MODES.has(mode)) valid.push(mode);
+      else invalid.push(mode);
+    }
+    return { requested, valid, invalid };
   }
 
   static normalizeModes(modes) {
-    const allow = new Set(ArenaPrefsService.listModes());
-    const arr = uniqUpper(modes).filter((m) => allow.has(m));
-    return arr;
+    return ArenaPrefsService.validateModes(modes).valid;
   }
 
   static async getWithClient(client, agentId) {

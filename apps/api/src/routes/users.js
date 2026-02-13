@@ -392,10 +392,10 @@ router.get('/me/pet', requireUserAuth, asyncHandler(async (req, res) => {
 }));
 
 /**
- * POST /users/me/pet/arena-prefs
+ * POST|PUT /users/me/pet/arena-prefs
  * Body: { modes?: string[] | null, coach_note?: string | null }
  */
-router.post('/me/pet/arena-prefs', requireUserAuth, asyncHandler(async (req, res) => {
+const upsertArenaPrefs = asyncHandler(async (req, res) => {
   await UserService.touchActivity(req.user.id, { reason: 'arena_prefs' }).catch(() => null);
   const petRow = await AgentService.findByOwnerUserId(req.user.id);
   if (!petRow) throw new NotFoundError('Pet');
@@ -405,15 +405,34 @@ router.post('/me/pet/arena-prefs', requireUserAuth, asyncHandler(async (req, res
 
   const modes = Array.isArray(modesRaw) ? modesRaw : modesRaw == null ? [] : null;
   if (modes === null) throw new BadRequestError('modes must be an array (or null)');
+  const { valid, invalid } = ArenaPrefsService.validateModes(modes);
+  if (modes.length > 0 && valid.length === 0) {
+    return res.status(400).json({
+      error: 'No valid arena modes provided',
+      allowed: ArenaPrefsService.listModes(),
+      invalid_modes: invalid
+    });
+  }
 
   const coach_note = coachRaw == null ? '' : String(coachRaw);
 
   const result = await transaction(async (client) => {
-    return ArenaPrefsService.setWithClient(client, petRow.id, { modes, coach_note });
+    return ArenaPrefsService.setWithClient(client, petRow.id, { modes: valid, coach_note });
   });
 
+  if (invalid.length > 0) {
+    result.warning = {
+      message: 'Some arena modes were ignored because they are not allowed',
+      invalid_modes: invalid,
+      allowed: ArenaPrefsService.listModes()
+    };
+  }
+
   success(res, result);
-}));
+});
+
+router.post('/me/pet/arena-prefs', requireUserAuth, upsertArenaPrefs);
+router.put('/me/pet/arena-prefs', requireUserAuth, upsertArenaPrefs);
 
 router.post('/me/pet/actions', requireUserAuth, asyncHandler(async (req, res) => {
   await UserService.touchActivity(req.user.id, { reason: 'care' }).catch(() => null);

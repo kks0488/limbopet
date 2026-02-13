@@ -1,22 +1,19 @@
-/**
- * Simple schema bootstrapper for local dev.
- *
- * Usage:
- *   DATABASE_URL=... node scripts/migrate.js
- */
-
 require('dotenv').config();
 
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
-const { Client } = require('pg');
+const { Pool } = require('pg');
 
-function sha256(text) {
-  return crypto.createHash('sha256').update(text).digest('hex');
+const DEFAULT_DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/limbopet';
+const MIGRATIONS_TABLE = '_migrations';
+const LEGACY_MIGRATIONS_TABLE = 'limbopet_migrations';
+
+function migrationDirPath() {
+  return path.join(__dirname, 'migrations');
 }
 
-function listMigrations(dir) {
+function listMigrationFiles() {
+  const dir = migrationDirPath();
   if (!fs.existsSync(dir)) return [];
   return fs
     .readdirSync(dir)
@@ -24,43 +21,54 @@ function listMigrations(dir) {
     .sort((a, b) => a.localeCompare(b));
 }
 
-async function hasTable(client, tableName) {
-  const name = String(tableName || '').trim();
-  if (!name) return false;
+async function tableExists(client, tableName) {
+  const t = String(tableName || '').trim();
+  if (!t) return false;
   const { rows } = await client.query(
     `SELECT 1
      FROM information_schema.tables
-     WHERE table_schema = 'public' AND table_name = $1
+     WHERE table_schema = 'public'
+       AND table_name = $1
      LIMIT 1`,
-    [name]
+    [t]
   );
   return Boolean(rows?.[0]);
 }
 
-async function ensureMigrationsTable(client) {
+async function ensureTrackerTable(client) {
   await client.query(
-    `CREATE TABLE IF NOT EXISTS limbopet_migrations (
-      name TEXT PRIMARY KEY,
-      applied_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    `CREATE TABLE IF NOT EXISTS _migrations (
+      id SERIAL PRIMARY KEY,
+      filename VARCHAR(255) UNIQUE NOT NULL,
+      applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     )`
   );
 }
 
-async function listAppliedMigrations(client) {
-  const { rows } = await client.query(`SELECT name FROM limbopet_migrations ORDER BY applied_at ASC`);
-  return new Set((rows || []).map((r) => String(r?.name || '').trim()).filter(Boolean));
+async function backfillFromLegacyTable(client) {
+  const hasLegacy = await tableExists(client, LEGACY_MIGRATIONS_TABLE);
+  if (!hasLegacy) return 0;
+
+  const { rowCount } = await client.query(
+    `INSERT INTO _migrations (filename, applied_at)
+     SELECT name, COALESCE(applied_at, NOW())
+     FROM limbopet_migrations
+     ON CONFLICT (filename) DO NOTHING`
+  );
+  return Number(rowCount || 0);
 }
 
-async function applySqlFile(client, { name, sql }) {
+async function appliedFileSet(client) {
+  const { rows } = await client.query('SELECT filename FROM _migrations');
+  return new Set((rows || []).map((r) => String(r?.filename || '').trim()).filter(Boolean));
+}
+
+async function applyMigrationFile(client, file) {
+  const sql = fs.readFileSync(path.join(migrationDirPath(), file), 'utf8');
   await client.query('BEGIN');
   try {
     await client.query(sql);
-    await client.query(
-      `INSERT INTO limbopet_migrations (name, applied_at)
-       VALUES ($1, NOW())
-       ON CONFLICT (name) DO NOTHING`,
-      [name]
-    );
+    await client.query('INSERT INTO _migrations (filename) VALUES ($1) ON CONFLICT (filename) DO NOTHING', [file]);
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK');
@@ -68,98 +76,42 @@ async function applySqlFile(client, { name, sql }) {
   }
 }
 
-async function main() {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    console.error('DATABASE_URL is required');
-    process.exit(1);
-  }
-
-  const schemaPath = path.join(__dirname, 'schema.sql');
-  const schema = fs.readFileSync(schemaPath, 'utf8');
-  const schemaHash = sha256(schema);
-
-  const migrationsDir = path.join(__dirname, 'migrations');
-  const migrationFiles = listMigrations(migrationsDir);
-
-  const client = new Client({ connectionString: databaseUrl });
+async function migrate() {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL || DEFAULT_DATABASE_URL });
+  const client = await pool.connect();
 
   try {
-    await client.connect();
-
-    // New: incremental migrations (production-friendly).
-    // - Bootstrap base schema once (schema.sql).
-    // - Apply migrations from scripts/migrations/*.sql thereafter.
-    await ensureMigrationsTable(client);
-    const applied = await listAppliedMigrations(client);
-
-    const baselineName = '0000_baseline_schema.sql';
-
-    // Compatibility: the old dev bootstrapper stored a single schema hash in limbopet_schema_meta.
-    const hasOldMeta = await hasTable(client, 'limbopet_schema_meta').catch(() => false);
-    const hasAgents = await hasTable(client, 'agents').catch(() => false);
-
-    if (!applied.has(baselineName)) {
-      if (hasOldMeta || hasAgents) {
-        // Assume baseline exists; record it so subsequent migrations can run.
-        await client.query(
-          `INSERT INTO limbopet_migrations (name, applied_at)
-           VALUES ($1, NOW())
-           ON CONFLICT (name) DO NOTHING`,
-          [baselineName]
-        );
-        applied.add(baselineName);
-        console.log('✅ Recorded existing baseline schema');
-      } else {
-        await applySqlFile(client, { name: baselineName, sql: schema });
-        applied.add(baselineName);
-
-        // Keep schema hash meta for easy debugging.
-        await client.query(
-          `CREATE TABLE IF NOT EXISTS limbopet_schema_meta (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL,
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-          )`
-        );
-        await client.query(
-          `INSERT INTO limbopet_schema_meta (key, value, updated_at)
-           VALUES ('schema_hash', $1, NOW())
-           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-          [schemaHash]
-        );
-        console.log('✅ Database baseline schema applied');
-      }
-    } else {
-      // Best-effort warning if schema.sql diverged from the recorded hash.
-      if (hasOldMeta) {
-        const { rows: metaRows } = await client.query(`SELECT value FROM limbopet_schema_meta WHERE key = 'schema_hash'`);
-        const prev = String(metaRows?.[0]?.value ?? '').trim();
-        if (prev && prev !== schemaHash) {
-          console.warn('⚠️  schema.sql changed since baseline. New columns/indexes should be added via migrations.');
-        }
-      }
+    await ensureTrackerTable(client);
+    const legacySynced = await backfillFromLegacyTable(client);
+    if (legacySynced > 0) {
+      console.log(`Synced ${legacySynced} legacy migration record(s) from ${LEGACY_MIGRATIONS_TABLE}`);
     }
 
-    let ran = 0;
-    for (const file of migrationFiles) {
+    const files = listMigrationFiles();
+    const applied = await appliedFileSet(client);
+
+    let count = 0;
+    for (const file of files) {
       if (applied.has(file)) continue;
-      const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-      await applySqlFile(client, { name: file, sql });
-      applied.add(file);
-      ran += 1;
-      console.log(`✅ Migration applied: ${file}`);
+      console.log(`Applying ${file}...`);
+      try {
+        await applyMigrationFile(client, file);
+        count += 1;
+        console.log('  OK');
+      } catch (e) {
+        console.error(`  FAIL: ${e.message}`);
+        throw e;
+      }
     }
 
-    if (ran === 0) {
-      console.log('✅ Database up-to-date; no migrations to apply');
-    }
+    console.log(`Migration complete: ${count} new, ${files.length - count} already applied`);
   } finally {
-    await client.end();
+    client.release();
+    await pool.end();
   }
 }
 
-main().catch((err) => {
-  console.error('❌ Migration failed:', err);
+migrate().catch((e) => {
+  console.error(e);
   process.exit(1);
 });

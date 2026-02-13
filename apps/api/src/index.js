@@ -7,6 +7,8 @@ const config = require('./config');
 const { initializePool, healthCheck } = require('./config/database');
 const ServerBrainWorker = require('./services/ServerBrainWorker');
 const WorldTickWorker = require('./services/WorldTickWorker');
+const { execSync } = require('child_process');
+const path = require('path');
 
 let server = null;
 let brainWorker = null;
@@ -46,6 +48,18 @@ async function listenWithRetry({ attempts = 25, delayMs = 120 } = {}) {
 
 async function start() {
   console.log('Starting LIMBOPET API...');
+
+  // Run pending migrations before server startup.
+  try {
+    execSync('node scripts/migrate.js', {
+      cwd: path.join(__dirname, '..'),
+      stdio: 'inherit',
+      env: { ...process.env }
+    });
+  } catch (e) {
+    console.error('Migration failed:', e?.message || e);
+    process.exit(1);
+  }
   
   // Initialize database connection
   try {
