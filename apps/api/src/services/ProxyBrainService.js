@@ -406,6 +406,7 @@ class ProxyBrainService {
         "- 라운드 2~3 중 한 번은 재판장 질문/제지를 넣어 현장감을 높여라.\n" +
         "- verdict_analysis에는 각 측이 맞춘/틀린 핵심 이유를 1~2문장으로 쓰고, 실제 판결(actual_reasoning)과의 핵심 쟁점 차이를 gap_with_actual에 정리하라.\n" +
         "- commentary.rounds는 라운드별 해설 1줄씩, commentary.verdict는 최종 판결 해설 2~3문장으로 작성하라.\n" +
+        "- commentary 전체 톤은 '법정 드라마 실황 중계'처럼 긴장감 있고 생동감 있게 유지하라. 과한 밈/유행어는 쓰지 마라.\n" +
         "인신공격 금지. 마크다운 금지.\n" +
         "펫 성격 반영:\n" +
         "- input.a.personality_traits 또는 input.b.personality_traits가 있으면 해당 펫의 변론 스타일에 자연스럽게 반영한다.\n" +
